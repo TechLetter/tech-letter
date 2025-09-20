@@ -62,28 +62,25 @@ func GetRenderedHTML(url string) (string, error) {
 	return htmlContent, nil
 }
 
-func ExtractTextFromHTMLWithReadability(htmlStr string) string {
-	doc, err := html.Parse(strings.NewReader(htmlStr))
-	if err != nil {
-		return ""
-	}
-
-	article, err := readability.FromDocument(doc, nil)
-	if err != nil {
-		return ""
-	}
-	return article.TextContent
+type ParsedArticle struct {
+	HtmlContent      string
+	PlainTextContent string
+	TopImage         string
 }
 
-func ExtractImageFromHTMLWithReadability(htmlStr string) string {
+func ParseArticleOfHTML(htmlStr string) (*ParsedArticle, error) {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
 	if err != nil {
-		return ""
+		return nil, err
 	}
 
 	article, err := readability.FromDocument(doc, nil)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	return article.Image
+	return &ParsedArticle{
+		HtmlContent:      article.Content,
+		PlainTextContent: article.TextContent,
+		TopImage:         article.Image,
+	}, nil
 }
