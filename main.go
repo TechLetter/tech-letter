@@ -3,6 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"tech-letter/config"
+	"tech-letter/parser"
+	"tech-letter/renderer"
+	"tech-letter/summarizer"
+	"time"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -15,6 +21,8 @@ type TechBlog struct {
 }
 
 func main() {
+	config.InitApp()
+
 	blogs := []TechBlog{
 		{
 			Name:   "카카오",
@@ -66,12 +74,37 @@ func main() {
 				break
 			}
 			fmt.Printf("%s \t%d. 제목: %s\n링크: %s\n게시일: %s\n\n", blog.Name, i, item.Title, item.Link, item.Published)
+			now := time.Now()
+			htmlStr, err := renderer.RenderHTML(item.Link)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println("HTML rendering time:", time.Since(now))
+
+			article, err := parser.ParseArticleOfHTML(htmlStr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println("HTML parsing time:", time.Since(now))
+
+			summary, err := summarizer.SummarizeText(article.PlainTextContent)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println("Summarizing time:", time.Since(now))
+
+			if summary.IsFailure {
+				err := os.WriteFile(fmt.Sprintf("failures-%s.txt", blog.Name), []byte(htmlStr), 0644)
+				if err != nil {
+					log.Fatal(err)
+				}
+				continue
+			}
+
+			fmt.Println(summary.SummaryShort)
+
+			fmt.Print("\n\n\n\n")
+
 		}
 	}
 }
-
-/*
-	클라이언트 랜더링이 필요한 사이트의 경우
-	1. chromedp를 사용하여 브라우저를 실행하고
-	2. readability를 사용하여 text_content와 image를 추출한다.
-*/

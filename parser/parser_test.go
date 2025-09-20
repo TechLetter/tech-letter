@@ -1,11 +1,11 @@
 package parser_test
 
 import (
-	"fmt"
-	"os"
 	"tech-letter/parser"
+	"tech-letter/renderer"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testPostUrls = []string{
@@ -16,39 +16,14 @@ var testPostUrls = []string{
 
 func TestParseArticleOfHTML(t *testing.T) {
 	for _, url := range testPostUrls {
-		now := time.Now()
-		renderedHtml, err := parser.GetRenderedHTML(url)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		beforeFile, err := os.Create(fmt.Sprintf("rendered-%s.txt", time.Now().Format("2006-01-02-15-04-05")))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer beforeFile.Close()
-		beforeFile.WriteString(renderedHtml)
+		renderedHtml, err := renderer.RenderHTML(url)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, renderedHtml)
 
 		article, err := parser.ParseArticleOfHTML(renderedHtml)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		htmlFile, err := os.Create(fmt.Sprintf("html-%s.txt", time.Now().Format("2006-01-02-15-04-05")))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer htmlFile.Close()
-		htmlFile.WriteString(article.HtmlContent)
-
-		textFile, err := os.Create(fmt.Sprintf("text-%s.txt", time.Now().Format("2006-01-02-15-04-05")))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer textFile.Close()
-		textFile.WriteString(article.PlainTextContent)
-
-		t.Log(url, time.Since(now))
-
+		assert.NoError(t, err)
+		assert.NotNil(t, article)
+		assert.NotEmpty(t, article.HtmlContent)
+		assert.NotEmpty(t, article.PlainTextContent)
 	}
 }
