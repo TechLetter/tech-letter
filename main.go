@@ -8,48 +8,48 @@ import (
 )
 
 type TechBlog struct {
-	Name string
-	URL string
-	IsRSS bool
+	Name   string
+	URL    string
+	IsRSS  bool
 	RSSURL string
 }
 
 func main() {
 	blogs := []TechBlog{
 		{
-			Name: "카카오",
-			URL: "https://tech.kakao.com/blog",
-			IsRSS: true,
+			Name:   "카카오",
+			URL:    "https://tech.kakao.com/blog",
+			IsRSS:  true,
 			RSSURL: "https://tech.kakao.com/feed/",
 		},
 		{
-			Name: "카카오 페이",
-			URL: "https://tech.kakaopay.com",
-			IsRSS: true,
+			Name:   "카카오 페이",
+			URL:    "https://tech.kakaopay.com",
+			IsRSS:  true,
 			RSSURL: "https://tech.kakaopay.com/rss",
 		},
 		{
-			Name: "네이버",
-			URL: "https://d2.naver.com/home",
-			IsRSS: true,
+			Name:   "네이버",
+			URL:    "https://d2.naver.com/home",
+			IsRSS:  true,
 			RSSURL: "https://d2.naver.com/d2.atom",
 		},
 		{
-			Name: "우아한 형제들",
-			URL: "https://techblog.woowahan.com",
-			IsRSS: true,
+			Name:   "우아한 형제들",
+			URL:    "https://techblog.woowahan.com",
+			IsRSS:  true,
 			RSSURL: "https://techblog.woowahan.com/feed/",
 		},
 		{
-			Name: "당근마켓",
-			URL: "https://medium.com/daangn",
-			IsRSS: true,
+			Name:   "당근마켓",
+			URL:    "https://medium.com/daangn",
+			IsRSS:  true,
 			RSSURL: "https://medium.com/feed/daangn",
 		},
 		{
-			Name: "리멤버",
-			URL: "https://tech.remember.co.kr",
-			IsRSS: true,
+			Name:   "리멤버",
+			URL:    "https://tech.remember.co.kr",
+			IsRSS:  true,
 			RSSURL: "https://tech.remember.co.kr/feed",
 		},
 	}
@@ -62,11 +62,16 @@ func main() {
 		}
 
 		for i, item := range feed.Items {
-			if i >= 3000 {
+			if i >= 1 {
 				break
 			}
-			fmt.Println(blog.Name)
-			fmt.Printf("%d. 제목: %s\n링크: %s\n게시일: %s\n\n", i, item.Title, item.Link, item.Published)
+			fmt.Printf("%s \t%d. 제목: %s\n링크: %s\n게시일: %s\n\n", blog.Name, i, item.Title, item.Link, item.Published)
 		}
 	}
 }
+
+/*
+	클라이언트 랜더링이 필요한 사이트의 경우
+	1. chromedp를 사용하여 브라우저를 실행하고
+	2. readability를 사용하여 text_content와 image를 추출한다.
+*/
