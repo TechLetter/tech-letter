@@ -6,6 +6,7 @@ require (
 	github.com/chromedp/chromedp v0.14.1
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/mmcdole/gofeed v1.3.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/net v0.35.0
 	google.golang.org/genai v1.25.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -37,7 +38,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
