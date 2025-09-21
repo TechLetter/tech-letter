@@ -29,9 +29,16 @@ HDFS는 일반적으로 단일 데이터센터의 노드들로 구성됩니다. 
 Hadoop은 데이터 로컬리티를 통해 높은 성능을 제공하지만, 이로 인해 컴퓨팅과 스토리지 리소스를 분리하기 어렵습니다. HDFS는 컴퓨팅 노드와 결합되어 운영되므로, 단순히 저장 공간(HDFS)을 확장하려 해도 추가 Hadoop 노드를 투입해야 합니다.
 반면, 클라우드 환경에서는 컴퓨팅과 스토리지를 독립적으로 확장할 수 있습니다.
 `
+
 	summary, err := summarizer.SummarizeText(text)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, summary.SummaryShort)
 	assert.NotEmpty(t, summary.SummaryLong)
+	assert.NotEmpty(t, summary.Categories)
+	assert.NotEmpty(t, summary.Tags)
 	assert.False(t, summary.IsFailure)
+
+	t.Log(summary.SummaryShort)
+	t.Log(summary.Categories)
+	t.Log(summary.Tags)
 }
