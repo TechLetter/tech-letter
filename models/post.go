@@ -9,9 +9,10 @@ import (
 // Deprecated string statuses are removed in favor of boolean flags below.
 
 // StatusFlags represents processing progress of a post
-//   html_fetched: HTML이 성공적으로 수집됨
-//   text_parsed: 본문 텍스트가 파싱되어 저장됨
-//   ai_summarized: AI 요약/분류가 저장됨
+//
+//	html_fetched: HTML이 성공적으로 수집됨
+//	text_parsed: 본문 텍스트가 파싱되어 저장됨
+//	ai_summarized: AI 요약/분류가 저장됨
 type StatusFlags struct {
 	HTMLFetched  bool `bson:"html_fetched" json:"html_fetched"`
 	TextParsed   bool `bson:"text_parsed" json:"text_parsed"`
@@ -31,8 +32,8 @@ type Post struct {
 	Title              string             `bson:"title" json:"title"`
 	Link               string             `bson:"link" json:"link"`
 	PublishedAt        time.Time          `bson:"published_at" json:"published_at"`
-	SummaryShort       string             `bson:"summary_short" json:"summary_short"`
-	ReadingTimeMinutes int                `bson:"reading_time_minutes" json:"reading_time_minutes"`
+	ThumbnailURL       string             `bson:"thumbnail_url" json:"thumbnail_url"`
+	ReadingTimeMinutes int                `bson:"reading_time_minutes" json:"reading_time_minutes"` // todo: implement
 	AIGeneratedInfo    AIGeneratedInfo    `bson:"ai_generated_info" json:"ai_generated_info"`
 }
 

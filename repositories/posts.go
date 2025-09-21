@@ -47,7 +47,7 @@ func (r *PostRepository) UpsertByBlogAndLink(ctx context.Context, p *models.Post
 			"title":                p.Title,
 			"link":                 p.Link,
 			"published_at":         p.PublishedAt,
-			"summary_short":        p.SummaryShort,
+			"thumbnail_url":        p.ThumbnailURL,
 			"reading_time_minutes": p.ReadingTimeMinutes,
 			"ai_generated_info":    p.AIGeneratedInfo,
 		},
@@ -73,15 +73,20 @@ func (r *PostRepository) UpdateStatusFlags(ctx context.Context, postID interface
 	return err
 }
 
-// UpdateAIGeneratedInfo sets ai_generated_info and optional summary_short
-func (r *PostRepository) UpdateAIGeneratedInfo(ctx context.Context, postID interface{}, info models.AIGeneratedInfo, summaryShort string) error {
+// UpdateAIGeneratedInfo sets ai_generated_info
+func (r *PostRepository) UpdateAIGeneratedInfo(ctx context.Context, postID interface{}, info models.AIGeneratedInfo) error {
 	set := bson.M{
 		"ai_generated_info": info,
 		"updated_at":        time.Now(),
 	}
-	if summaryShort != "" {
-		set["summary_short"] = summaryShort
-	}
 	_, err := r.col.UpdateByID(ctx, postID, bson.M{"$set": set})
+	return err
+}
+
+// UpdateThumbnailURL sets thumbnail_url field
+func (r *PostRepository) UpdateThumbnailURL(ctx context.Context, postID interface{}, url string) error {
+	_, err := r.col.UpdateByID(ctx, postID, bson.M{
+		"$set": bson.M{"thumbnail_url": url, "updated_at": time.Now()},
+	})
 	return err
 }

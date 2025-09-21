@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 	"tech-letter/config"
 	"tech-letter/db"
 	"tech-letter/feeder"
 	"tech-letter/models"
 	"tech-letter/parser"
 	"tech-letter/renderer"
-	"tech-letter/summarizer"
 	"tech-letter/repositories"
+	"tech-letter/summarizer"
+	"time"
 )
 
 type TechBlog struct {
@@ -24,11 +24,11 @@ type TechBlog struct {
 
 // truncate returns s truncated to max runes.
 func truncate(s string, max int) string {
-    rs := []rune(s)
-    if len(rs) <= max {
-        return s
-    }
-    return string(rs[:max])
+	rs := []rune(s)
+	if len(rs) <= max {
+		return s
+	}
+	return string(rs[:max])
 }
 
 func main() {
@@ -183,6 +183,14 @@ func main() {
 			if flags.TextParsed {
 				if txt, err := postTextRepo.FindByPostID(ctx, saved.ID); err == nil {
 					plain = txt.PlainText
+					// 썸네일이 비어있다면 HTML에서 추출만 수행해 채움
+					if saved.ThumbnailURL == "" && htmlStr != "" {
+						if parsedThumb, err := parser.ParseArticleOfHTML(htmlStr); err == nil {
+							if parsedThumb.TopImage != "" {
+								_ = postRepo.UpdateThumbnailURL(ctx, saved.ID, parsedThumb.TopImage)
+							}
+						}
+					}
 				} else {
 					parsed, err := parser.ParseArticleOfHTML(htmlStr)
 					if err == nil {
@@ -195,6 +203,10 @@ func main() {
 							BlogName:  blogDoc.Name,
 							PostTitle: item.Title,
 						})
+						// 썸네일 저장
+						if parsed.TopImage != "" {
+							_ = postRepo.UpdateThumbnailURL(ctx, saved.ID, parsed.TopImage)
+						}
 					}
 				}
 			} else {
@@ -214,6 +226,10 @@ func main() {
 				}); err != nil {
 					log.Printf("failed to upsert post_text: %v", err)
 					continue
+				}
+				// 썸네일 저장
+				if parsed.TopImage != "" {
+					_ = postRepo.UpdateThumbnailURL(ctx, saved.ID, parsed.TopImage)
 				}
 				flags.TextParsed = true
 				_ = postRepo.UpdateStatusFlags(ctx, saved.ID, flags)
@@ -237,7 +253,7 @@ func main() {
 					ConfidenceScore: 0,
 					GeneratedAt:     time.Now(),
 				}
-				if err := postRepo.UpdateAIGeneratedInfo(ctx, saved.ID, info, summary.SummaryShort); err != nil {
+				if err := postRepo.UpdateAIGeneratedInfo(ctx, saved.ID, info); err != nil {
 					log.Printf("failed to update ai_generated_info: %v", err)
 				}
 				_, _ = aiLogRepo.Insert(ctx, models.AILog{
