@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"time"
 	"tech-letter/config"
 	"tech-letter/db"
 	"tech-letter/feeder"
@@ -12,15 +12,7 @@ import (
 	"tech-letter/renderer"
 	"tech-letter/repositories"
 	"tech-letter/summarizer"
-	"time"
 )
-
-type TechBlog struct {
-	Name   string
-	URL    string
-	IsRSS  bool
-	RSSURL string
-}
 
 // truncate returns s truncated to max runes.
 func truncate(s string, max int) string {
@@ -34,64 +26,63 @@ func truncate(s string, max int) string {
 func main() {
 	config.InitApp()
 
-	// Initialize MongoDB
 	ctx := context.Background()
 	if err := db.Init(ctx); err != nil {
 		log.Fatal("failed to initialize MongoDB:", err)
 	}
 
-	blogs := []TechBlog{
-		{
-			Name:   "카카오",
-			URL:    "https://tech.kakao.com/blog",
-			RSSURL: "https://tech.kakao.com/feed/",
-		},
-		{
-			Name:   "카카오 페이",
-			URL:    "https://tech.kakaopay.com",
-			RSSURL: "https://tech.kakaopay.com/rss",
-		},
-		{
-			Name:   "네이버",
-			URL:    "https://d2.naver.com/home",
-			RSSURL: "https://d2.naver.com/d2.atom",
-		},
-		{
-			Name:   "우아한 형제들",
-			URL:    "https://techblog.woowahan.com",
-			RSSURL: "https://techblog.woowahan.com/feed/",
-		},
-		{
-			Name:   "당근마켓",
-			URL:    "https://medium.com/daangn",
-			RSSURL: "https://medium.com/feed/daangn",
-		},
-		{
-			Name:   "리멤버",
-			URL:    "https://tech.remember.co.kr",
-			RSSURL: "https://tech.remember.co.kr/feed",
-		},
+	// 첫 실행은 즉시 1회 수행
+	if err := runOnce(ctx); err != nil {
+		log.Printf("aggregate runOnce error: %v", err)
 	}
 
-	// Upsert blogs into MongoDB
+	// Asia/Seoul 기준 자정마다 수행
+	loc, err := time.LoadLocation("Asia/Seoul")
+	if err != nil {
+		loc = time.Local
+	}
+	for {
+		now := time.Now().In(loc)
+		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
+		sleepDur := time.Until(nextMidnight)
+		if sleepDur <= 0 {
+			sleepDur = time.Minute // fallback
+		}
+		log.Printf("aggregate sleeping until %s (%s)", nextMidnight.Format(time.RFC3339), loc)
+		time.Sleep(sleepDur)
+		if err := runOnce(ctx); err != nil {
+			log.Printf("aggregate runOnce error: %v", err)
+		}
+	}
+}
+
+// runOnce executes one full aggregation cycle for all configured blogs.
+func runOnce(ctx context.Context) error {
 	blogRepo := repositories.NewBlogRepository(db.Database())
 	postRepo := repositories.NewPostRepository(db.Database())
 	postHTMLRepo := repositories.NewPostHTMLRepository(db.Database())
 	postTextRepo := repositories.NewPostTextRepository(db.Database())
 	aiLogRepo := repositories.NewAILogRepository(db.Database())
-	for _, b := range blogs {
+
+	cfgBlogs := config.GetConfig().Blogs
+	if len(cfgBlogs) == 0 {
+		log.Printf("no blogs configured in config.yaml (key: blogs)")
+		return nil
+	}
+
+	for _, b := range cfgBlogs {
 		mb := &models.Blog{
 			Name:     b.Name,
 			URL:      b.URL,
 			RSSURL:   b.RSSURL,
-			BlogType: "company",
+			BlogType: func() string { if b.BlogType != "" { return b.BlogType }; return "company" }(),
 		}
 		if _, err := blogRepo.UpsertByRSSURL(ctx, mb); err != nil {
 			log.Printf("failed to upsert blog %s: %v", b.Name, err)
 		}
 	}
 
-	for _, blog := range blogs {
+	for _, blog := range cfgBlogs {
 		// Find blog doc to get BlogID
 		blogDoc, err := blogRepo.GetByRSSURL(ctx, blog.RSSURL)
 		if err != nil {
@@ -101,11 +92,11 @@ func main() {
 
 		feed, err := feeder.FetchRssFeeds(blog.RSSURL, 10)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("fetch rss error for %s: %v", blog.Name, err)
+			continue
 		}
 
-		for i, item := range feed {
-			fmt.Printf("%s \t%d. 제목: %s\n링크: %s\n게시일: %s\n\n", blog.Name, i, item.Title, item.Link, item.PublishedAt)
+		for _, item := range feed {
 			// Upsert into posts
 			p := &models.Post{
 				BlogID:   blogDoc.ID,
@@ -273,4 +264,5 @@ func main() {
 			}
 		}
 	}
+	return nil
 }

@@ -14,6 +14,15 @@ type AppConfig struct {
 	GeminiModel  string `yaml:"gemini_model"`
 	MongoURI     string `yaml:"mongo_uri"`
 	MongoDBName  string `yaml:"mongo_db_name"`
+	Blogs        []BlogSource `yaml:"blogs"`
+}
+
+// BlogSource is a single blog configuration item
+type BlogSource struct {
+	Name     string `yaml:"name"`
+	URL      string `yaml:"url"`
+	RSSURL   string `yaml:"rss_url"`
+	BlogType string `yaml:"blog_type"`
 }
 
 var config *AppConfig

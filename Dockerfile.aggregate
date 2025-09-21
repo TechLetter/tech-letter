@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+
+# --- Build stage ---
+FROM golang:1.25.1 AS build
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/aggregate ./cmd/aggregate
+
+# --- Runtime stage (with Chromium for rendering) ---
+FROM alpine:3.20
+WORKDIR /app
+
+# Install headless Chromium and fonts (TLS needs nss)
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    ttf-freefont \
+    font-noto \
+    font-noto-cjk \
+    ca-certificates \
+    tzdata \
+  && update-ca-certificates \
+  && ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome || true
+
+COPY --from=build /out/aggregate /app/aggregate
+
+# In many container envs Chromium sandbox cannot run; allow passing flags via env if app supports
+ENV CHROME_PATH=/usr/bin/chromium-browser \
+    TZ=Asia/Seoul \
+    XDG_CONFIG_HOME=/tmp/.chromium \
+    XDG_CACHE_HOME=/tmp/.chromium
+
+# Create non-root user
+RUN adduser -D -H -u 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+
+ENTRYPOINT ["/app/aggregate"]

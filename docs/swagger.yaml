@@ -1,0 +1,136 @@
+basePath: /api/v1
+definitions:
+  models.AIGeneratedInfo:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      confidence_score:
+        type: number
+      generated_at:
+        type: string
+      model_name:
+        type: string
+      summary_long:
+        type: string
+      summary_short:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  models.Post:
+    properties:
+      ai_generated_info:
+        $ref: '#/definitions/models.AIGeneratedInfo'
+      blog_id:
+        type: string
+      blog_name:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      link:
+        type: string
+      published_at:
+        type: string
+      reading_time_minutes:
+        description: 'todo: implement'
+        type: integer
+      status:
+        $ref: '#/definitions/models.StatusFlags'
+      thumbnail_url:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
+  models.StatusFlags:
+    properties:
+      ai_summarized:
+        type: boolean
+      html_fetched:
+        type: boolean
+      text_parsed:
+        type: boolean
+    type: object
+info:
+  contact: {}
+  description: API for browsing summarized tech blog posts
+  title: Tech-Letter API
+  version: "1.0"
+paths:
+  /posts:
+    get:
+      description: List summarized posts with filters and pagination
+      parameters:
+      - description: Page number (1-based)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (<=100)
+        in: query
+        name: page_size
+        type: integer
+      - description: Category filter
+        in: query
+        name: category
+        type: string
+      - description: Tag filter
+        in: query
+        name: tag
+        type: string
+      - description: Keyword search (title/summary/blog)
+        in: query
+        name: q
+        type: string
+      - description: Filter by html_fetched status
+        in: query
+        name: html_fetched
+        type: boolean
+      - description: Filter by text_parsed status
+        in: query
+        name: text_parsed
+        type: boolean
+      - description: Filter by ai_summarized status
+        in: query
+        name: ai_summarized
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Post'
+            type: array
+      summary: List posts
+      tags:
+      - posts
+  /posts/{id}:
+    get:
+      description: Get a single post by ObjectID
+      parameters:
+      - description: ObjectID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Post'
+      summary: Get post by id
+      tags:
+      - posts
+swagger: "2.0"

@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+
+# --- Build stage ---
+FROM golang:1.25.1 AS build
+WORKDIR /app
+
+# Enable Go modules and caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/api ./cmd/api
+
+# --- Runtime stage ---
+FROM gcr.io/distroless/base-debian12:nonroot
+WORKDIR /app
+
+COPY --from=build /out/api /app/api
+
+# Port for Gin HTTP server
+EXPOSE 8080
+
+USER nonroot:nonroot
+ENTRYPOINT ["/app/api"]

@@ -12,7 +12,18 @@ const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 func RenderHTML(url string) (string, error) {
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath("/usr/bin/chromium-browser"),
 		chromedp.UserAgent(USER_AGENT),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-crashpad", true),
+		chromedp.Flag("disable-breakpad", true),
+		chromedp.Flag("no-first-run", true),
+		chromedp.Flag("no-default-browser-check", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("user-data-dir", "/tmp/chrome-data"),
+		chromedp.Flag("headless", true),
 	)
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
@@ -22,7 +33,7 @@ func RenderHTML(url string) (string, error) {
 	var htmlContent string
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(url),
-		chromedp.Sleep(2*time.Second), // JS 렌더링 대기
+		chromedp.Sleep(2*time.Second), // JS 
 		chromedp.OuterHTML("html", &htmlContent),
 	)
 	if err != nil {

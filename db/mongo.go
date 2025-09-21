@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -27,10 +28,20 @@ func Init(ctx context.Context) error {
 		cfg := config.GetConfig()
 		uri := cfg.MongoURI
 		if uri == "" {
+			if env := os.Getenv("MONGO_URI"); env != "" {
+				uri = env
+			}
+		}
+		if uri == "" {
 			// Fallback for local docker-compose default
 			uri = "mongodb://root:1234@localhost:27017/techletter?authSource=admin"
 		}
 		dbName := cfg.MongoDBName
+		if dbName == "" {
+			if env := os.Getenv("MONGO_DB_NAME"); env != "" {
+				dbName = env
+			}
+		}
 		if dbName == "" {
 			dbName = "techletter"
 		}
