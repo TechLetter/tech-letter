@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -89,4 +90,81 @@ func (r *PostRepository) UpdateThumbnailURL(ctx context.Context, postID interfac
 		"$set": bson.M{"thumbnail_url": url, "updated_at": time.Now()},
 	})
 	return err
+}
+
+type ListPostsOptions struct {
+	Page         int
+	PageSize     int
+	Category     string
+	Tag          string
+	Q            string
+	HTMLFetched  *bool
+	TextParsed   *bool
+	AISummarized *bool
+}
+
+// List returns posts with filters and pagination, sorted by published_at desc
+func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]models.Post, error) {
+	filter := bson.M{}
+	if opt.Category != "" {
+		filter["ai_generated_info.categories"] = opt.Category
+	}
+	if opt.Tag != "" {
+		filter["ai_generated_info.tags"] = opt.Tag
+	}
+	if opt.Q != "" {
+		filter["$or"] = []bson.M{
+			{"title": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"ai_generated_info.summary_short": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"ai_generated_info.summary_long": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"blog_name": bson.M{"$regex": opt.Q, "$options": "i"}},
+		}
+	}
+	if opt.HTMLFetched != nil {
+		filter["status.html_fetched"] = *opt.HTMLFetched
+	}
+	if opt.TextParsed != nil {
+		filter["status.text_parsed"] = *opt.TextParsed
+	}
+	if opt.AISummarized != nil {
+		filter["status.ai_summarized"] = *opt.AISummarized
+	}
+
+	if opt.Page <= 0 {
+		opt.Page = 1
+	}
+	if opt.PageSize <= 0 || opt.PageSize > 100 {
+		opt.PageSize = 20
+	}
+	skip := int64((opt.Page - 1) * opt.PageSize)
+	limit := int64(opt.PageSize)
+
+	findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "published_at", Value: -1}})
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Post
+	for cur.Next(ctx) {
+		var p models.Post
+		if err := cur.Decode(&p); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// FindByID returns a post by its ObjectID
+func (r *PostRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*models.Post, error) {
+	var p models.Post
+	if err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&p); err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
