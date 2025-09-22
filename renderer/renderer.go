@@ -29,11 +29,17 @@ func RenderHTML(url string) (string, error) {
 	defer cancel()
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
+	// Overall timeout for rendering
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
 	var htmlContent string
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(url),
-		chromedp.Sleep(2*time.Second), // JS 
+		// Wait until body is attached and ready
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		// Short settle time for late JS
+		chromedp.Sleep(1*time.Second),
 		chromedp.OuterHTML("html", &htmlContent),
 	)
 	if err != nil {

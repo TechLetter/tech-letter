@@ -50,7 +50,7 @@ func (r *PostRepository) UpsertByBlogAndLink(ctx context.Context, p *models.Post
 			"published_at":         p.PublishedAt,
 			"thumbnail_url":        p.ThumbnailURL,
 			"reading_time_minutes": p.ReadingTimeMinutes,
-			"ai_generated_info":    p.AIGeneratedInfo,
+			"aisummary":            p.AISummary,
 		},
 	}
 	opts := options.Update().SetUpsert(true)
@@ -75,10 +75,20 @@ func (r *PostRepository) UpdateStatusFlags(ctx context.Context, postID interface
 }
 
 // UpdateAIGeneratedInfo sets ai_generated_info
-func (r *PostRepository) UpdateAIGeneratedInfo(ctx context.Context, postID interface{}, info models.AIGeneratedInfo) error {
+func (r *PostRepository) UpdateAIGeneratedInfo(ctx context.Context, postID interface{}, summary models.AISummary) error {
 	set := bson.M{
-		"ai_generated_info": info,
+		"ai_generated_info": summary,
 		"updated_at":        time.Now(),
+	}
+	_, err := r.col.UpdateByID(ctx, postID, bson.M{"$set": set})
+	return err
+}
+
+// UpdateAISummary sets normalized summary snapshot on the post document
+func (r *PostRepository) UpdateAISummary(ctx context.Context, postID interface{}, summary models.AISummary) error {
+	set := bson.M{
+		"aisummary":  summary,
+		"updated_at": time.Now(),
 	}
 	_, err := r.col.UpdateByID(ctx, postID, bson.M{"$set": set})
 	return err
@@ -107,16 +117,16 @@ type ListPostsOptions struct {
 func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]models.Post, error) {
 	filter := bson.M{}
 	if opt.Category != "" {
-		filter["ai_generated_info.categories"] = opt.Category
+		filter["aisummary.categories"] = opt.Category
 	}
 	if opt.Tag != "" {
-		filter["ai_generated_info.tags"] = opt.Tag
+		filter["aisummary.tags"] = opt.Tag
 	}
 	if opt.Q != "" {
 		filter["$or"] = []bson.M{
 			{"title": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"ai_generated_info.summary_short": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"ai_generated_info.summary_long": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"aisummary.summary_short": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"aisummary.summary_long": bson.M{"$regex": opt.Q, "$options": "i"}},
 			{"blog_name": bson.M{"$regex": opt.Q, "$options": "i"}},
 		}
 	}

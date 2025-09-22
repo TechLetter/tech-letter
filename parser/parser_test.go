@@ -21,9 +21,13 @@ func TestParseArticleOfHTML(t *testing.T) {
 		assert.NotEmpty(t, renderedHtml)
 
 		article, err := parser.ParseArticleOfHTML(renderedHtml)
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("failed to parse article: %v", err)
+		}
 		assert.NotNil(t, article)
 		assert.NotEmpty(t, article.HtmlContent)
 		assert.NotEmpty(t, article.PlainTextContent)
+
+		t.Logf("Top Image: %s", article.TopImage)
 	}
 }
