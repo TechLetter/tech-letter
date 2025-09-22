@@ -30,15 +30,16 @@ Hadoop은 데이터 로컬리티를 통해 높은 성능을 제공하지만, 이
 반면, 클라우드 환경에서는 컴퓨팅과 스토리지를 독립적으로 확장할 수 있습니다.
 `
 
-	summary, err := summarizer.SummarizeText(text)
+	summary, log, err := summarizer.SummarizeText(text)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, summary.SummaryShort)
 	assert.NotEmpty(t, summary.SummaryLong)
 	assert.NotEmpty(t, summary.Categories)
 	assert.NotEmpty(t, summary.Tags)
-	assert.False(t, summary.IsFailure)
+	assert.Nil(t, summary.Error)
 
 	t.Log(summary.SummaryShort)
 	t.Log(summary.Categories)
 	t.Log(summary.Tags)
+	t.Log(log)
 }

@@ -79,18 +79,7 @@ func Client() *mongo.Client { return client }
 func Database() *mongo.Database { return db }
 
 func ensureIndexes(ctx context.Context, d *mongo.Database) error {
-	// blogs: unique index on rss_url
-	{
-		mi := mongo.IndexModel{
-			Keys:    bson.D{{Key: "rss_url", Value: 1}},
-			Options: options.Index().SetName("uniq_rss_url").SetUnique(true),
-		}
-		if _, err := d.Collection("blogs").Indexes().CreateOne(ctx, mi); err != nil {
-			return err
-		}
-	}
-
-	// posts: indexes on published_at (desc), categories, tags
+	// posts: indexes on published_at (desc), aisummary.categories, aisummary.tags
 	{
 		// published_at desc
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -99,16 +88,16 @@ func ensureIndexes(ctx context.Context, d *mongo.Database) error {
 		}); err != nil {
 			return err
 		}
-		// categories
+		// aisummary.categories
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "ai_generated_info.categories", Value: 1}},
+			Keys:    bson.D{{Key: "aisummary.categories", Value: 1}},
 			Options: options.Index().SetName("idx_categories"),
 		}); err != nil {
 			return err
 		}
-		// tags
+		// aisummary.tags
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "ai_generated_info.tags", Value: 1}},
+			Keys:    bson.D{{Key: "aisummary.tags", Value: 1}},
 			Options: options.Index().SetName("idx_tags"),
 		}); err != nil {
 			return err
@@ -122,23 +111,42 @@ func ensureIndexes(ctx context.Context, d *mongo.Database) error {
 		}
 	}
 
-    // post_htmls: index on post_id
-    {
-        if _, err := d.Collection("post_htmls").Indexes().CreateOne(ctx, mongo.IndexModel{
-            Keys:    bson.D{{Key: "post_id", Value: 1}},
-            Options: options.Index().SetName("idx_post_id_html"),
-        }); err != nil {
-            return err
-        }
-    }
-    // post_texts: index on post_id
-    {
-        if _, err := d.Collection("post_texts").Indexes().CreateOne(ctx, mongo.IndexModel{
-            Keys:    bson.D{{Key: "post_id", Value: 1}},
-            Options: options.Index().SetName("idx_post_id_text"),
-        }); err != nil {
-            return err
-        }
-    }
+	// post_htmls: index on post_id
+	{
+		if _, err := d.Collection("post_htmls").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "post_id", Value: 1}},
+			Options: options.Index().SetName("idx_post_id_html"),
+		}); err != nil {
+			return err
+		}
+	}
+
+	// post_texts: index on post_id
+	{
+		if _, err := d.Collection("post_texts").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "post_id", Value: 1}},
+			Options: options.Index().SetName("idx_post_id_text"),
+		}); err != nil {
+			return err
+		}
+	}
+
+	// post_ai_summaries: indexes (no version uniqueness)
+	{
+		// index on ai_log_id for quick join
+		if _, err := d.Collection("post_ai_summaries").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "ai_log_id", Value: 1}},
+			Options: options.Index().SetName("idx_ai_log_id"),
+		}); err != nil {
+			return err
+		}
+		// index on post_id for retrieval of all summaries for a post
+		if _, err := d.Collection("post_ai_summaries").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "post_id", Value: 1}},
+			Options: options.Index().SetName("idx_post_id_summary"),
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }

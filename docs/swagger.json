@@ -112,7 +112,7 @@
         }
     },
     "definitions": {
-        "models.AIGeneratedInfo": {
+        "models.AISummary": {
             "type": "object",
             "properties": {
                 "categories": {
@@ -120,9 +120,6 @@
                     "items": {
                         "type": "string"
                     }
-                },
-                "confidence_score": {
-                    "type": "number"
                 },
                 "generated_at": {
                     "type": "string"
@@ -147,8 +144,8 @@
         "models.Post": {
             "type": "object",
             "properties": {
-                "ai_generated_info": {
-                    "$ref": "#/definitions/models.AIGeneratedInfo"
+                "aisummary": {
+                    "$ref": "#/definitions/models.AISummary"
                 },
                 "blog_id": {
                     "type": "string"

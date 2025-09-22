@@ -26,7 +26,7 @@ type Post struct {
 	CreatedAt          time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt          time.Time          `bson:"updated_at" json:"updated_at"`
 	Status             StatusFlags        `bson:"status" json:"status"`
-	ViewCount          int64              `bson:"view_count" json:"view_count"`
+	ViewCount          int64              `bson:"view_count" json:"view_count"` // todo: implement
 	BlogID             primitive.ObjectID `bson:"blog_id" json:"blog_id"`
 	BlogName           string             `bson:"blog_name" json:"blog_name"`
 	Title              string             `bson:"title" json:"title"`
@@ -34,64 +34,17 @@ type Post struct {
 	PublishedAt        time.Time          `bson:"published_at" json:"published_at"`
 	ThumbnailURL       string             `bson:"thumbnail_url" json:"thumbnail_url"`
 	ReadingTimeMinutes int                `bson:"reading_time_minutes" json:"reading_time_minutes"` // todo: implement
-	AIGeneratedInfo    AIGeneratedInfo    `bson:"ai_generated_info" json:"ai_generated_info"`
+	AISummary          AISummary          `bson:"aisummary" json:"aisummary"`
 }
 
-// AIGeneratedInfo nested info in Post
-// Stored under posts.ai_generated_info
+// AISummary nested info in Post (denormalized snapshot)
+// Stored under posts.aisummary
 // Includes categories and tags arrays for indexing
-type AIGeneratedInfo struct {
-	Categories      []string  `bson:"categories" json:"categories"`
-	Tags            []string  `bson:"tags" json:"tags"`
-	SummaryShort    string    `bson:"summary_short" json:"summary_short"`
-	SummaryLong     string    `bson:"summary_long" json:"summary_long"`
-	ModelName       string    `bson:"model_name" json:"model_name"`
-	ConfidenceScore float64   `bson:"confidence_score" json:"confidence_score"`
-	GeneratedAt     time.Time `bson:"generated_at" json:"generated_at"`
-}
-
-// PostHTML stores raw html
-// Collection: post_htmls
-type PostHTML struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	CreatedAt       time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt       time.Time          `bson:"updated_at" json:"updated_at"`
-	PostID          primitive.ObjectID `bson:"post_id" json:"post_id"`
-	RawHTML         string             `bson:"raw_html" json:"raw_html"`
-	FetchedAt       time.Time          `bson:"fetched_at" json:"fetched_at"`
-	FetchDurationMs int64              `bson:"fetch_duration_ms" json:"fetch_duration_ms"`
-	HTMLSizeBytes   int64              `bson:"html_size_bytes" json:"html_size_bytes"`
-	BlogName        string             `bson:"blog_name" json:"blog_name"`
-	PostTitle       string             `bson:"post_title" json:"post_title"`
-}
-
-// PostText stores parsed plain text
-// Collection: post_texts
-type PostText struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
-	PostID    primitive.ObjectID `bson:"post_id" json:"post_id"`
-	PlainText string             `bson:"plain_text" json:"plain_text"`
-	ParsedAt  time.Time          `bson:"parsed_at" json:"parsed_at"`
-	WordCount int                `bson:"word_count" json:"word_count"`
-	BlogName  string             `bson:"blog_name" json:"blog_name"`
-	PostTitle string             `bson:"post_title" json:"post_title"`
-}
-
-// AILog stores LLM usage logs
-// Collection: ai_logs
-type AILog struct {
-	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	PostID           primitive.ObjectID `bson:"post_id" json:"post_id"`
-	Model            string             `bson:"model" json:"model"`
-	PromptTokens     int                `bson:"prompt_tokens" json:"prompt_tokens"`
-	CompletionTokens int                `bson:"completion_tokens" json:"completion_tokens"`
-	TotalTokens      int                `bson:"total_tokens" json:"total_tokens"`
-	DurationMs       int64              `bson:"duration_ms" json:"duration_ms"`
-	Success          bool               `bson:"success" json:"success"`
-	ResponseExcerpt  string             `bson:"response_excerpt" json:"response_excerpt"`
-	ErrorMessage     *string            `bson:"error_message,omitempty" json:"error_message,omitempty"`
-	RequestedAt      time.Time          `bson:"requested_at" json:"requested_at"`
-	CompletedAt      time.Time          `bson:"completed_at" json:"completed_at"`
+type AISummary struct {
+	Categories   []string  `bson:"categories" json:"categories"`
+	Tags         []string  `bson:"tags" json:"tags"`
+	SummaryShort string    `bson:"summary_short" json:"summary_short"`
+	SummaryLong  string    `bson:"summary_long" json:"summary_long"`
+	ModelName    string    `bson:"model_name" json:"model_name"`
+	GeneratedAt  time.Time `bson:"generated_at" json:"generated_at"`
 }
