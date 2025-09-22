@@ -20,42 +20,33 @@ func NewPostRepository(db *mongo.Database) *PostRepository {
 	return &PostRepository{col: db.Collection("posts")}
 }
 
-// UpsertByBlogAndLink upserts a post uniquely identified by (blog_id, link)
-// IMPORTANT: This must NOT reset processing status or AISummary on existing documents.
-func (r *PostRepository) UpsertByBlogAndLink(ctx context.Context, p *models.Post) (*mongo.UpdateResult, error) {
+// IsExistByLink checks if a post exists by its link.
+func (r *PostRepository) IsExistByLink(ctx context.Context, link string) (bool, error) {
+	err := r.col.FindOne(ctx, bson.M{"link": link}).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// Insert inserts a new post document.
+func (r *PostRepository) Insert(ctx context.Context, p *models.Post) (*mongo.InsertOneResult, error) {
 	now := time.Now()
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = now
 	}
 	p.UpdatedAt = now
-
-	filter := bson.M{"blog_id": p.BlogID, "link": p.Link}
-	update := bson.M{
-		"$setOnInsert": bson.M{
-			"created_at": p.CreatedAt,
-			// initialize status only on insert (do not reset on updates)
-			"status": models.StatusFlags{},
-		},
-		"$set": bson.M{
-			"updated_at":           p.UpdatedAt,
-			"view_count":           p.ViewCount,
-			"blog_id":              p.BlogID,
-			"blog_name":            p.BlogName,
-			"title":                p.Title,
-			"link":                 p.Link,
-			"published_at":         p.PublishedAt,
-			"thumbnail_url":        p.ThumbnailURL,
-			"reading_time_minutes": p.ReadingTimeMinutes,
-		},
+	if p.Status == (models.StatusFlags{}) {
+		// default zero flags
+		p.Status = models.StatusFlags{}
 	}
-	opts := options.Update().SetUpsert(true)
-	return r.col.UpdateOne(ctx, filter, update, opts)
+	return r.col.InsertOne(ctx, p)
 }
 
-// FindByBlogAndLink returns a post by (blog_id, link)
-func (r *PostRepository) FindByBlogAndLink(ctx context.Context, blogID interface{}, link string) (*models.Post, error) {
+// FindByLink returns a post by link
+func (r *PostRepository) FindByLink(ctx context.Context, link string) (*models.Post, error) {
 	var p models.Post
-	if err := r.col.FindOne(ctx, bson.M{"blog_id": blogID, "link": link}).Decode(&p); err != nil {
+	if err := r.col.FindOne(ctx, bson.M{"link": link}).Decode(&p); err != nil {
 		return nil, err
 	}
 	return &p, nil

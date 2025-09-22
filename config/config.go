@@ -10,11 +10,12 @@ import (
 const CONFIG_FILE = "config.yaml"
 
 type AppConfig struct {
-	GeminiApiKey string `yaml:"gemini_api_key"`
-	GeminiModel  string `yaml:"gemini_model"`
-	MongoURI     string `yaml:"mongo_uri"`
-	MongoDBName  string `yaml:"mongo_db_name"`
-	Blogs        []BlogSource `yaml:"blogs"`
+	GeminiApiKey       string       `yaml:"gemini_api_key"`
+	GeminiModel        string       `yaml:"gemini_model"`
+	MongoURI           string       `yaml:"mongo_uri"`
+	MongoDBName        string       `yaml:"mongo_db_name"`
+	BlogFetchBatchSize int          `yaml:"blog_fetch_batch_size"`
+	Blogs              []BlogSource `yaml:"blogs"`
 }
 
 // BlogSource is a single blog configuration item

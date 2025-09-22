@@ -89,30 +89,37 @@ func runOnce(ctx context.Context) error {
 			continue
 		}
 
-		feed, err := feeder.FetchRssFeeds(blog.RSSURL, 10)
+		feed, err := feeder.FetchRssFeeds(blog.RSSURL, config.GetConfig().BlogFetchBatchSize)
 		if err != nil {
 			log.Printf("fetch rss error for %s: %v", blog.Name, err)
 			continue
 		}
 
 		for _, item := range feed {
-			// Upsert into posts
-			p := &models.Post{
-				BlogID:   blogDoc.ID,
-				BlogName: blogDoc.Name,
-				Title:    item.Title,
-				Link:     item.Link,
-			}
-			if !item.PublishedAt.IsZero() {
-				p.PublishedAt = item.PublishedAt
-			}
-			if _, err := postRepo.UpsertByBlogAndLink(ctx, p); err != nil {
-				log.Printf("failed to upsert post (blog=%s, title=%s): %v", blog.Name, item.Title, err)
+			// Ensure post exists by link (no upsert)
+			exists, err := postRepo.IsExistByLink(ctx, item.Link)
+			if err != nil {
+				log.Printf("failed to check post existence (link=%s): %v", item.Link, err)
 				continue
 			}
+			if !exists {
+				p := &models.Post{
+					BlogID:   blogDoc.ID,
+					BlogName: blogDoc.Name,
+					Title:    item.Title,
+					Link:     item.Link,
+				}
+				if !item.PublishedAt.IsZero() {
+					p.PublishedAt = item.PublishedAt
+				}
+				if _, err := postRepo.Insert(ctx, p); err != nil {
+					log.Printf("failed to insert post (blog=%s, title=%s): %v", blog.Name, item.Title, err)
+					continue
+				}
+			}
 
-			// Load savedPost post to get its ID
-			savedPost, err := postRepo.FindByBlogAndLink(ctx, blogDoc.ID, item.Link)
+			// Load saved post to get its ID
+			savedPost, err := postRepo.FindByLink(ctx, item.Link)
 			if err != nil {
 				log.Printf("failed to reload post (blog=%s, link=%s): %v", blog.Name, item.Link, err)
 				continue
@@ -137,7 +144,7 @@ func runOnce(ctx context.Context) error {
 					log.Printf("failed to render HTML: %v", err)
 					continue
 				}
-				if _, err := postHTMLRepo.UpsertByPost(ctx, &models.PostHTML{
+				htmlDoc := &models.PostHTML{
 					PostID:          savedPost.ID,
 					RawHTML:         htmlStr,
 					FetchedAt:       time.Now(),
@@ -145,9 +152,22 @@ func runOnce(ctx context.Context) error {
 					HTMLSizeBytes:   int64(len([]byte(htmlStr))),
 					BlogName:        blogDoc.Name,
 					PostTitle:       item.Title,
-				}); err != nil {
-					log.Printf("failed to upsert post_html: %v", err)
+				}
+				exists, err := postHTMLRepo.IsExistByPostID(ctx, savedPost.ID)
+				if err != nil {
+					log.Printf("failed to check post_html existence: %v", err)
 					continue
+				}
+				if !exists {
+					if _, err := postHTMLRepo.Insert(ctx, htmlDoc); err != nil {
+						log.Printf("failed to insert post_html: %v", err)
+						continue
+					}
+				} else {
+					if _, err := postHTMLRepo.UpdateByPostID(ctx, htmlDoc); err != nil {
+						log.Printf("failed to update post_html: %v", err)
+						continue
+					}
 				}
 				flags.HTMLFetched = true
 				_ = postRepo.UpdateStatusFlags(ctx, savedPost.ID, flags)
@@ -165,7 +185,7 @@ func runOnce(ctx context.Context) error {
 						log.Printf("failed to render HTML (fallback): %v", err)
 						continue
 					}
-					if _, err := postHTMLRepo.UpsertByPost(ctx, &models.PostHTML{
+					htmlDoc := &models.PostHTML{
 						PostID:          savedPost.ID,
 						RawHTML:         htmlStr,
 						FetchedAt:       time.Now(),
@@ -173,9 +193,22 @@ func runOnce(ctx context.Context) error {
 						HTMLSizeBytes:   int64(len([]byte(htmlStr))),
 						BlogName:        blogDoc.Name,
 						PostTitle:       item.Title,
-					}); err != nil {
-						log.Printf("failed to upsert post_html (fallback): %v", err)
+					}
+					exists, err := postHTMLRepo.IsExistByPostID(ctx, savedPost.ID)
+					if err != nil {
+						log.Printf("failed to check post_html existence (fallback): %v", err)
 						continue
+					}
+					if !exists {
+						if _, err := postHTMLRepo.Insert(ctx, htmlDoc); err != nil {
+							log.Printf("failed to insert post_html (fallback): %v", err)
+							continue
+						}
+					} else {
+						if _, err := postHTMLRepo.UpdateByPostID(ctx, htmlDoc); err != nil {
+							log.Printf("failed to update post_html (fallback): %v", err)
+							continue
+						}
 					}
 					log.Printf("re-fetched Raw HTML for %s: %s", item.Title, item.Link)
 				}
@@ -190,16 +223,29 @@ func runOnce(ctx context.Context) error {
 					continue
 				}
 				savedPlainText = parsed.PlainTextContent
-				if _, err := postTextRepo.UpsertByPost(ctx, &models.PostText{
+				textDoc := &models.PostText{
 					PostID:    savedPost.ID,
 					PlainText: savedPlainText,
 					ParsedAt:  time.Now(),
 					WordCount: len([]rune(savedPlainText)),
 					BlogName:  blogDoc.Name,
 					PostTitle: item.Title,
-				}); err != nil {
-					log.Printf("failed to upsert post_text: %v", err)
+				}
+				exists, err := postTextRepo.IsExistByPostID(ctx, savedPost.ID)
+				if err != nil {
+					log.Printf("failed to check post_text existence: %v", err)
 					continue
+				}
+				if !exists {
+					if _, err := postTextRepo.Insert(ctx, textDoc); err != nil {
+						log.Printf("failed to insert post_text: %v", err)
+						continue
+					}
+				} else {
+					if _, err := postTextRepo.UpdateByPostID(ctx, textDoc); err != nil {
+						log.Printf("failed to update post_text: %v", err)
+						continue
+					}
 				}
 				if parsed.TopImage != "" {
 					_ = postRepo.UpdateThumbnailURL(ctx, savedPost.ID, parsed.TopImage)
@@ -223,16 +269,29 @@ func runOnce(ctx context.Context) error {
 						continue
 					}
 					savedPlainText = parsed.PlainTextContent
-					if _, err := postTextRepo.UpsertByPost(ctx, &models.PostText{
+					textDoc := &models.PostText{
 						PostID:    savedPost.ID,
 						PlainText: savedPlainText,
 						ParsedAt:  time.Now(),
 						WordCount: len([]rune(savedPlainText)),
 						BlogName:  blogDoc.Name,
 						PostTitle: item.Title,
-					}); err != nil {
-						log.Printf("failed to upsert post_text (fallback): %v", err)
+					}
+					exists, err := postTextRepo.IsExistByPostID(ctx, savedPost.ID)
+					if err != nil {
+						log.Printf("failed to check post_text existence (fallback): %v", err)
 						continue
+					}
+					if !exists {
+						if _, err := postTextRepo.Insert(ctx, textDoc); err != nil {
+							log.Printf("failed to insert post_text (fallback): %v", err)
+							continue
+						}
+					} else {
+						if _, err := postTextRepo.UpdateByPostID(ctx, textDoc); err != nil {
+							log.Printf("failed to update post_text (fallback): %v", err)
+							continue
+						}
 					}
 				}
 			}
@@ -267,7 +326,7 @@ func runOnce(ctx context.Context) error {
 					OutputTokens:   reqLog.TokenUsage.OutputTokens,
 					TotalTokens:    reqLog.TokenUsage.TotalTokens,
 					DurationMs:     reqLog.LatencyMs,
-					InputPrompt:    savedPlainText,
+					InputPrompt:    reqLog.Prompt,
 					OutputResponse: reqLog.Response,
 					RequestedAt:    reqLog.GeneratedAt.Add(-time.Duration(reqLog.LatencyMs) * time.Millisecond),
 					CompletedAt:    reqLog.GeneratedAt,
