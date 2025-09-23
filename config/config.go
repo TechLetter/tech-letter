@@ -10,12 +10,17 @@ import (
 const CONFIG_FILE = "config.yaml"
 
 type AppConfig struct {
-	GeminiApiKey       string       `yaml:"gemini_api_key"`
-	GeminiModel        string       `yaml:"gemini_model"`
-	MongoURI           string       `yaml:"mongo_uri"`
-	MongoDBName        string       `yaml:"mongo_db_name"`
-	BlogFetchBatchSize int          `yaml:"blog_fetch_batch_size"`
-	Blogs              []BlogSource `yaml:"blogs"`
+	Logging            LoggingConfig `yaml:"logging"`
+	GeminiApiKey       string        `yaml:"gemini_api_key"`
+	GeminiModel        string        `yaml:"gemini_model"`
+	MongoURI           string        `yaml:"mongo_uri"`
+	MongoDBName        string        `yaml:"mongo_db_name"`
+	BlogFetchBatchSize int           `yaml:"blog_fetch_batch_size"`
+	Blogs              []BlogSource  `yaml:"blogs"`
+}
+
+type LoggingConfig struct {
+	Level string `yaml:"level"`
 }
 
 // BlogSource is a single blog configuration item
@@ -29,6 +34,7 @@ type BlogSource struct {
 var config *AppConfig
 
 func InitApp() {
+	// load configuration file
 	data, err := os.ReadFile(filepath.Join(GetBasePath(), CONFIG_FILE))
 	if err != nil {
 		panic(err)
