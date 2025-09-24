@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	_ "tech-letter/docs" // swag will generate this package
+	"tech-letter/api/router"
 	"tech-letter/config"
 	"tech-letter/db"
-	"tech-letter/api/router"
+	_ "tech-letter/docs" // swag will generate this package
 )
 
 // @title           Tech-Letter API
@@ -17,6 +17,8 @@ import (
 // @BasePath        /api/v1
 func main() {
 	config.InitApp()
+	config.InitLogger()
+
 	if err := db.Init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
