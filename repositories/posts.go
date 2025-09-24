@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -79,40 +80,40 @@ func (r *PostRepository) UpdateThumbnailURL(ctx context.Context, postID interfac
 }
 
 type ListPostsOptions struct {
-	Page         int
-	PageSize     int
-	Category     string
-	Tag          string
-	Q            string
-	HTMLFetched  *bool
-	TextParsed   *bool
-	AISummarized *bool
+	Page       int
+	PageSize   int
+	Categories []string
+	Tags       []string
 }
 
 // List returns posts with filters and pagination, sorted by published_at desc
 func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]models.Post, error) {
 	filter := bson.M{}
-	if opt.Category != "" {
-		filter["aisummary.categories"] = opt.Category
-	}
-	if opt.Tag != "" {
-		filter["aisummary.tags"] = opt.Tag
-	}
-	if opt.Q != "" {
-		filter["$or"] = []bson.M{
-			{"title": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"aisummary.summary": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"blog_name": bson.M{"$regex": opt.Q, "$options": "i"}},
+	// Build case-insensitive anchored regex arrays for categories and tags
+	toRegexIn := func(values []string) []interface{} {
+		arr := make([]interface{}, 0, len(values))
+		for _, v := range values {
+			if v == "" {
+				continue
+			}
+			// Quote meta to avoid special regex chars being interpreted
+			pattern := "^" + regexp.QuoteMeta(v) + "$"
+			arr = append(arr, primitive.Regex{Pattern: pattern, Options: "i"})
 		}
+		return arr
 	}
-	if opt.HTMLFetched != nil {
-		filter["status.html_fetched"] = *opt.HTMLFetched
-	}
-	if opt.TextParsed != nil {
-		filter["status.text_parsed"] = *opt.TextParsed
-	}
-	if opt.AISummarized != nil {
-		filter["status.ai_summarized"] = *opt.AISummarized
+
+	catsRegex := toRegexIn(opt.Categories)
+	tagsRegex := toRegexIn(opt.Tags)
+	if len(catsRegex) > 0 && len(tagsRegex) > 0 {
+		filter["$or"] = []bson.M{
+			{"aisummary.categories": bson.M{"$in": catsRegex}},
+			{"aisummary.tags": bson.M{"$in": tagsRegex}},
+		}
+	} else if len(catsRegex) > 0 {
+		filter["aisummary.categories"] = bson.M{"$in": catsRegex}
+	} else if len(tagsRegex) > 0 {
+		filter["aisummary.tags"] = bson.M{"$in": tagsRegex}
 	}
 
 	if opt.Page <= 0 {

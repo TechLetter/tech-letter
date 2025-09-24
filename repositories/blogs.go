@@ -52,3 +52,41 @@ func (r *BlogRepository) GetByRSSURL(ctx context.Context, rssURL string) (*model
 	}
 	return &b, nil
 }
+
+// ListBlogsOptions defines pagination options for listing blogs
+type ListBlogsOptions struct {
+	Page     int
+	PageSize int
+}
+
+// List returns blogs with simple pagination, sorted by name asc
+func (r *BlogRepository) List(ctx context.Context, opt ListBlogsOptions) ([]models.Blog, error) {
+	if opt.Page <= 0 {
+		opt.Page = 1
+	}
+	if opt.PageSize <= 0 || opt.PageSize > 100 {
+		opt.PageSize = 20
+	}
+	skip := int64((opt.Page - 1) * opt.PageSize)
+	limit := int64(opt.PageSize)
+
+	findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "name", Value: 1}})
+	cur, err := r.col.Find(ctx, bson.M{}, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Blog
+	for cur.Next(ctx) {
+		var b models.Blog
+		if err := cur.Decode(&b); err != nil {
+			return nil, err
+		}
+		results = append(results, b)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
