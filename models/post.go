@@ -41,10 +41,9 @@ type Post struct {
 // Stored under posts.aisummary
 // Includes categories and tags arrays for indexing
 type AISummary struct {
-	Categories   []string  `bson:"categories" json:"categories"`
-	Tags         []string  `bson:"tags" json:"tags"`
-	SummaryShort string    `bson:"summary_short" json:"summary_short"`
-	SummaryLong  string    `bson:"summary_long" json:"summary_long"`
-	ModelName    string    `bson:"model_name" json:"model_name"`
-	GeneratedAt  time.Time `bson:"generated_at" json:"generated_at"`
+	Categories  []string  `bson:"categories" json:"categories"`
+	Tags        []string  `bson:"tags" json:"tags"`
+	Summary     string    `bson:"summary" json:"summary"`
+	ModelName   string    `bson:"model_name" json:"model_name"`
+	GeneratedAt time.Time `bson:"generated_at" json:"generated_at"`
 }

@@ -32,13 +32,12 @@ Hadoop은 데이터 로컬리티를 통해 높은 성능을 제공하지만, 이
 
 	summary, log, err := summarizer.SummarizeText(text)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, summary.SummaryShort)
-	assert.NotEmpty(t, summary.SummaryLong)
+	assert.NotEmpty(t, summary.Summary)
 	assert.NotEmpty(t, summary.Categories)
 	assert.NotEmpty(t, summary.Tags)
 	assert.Nil(t, summary.Error)
 
-	t.Log(summary.SummaryShort)
+	t.Log(summary.Summary)
 	t.Log(summary.Categories)
 	t.Log(summary.Tags)
 	t.Log(log)

@@ -102,48 +102,10 @@ func ensureIndexes(ctx context.Context, d *mongo.Database) error {
 		}); err != nil {
 			return err
 		}
-		// unique (blog_id, link)
+		// unique link
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "blog_id", Value: 1}, {Key: "link", Value: 1}},
-			Options: options.Index().SetName("uniq_blog_link").SetUnique(true),
-		}); err != nil {
-			return err
-		}
-	}
-
-	// post_htmls: index on post_id
-	{
-		if _, err := d.Collection("post_htmls").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "post_id", Value: 1}},
-			Options: options.Index().SetName("idx_post_id_html"),
-		}); err != nil {
-			return err
-		}
-	}
-
-	// post_texts: index on post_id
-	{
-		if _, err := d.Collection("post_texts").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "post_id", Value: 1}},
-			Options: options.Index().SetName("idx_post_id_text"),
-		}); err != nil {
-			return err
-		}
-	}
-
-	// post_ai_summaries: indexes (no version uniqueness)
-	{
-		// index on ai_log_id for quick join
-		if _, err := d.Collection("post_ai_summaries").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "ai_log_id", Value: 1}},
-			Options: options.Index().SetName("idx_ai_log_id"),
-		}); err != nil {
-			return err
-		}
-		// index on post_id for retrieval of all summaries for a post
-		if _, err := d.Collection("post_ai_summaries").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "post_id", Value: 1}},
-			Options: options.Index().SetName("idx_post_id_summary"),
+			Keys:    bson.D{{Key: "link", Value: 1}},
+			Options: options.Index().SetName("uniq_link").SetUnique(true),
 		}); err != nil {
 			return err
 		}

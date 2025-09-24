@@ -101,8 +101,7 @@ func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]mode
 	if opt.Q != "" {
 		filter["$or"] = []bson.M{
 			{"title": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"aisummary.summary_short": bson.M{"$regex": opt.Q, "$options": "i"}},
-			{"aisummary.summary_long": bson.M{"$regex": opt.Q, "$options": "i"}},
+			{"aisummary.summary": bson.M{"$regex": opt.Q, "$options": "i"}},
 			{"blog_name": bson.M{"$regex": opt.Q, "$options": "i"}},
 		}
 	}

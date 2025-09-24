@@ -11,11 +11,10 @@ import (
 )
 
 type SummarizeResult struct {
-	SummaryShort string   `json:"summary_short"`
-	SummaryLong  string   `json:"summary_long"`
-	Categories   []string `json:"categories"`
-	Tags         []string `json:"tags"`
-	Error        *string  `json:"error,omitempty"`
+	Summary    string   `json:"summary"`
+	Categories []string `json:"categories"`
+	Tags       []string `json:"tags"`
+	Error      *string  `json:"error,omitempty"`
 }
 
 type LLMRequestLog struct {
@@ -39,11 +38,9 @@ You are a content summarization assistant for technical blog posts.
 Your task is to analyze the provided text and produce a structured summary.
 The response MUST be a valid JSON object with five keys:
 
-1. summary_short: A concise summary of the blog post, no more than 200 characters.
+1. summary: A concise summary of the blog post, no more than 200 characters.
    (Written in Korean)
-2. summary_long: A detailed summary of the blog post, no more than 1000 characters.
-   (Written in Korean)
-3. error: An optional string field. If the content contains a security check
+2. error: An optional string field. If the content contains a security check
    (e.g., "I'm not a bot," "Are you human?") that prevents summarization,
    set this field to a descriptive error message. Otherwise, set it to 'null'.
 4. categories: A list of 1–3 categories that best describe the blog post.
@@ -57,11 +54,11 @@ The response MUST be a valid JSON object with five keys:
    - Remove duplicates.
 
 Additional constraints:
-- Only summary_short and summary_long should be written in Korean. All other fields (categories, tags) remain in English.
+- Only 'summary' should be written in Korean. All other fields (categories, tags) remain in English.
 - You MUST NOT wrap the JSON output in a markdown code block (e.g., ` + "```json ... ```" + `).
 - The response should contain ONLY the raw JSON string.
 - If summarization fails, set the 'error' field to an appropriate message (e.g., "Content contains a security check preventing summarization.")
-  and provide an empty string for 'summary_short' and 'summary_long', and empty arrays for 'categories' and 'tags'.
+  and provide an empty string for 'summary', and empty arrays for 'categories' and 'tags'.
 `
 
 func SummarizeText(text string) (*SummarizeResult, *LLMRequestLog, error) {
