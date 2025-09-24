@@ -5,9 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"tech-letter/repositories"
+	"tech-letter/services"
 )
 
 // ListPostsHandler godoc
@@ -16,39 +15,22 @@ import (
 // @Tags         posts
 // @Param        page          query  int     false  "Page number (1-based)"
 // @Param        page_size     query  int     false  "Page size (<=100)"
-// @Param        category      query  string  false  "Category filter"
-// @Param        tag           query  string  false  "Tag filter"
-// @Param        q             query  string  false  "Keyword search (title/summary/blog)"
-// @Param        html_fetched  query  bool    false  "Filter by html_fetched status"
-// @Param        text_parsed   query  bool    false  "Filter by text_parsed status"
-// @Param        ai_summarized query  bool    false  "Filter by ai_summarized status"
+// @Param        categories    query  []string  false  "Categories (OR match)"
+// @Param        tags          query  []string  false  "Tags (OR match)"
 // @Produce      json
-// @Success      200  {array}  models.Post
+// @Success      200  {array}  dto.PostDTO
 // @Router       /posts [get]
-func ListPostsHandler(repo *repositories.PostRepository) gin.HandlerFunc {
+func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var opt repositories.ListPostsOptions
+		var in services.ListPostsInput
 		// pagination
-		opt.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
-		opt.PageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", "20"))
+		in.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+		in.PageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", "20"))
 		// filters
-		opt.Category = c.Query("category")
-		opt.Tag = c.Query("tag")
-		opt.Q = c.Query("q")
-		if v := c.Query("html_fetched"); v != "" {
-			b, _ := strconv.ParseBool(v)
-			opt.HTMLFetched = &b
-		}
-		if v := c.Query("text_parsed"); v != "" {
-			b, _ := strconv.ParseBool(v)
-			opt.TextParsed = &b
-		}
-		if v := c.Query("ai_summarized"); v != "" {
-			b, _ := strconv.ParseBool(v)
-			opt.AISummarized = &b
-		}
+		in.Categories = c.QueryArray("categories")
+		in.Tags = c.QueryArray("tags")
 
-		items, err := repo.List(c.Request.Context(), opt)
+		items, err := svc.List(c.Request.Context(), in)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -63,21 +45,38 @@ func ListPostsHandler(repo *repositories.PostRepository) gin.HandlerFunc {
 // @Tags         posts
 // @Param        id   path   string  true  "ObjectID"
 // @Produce      json
-// @Success      200  {object}  models.Post
+// @Success      200  {object}  dto.PostDTO
 // @Router       /posts/{id} [get]
-func GetPostHandler(repo *repositories.PostRepository) gin.HandlerFunc {
+func GetPostHandler(svc *services.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
-		id, err := primitive.ObjectIDFromHex(idStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-			return
-		}
-		post, err := repo.FindByID(c.Request.Context(), id)
+		post, err := svc.GetByID(c.Request.Context(), idStr)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
 		c.JSON(http.StatusOK, post)
+	}
+}
+
+// ListBlogsHandler godoc
+// @Summary      List blogs
+// @Description  List blogs with simple pagination
+// @Tags         blogs
+// @Param        page          query  int     false  "Page number (1-based)"
+// @Param        page_size     query  int     false  "Page size (<=100)"
+// @Produce      json
+// @Success      200  {array}  dto.BlogDTO
+// @Router       /blogs [get]
+func ListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+		items, err := svc.List(c.Request.Context(), services.ListBlogsInput{Page: page, PageSize: pageSize})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, items)
 	}
 }

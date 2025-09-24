@@ -11,6 +11,7 @@ import (
     "tech-letter/db"
     "tech-letter/api/handlers"
     "tech-letter/repositories"
+    "tech-letter/services"
     "go.mongodb.org/mongo-driver/bson"
 )
 
@@ -34,8 +35,13 @@ func New() *gin.Engine {
     api := r.Group("/api/v1")
     {
         postsRepo := repositories.NewPostRepository(db.Database())
-        api.GET("/posts", handlers.ListPostsHandler(postsRepo))
-        api.GET("/posts/:id", handlers.GetPostHandler(postsRepo))
+        postsSvc := services.NewPostService(postsRepo)
+        api.GET("/posts", handlers.ListPostsHandler(postsSvc))
+        api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
+
+        blogsRepo := repositories.NewBlogRepository(db.Database())
+        blogsSvc := services.NewBlogService(blogsRepo)
+        api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))
     }
 
     return r
