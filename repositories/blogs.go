@@ -59,8 +59,8 @@ type ListBlogsOptions struct {
 	PageSize int
 }
 
-// List returns blogs with simple pagination, sorted by name asc
-func (r *BlogRepository) List(ctx context.Context, opt ListBlogsOptions) ([]models.Blog, error) {
+// List returns blogs with pagination and total, sorted by name asc
+func (r *BlogRepository) List(ctx context.Context, opt ListBlogsOptions) ([]models.Blog, int64, error) {
 	if opt.Page <= 0 {
 		opt.Page = 1
 	}
@@ -70,10 +70,16 @@ func (r *BlogRepository) List(ctx context.Context, opt ListBlogsOptions) ([]mode
 	skip := int64((opt.Page - 1) * opt.PageSize)
 	limit := int64(opt.PageSize)
 
-	findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "name", Value: 1}})
-	cur, err := r.col.Find(ctx, bson.M{}, findOpts)
+	filter := bson.M{}
+	total, err := r.col.CountDocuments(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+
+	findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "name", Value: 1}})
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer cur.Close(ctx)
 
@@ -81,12 +87,12 @@ func (r *BlogRepository) List(ctx context.Context, opt ListBlogsOptions) ([]mode
 	for cur.Next(ctx) {
 		var b models.Blog
 		if err := cur.Decode(&b); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		results = append(results, b)
 	}
 	if err := cur.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return results, nil
+	return results, total, nil
 }

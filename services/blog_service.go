@@ -21,17 +21,22 @@ type ListBlogsInput struct {
     PageSize int
 }
 
-func (s *BlogService) List(ctx context.Context, in ListBlogsInput) ([]dto.BlogDTO, error) {
-    items, err := s.repo.List(ctx, repositories.ListBlogsOptions{
+func (s *BlogService) List(ctx context.Context, in ListBlogsInput) (dto.Pagination[dto.BlogDTO], error) {
+    items, total, err := s.repo.List(ctx, repositories.ListBlogsOptions{
         Page:     in.Page,
         PageSize: in.PageSize,
     })
     if err != nil {
-        return nil, err
+        return dto.Pagination[dto.BlogDTO]{}, err
     }
     out := make([]dto.BlogDTO, 0, len(items))
     for _, b := range items {
         out = append(out, dto.NewBlogDTO(b))
     }
-    return out, nil
+    return dto.Pagination[dto.BlogDTO]{
+        Data:     out,
+        Page:     in.Page,
+        PageSize: in.PageSize,
+        Total:    total,
+    }, nil
 }

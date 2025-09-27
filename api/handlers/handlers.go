@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	_ "tech-letter/dto"
+
 	"github.com/gin-gonic/gin"
 
 	"tech-letter/services"
@@ -17,8 +19,10 @@ import (
 // @Param        page_size     query  int     false  "Page size (<=100)"
 // @Param        categories    query  []string  false  "Categories (OR match)"
 // @Param        tags          query  []string  false  "Tags (OR match)"
+// @Param        blog_id       query  string  false  "Blog ID"
+// @Param        blog_name     query  string  false  "Blog name"
 // @Produce      json
-// @Success      200  {array}  dto.PostDTO
+// @Success      200  {object}  dto.PaginationPostDTO
 // @Router       /posts [get]
 func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -29,13 +33,15 @@ func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
 		// filters
 		in.Categories = c.QueryArray("categories")
 		in.Tags = c.QueryArray("tags")
+		in.BlogID = c.Query("blog_id")
+		in.BlogName = c.Query("blog_name")
 
-		items, err := svc.List(c.Request.Context(), in)
+		page, err := svc.List(c.Request.Context(), in)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, items)
+		c.JSON(http.StatusOK, page)
 	}
 }
 
@@ -66,17 +72,17 @@ func GetPostHandler(svc *services.PostService) gin.HandlerFunc {
 // @Param        page          query  int     false  "Page number (1-based)"
 // @Param        page_size     query  int     false  "Page size (<=100)"
 // @Produce      json
-// @Success      200  {array}  dto.BlogDTO
+// @Success      200  {object}  dto.PaginationBlogDTO
 // @Router       /blogs [get]
 func ListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-		items, err := svc.List(c.Request.Context(), services.ListBlogsInput{Page: page, PageSize: pageSize})
+		resp, err := svc.List(c.Request.Context(), services.ListBlogsInput{Page: page, PageSize: pageSize})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, items)
+		c.JSON(http.StatusOK, resp)
 	}
 }
