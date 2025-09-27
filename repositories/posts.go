@@ -109,6 +109,16 @@ func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]mode
         }
     } else if len(catsRegex) > 0 {
         filter["aisummary.categories"] = bson.M{"$in": catsRegex}
+    } else if len(tagsRegex) > 0 {
+        filter["aisummary.tags"] = bson.M{"$in": tagsRegex}
+    }
+
+    // Blog filters
+    if opt.BlogID != nil {
+        filter["blog_id"] = *opt.BlogID
+    }
+    if opt.BlogName != "" {
+        filter["blog_name"] = primitive.Regex{Pattern: "^" + regexp.QuoteMeta(opt.BlogName) + "$", Options: "i"}
     }
 
     if opt.Page <= 0 {
