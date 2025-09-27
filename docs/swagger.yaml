@@ -9,6 +9,32 @@ definitions:
       url:
         type: string
     type: object
+  dto.PaginationBlogDTO:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.BlogDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.PaginationPostDTO:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.PostDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   dto.PostDTO:
     properties:
       blog_id:
@@ -60,9 +86,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/dto.BlogDTO'
-            type: array
+            $ref: '#/definitions/dto.PaginationBlogDTO'
       summary: List blogs
       tags:
       - blogs
@@ -92,15 +116,21 @@ paths:
           type: string
         name: tags
         type: array
+      - description: Blog ID
+        in: query
+        name: blog_id
+        type: string
+      - description: Blog name
+        in: query
+        name: blog_name
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/dto.PostDTO'
-            type: array
+            $ref: '#/definitions/dto.PaginationPostDTO'
       summary: List posts
       tags:
       - posts
