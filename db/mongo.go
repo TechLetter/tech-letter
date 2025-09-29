@@ -81,10 +81,10 @@ func Database() *mongo.Database { return db }
 func ensureIndexes(ctx context.Context, d *mongo.Database) error {
 	// posts: indexes on published_at (desc), aisummary.categories, aisummary.tags
 	{
-		// published_at desc
+		// published_at desc with _id for stable sorting
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "published_at", Value: -1}},
-			Options: options.Index().SetName("idx_published_at_desc"),
+			Keys:    bson.D{{Key: "published_at", Value: -1}, {Key: "_id", Value: -1}},
+			Options: options.Index().SetName("idx_published_at_id_desc"),
 		}); err != nil {
 			return err
 		}
@@ -99,6 +99,20 @@ func ensureIndexes(ctx context.Context, d *mongo.Database) error {
 		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
 			Keys:    bson.D{{Key: "aisummary.tags", Value: 1}},
 			Options: options.Index().SetName("idx_tags"),
+		}); err != nil {
+			return err
+		}
+		// aisummary.tags with published_at for filtered sorting
+		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "aisummary.tags", Value: 1}, {Key: "published_at", Value: -1}},
+			Options: options.Index().SetName("idx_tags_published_at"),
+		}); err != nil {
+			return err
+		}
+		// aisummary.categories with published_at for filtered sorting
+		if _, err := d.Collection("posts").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys:    bson.D{{Key: "aisummary.categories", Value: 1}, {Key: "published_at", Value: -1}},
+			Options: options.Index().SetName("idx_categories_published_at"),
 		}); err != nil {
 			return err
 		}
