@@ -135,7 +135,10 @@ func (r *PostRepository) List(ctx context.Context, opt ListPostsOptions) ([]mode
         return nil, 0, err
     }
 
-    findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "published_at", Value: -1}})
+    findOpts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{
+        {Key: "published_at", Value: -1},
+        {Key: "_id", Value: -1},
+    })
     cur, err := r.col.Find(ctx, filter, findOpts)
     if err != nil {
         return nil, 0, err
