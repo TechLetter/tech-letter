@@ -1,0 +1,21 @@
+name: CI/CD Deploy on Self-hosted Runner
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, ARM64]
+    # environment: production # (선택 사항: 환경 정의)
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Stop existing application and Run new version
+        run: |
+          cp /home/ubuntu/workspace/tech-letter/config.yaml ./config.yaml
+          docker-compose down
+          docker-compose up -d --build
