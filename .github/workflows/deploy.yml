@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [self-hosted, Linux, ARM64, techletter-prod]
     # environment: production # (선택 사항: 환경 정의)
 
     steps:
