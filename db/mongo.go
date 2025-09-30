@@ -2,17 +2,16 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"tech-letter/config"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 )
 
 var (
@@ -25,47 +24,34 @@ var (
 func Init(ctx context.Context) error {
 	var initErr error
 	clientOnce.Do(func() {
-		cfg := config.GetConfig()
-		uri := cfg.MongoURI
+		uri := os.Getenv("MONGO_URI")
 		if uri == "" {
-			if env := os.Getenv("MONGO_URI"); env != "" {
-				uri = env
-			}
-		}
-		if uri == "" {
-			// Fallback for local docker-compose default
-			uri = "mongodb://root:1234@localhost:27017/techletter?authSource=admin"
-		}
-		dbName := cfg.MongoDBName
-		if dbName == "" {
-			if env := os.Getenv("MONGO_DB_NAME"); env != "" {
-				dbName = env
-			}
-		}
-		if dbName == "" {
-			dbName = "techletter"
+			initErr = fmt.Errorf("MONGO_URI environment variable is not set")
+			return
 		}
 
-		cl, err := mongo.NewClient(options.Client().ApplyURI(uri))
+		cs, err := connstring.Parse(uri)
 		if err != nil {
 			initErr = err
 			return
 		}
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		if err := cl.Connect(ctx); err != nil {
+		if cs.Database == "" {
+			initErr = fmt.Errorf("MongoDB URI must include a database name")
+			return
+		}
+
+		cl, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+		if err != nil {
 			initErr = err
 			return
 		}
-		// Ping to verify connection
 		if err := cl.Ping(ctx, readpref.Primary()); err != nil {
 			initErr = err
 			return
 		}
 		client = cl
-		db = client.Database(dbName)
+		db = client.Database(cs.Database)
 
-		// Ensure indexes for all collections
 		if err := ensureIndexes(ctx, db); err != nil {
 			initErr = err
 			return
@@ -74,6 +60,8 @@ func Init(ctx context.Context) error {
 	})
 	return initErr
 }
+
+
 
 func Client() *mongo.Client { return client }
 func Database() *mongo.Database { return db }

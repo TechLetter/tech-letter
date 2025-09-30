@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"tech-letter/config"
 	"time"
 
@@ -64,11 +65,15 @@ Additional constraints:
 func SummarizeText(text string) (*SummarizeResult, *LLMRequestLog, error) {
 	startTime := time.Now()
 
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+	}
 	modelName := config.GetConfig().GeminiModel
-
+	
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: config.GetConfig().GeminiApiKey,
+		APIKey: apiKey,
 	})
 	if err != nil {
 		return nil, nil, err
