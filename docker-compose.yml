@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: techletter_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+  aggregate:
+    build:
+      context: .
+      dockerfile: Dockerfile.aggregate
+    container_name: techletter_aggregate
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}

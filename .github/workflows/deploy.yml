@@ -8,13 +8,16 @@ on:
 jobs:
   deploy:
     runs-on: [self-hosted, Linux, ARM64, techletter-prod]
-    # environment: production # (선택 사항: 환경 정의)
+    environment: production
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Stop existing application and Run new version
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           cp config-production.yaml ./config.yaml
           docker-compose down
