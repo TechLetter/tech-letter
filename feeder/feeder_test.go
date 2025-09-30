@@ -7,9 +7,16 @@ import (
 )
 
 func TestFetchRssFeeds(t *testing.T) {
-	items, err := feeder.FetchRssFeeds("https://tech.kakao.com/feed/", 10)
-	if err != nil {
-		t.Fatal(err)
+
+	var rssUrls = []string{
+		"https://tech.kakao.com/feed/",
+		"https://medium.com/feed/pinkfong",
 	}
-	t.Log(items)
+
+	for _, rssUrl := range rssUrls {
+		items, err := feeder.FetchRssFeeds(rssUrl, 10)
+		if err != nil || len(items) == 0 {
+			t.Fatal(err)
+		}
+	}
 }
