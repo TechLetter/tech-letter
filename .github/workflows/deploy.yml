@@ -16,6 +16,6 @@ jobs:
 
       - name: Stop existing application and Run new version
         run: |
-          cp /home/ubuntu/workspace/tech-letter/config.yaml ./config.yaml
+          cp config-production.yaml ./config.yaml
           docker-compose down
           docker-compose up -d --build
