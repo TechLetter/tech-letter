@@ -64,3 +64,8 @@ blogs:
     url: https://toss.tech/
     rss_url: https://toss.tech/rss.xml
     blog_type: company
+
+  - name: 더핑크퐁컴퍼니
+    url: https://medium.com/pinkfong
+    rss_url: https://medium.com/feed/pinkfong
+    blog_type: company
