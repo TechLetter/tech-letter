@@ -9,6 +9,7 @@ services:
       - "8080:8080"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
     environment:
       MONGO_URI: ${MONGO_URI}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -21,6 +22,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
     environment:
       MONGO_URI: ${MONGO_URI}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
