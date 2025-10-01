@@ -33,11 +33,8 @@ type BlogSource struct {
 var config *AppConfig
 
 func InitApp() {
-
 	// load environment variables
-	if err := godotenv.Load(filepath.Join(GetBasePath(), ENV_FILE)); err != nil {
-		panic(err)
-	}
+	godotenv.Load(filepath.Join(GetBasePath(), ENV_FILE))
 
 	// load configuration file
 	data, err := os.ReadFile(filepath.Join(GetBasePath(), CONFIG_FILE))
