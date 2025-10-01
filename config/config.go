@@ -4,9 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
+const ENV_FILE = ".env"
 const CONFIG_FILE = "config.yaml"
 
 type AppConfig struct {
@@ -31,6 +33,12 @@ type BlogSource struct {
 var config *AppConfig
 
 func InitApp() {
+
+	// load environment variables
+	if err := godotenv.Load(filepath.Join(GetBasePath(), ENV_FILE)); err != nil {
+		panic(err)
+	}
+
 	// load configuration file
 	data, err := os.ReadFile(filepath.Join(GetBasePath(), CONFIG_FILE))
 	if err != nil {
