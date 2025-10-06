@@ -61,6 +61,8 @@ definitions:
         type: string
       title:
         type: string
+      view_count:
+        type: integer
     type: object
 info:
   contact: {}

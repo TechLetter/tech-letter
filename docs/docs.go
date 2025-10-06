@@ -294,6 +294,9 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
                 }
             }
         }
