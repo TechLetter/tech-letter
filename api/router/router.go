@@ -1,48 +1,51 @@
 package router
 
 import (
-    "context"
-    "net/http"
-	"github.com/gin-gonic/gin"
-    ginSwagger "github.com/swaggo/gin-swagger"
-    swaggerFiles "github.com/swaggo/files"
+	"context"
+	"net/http"
 
-    _ "tech-letter/docs"
-    "tech-letter/db"
-    "tech-letter/api/handlers"
-    "tech-letter/repositories"
-    "tech-letter/services"
-    "go.mongodb.org/mongo-driver/bson"
+	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	"tech-letter/api/handlers"
+	"tech-letter/db"
+	_ "tech-letter/docs"
+	"tech-letter/repositories"
+	"tech-letter/services"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func New() *gin.Engine {
-    r := gin.Default()
+	r := gin.Default()
 
-    // Health check
-    r.GET("/health", func(c *gin.Context) {
-        // Try ping MongoDB
-        if err := db.Database().RunCommand(context.Background(), bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
-            c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "mongo": "down", "error": err.Error()})
-            return
-        }
-        c.JSON(http.StatusOK, gin.H{"status": "ok"})
-    })
+	// Health check
+	r.GET("/health", func(c *gin.Context) {
+		// Try ping MongoDB
+		if err := db.Database().RunCommand(context.Background(), bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "mongo": "down", "error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
-    // Swagger
-    r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Swagger
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-    // v1 routes
-    api := r.Group("/api/v1")
-    {
-        postsRepo := repositories.NewPostRepository(db.Database())
-        postsSvc := services.NewPostService(postsRepo)
-        api.GET("/posts", handlers.ListPostsHandler(postsSvc))
-        api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
+	// v1 routes
+	api := r.Group("/api/v1")
+	{
+		postsRepo := repositories.NewPostRepository(db.Database())
+		postsSvc := services.NewPostService(postsRepo)
+		api.GET("/posts", handlers.ListPostsHandler(postsSvc))
+		api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
+		api.POST("/posts/:id/view", handlers.IncrementPostViewCountHandler(postsSvc))
 
-        blogsRepo := repositories.NewBlogRepository(db.Database())
-        blogsSvc := services.NewBlogService(blogsRepo)
-        api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))
-    }
+		blogsRepo := repositories.NewBlogRepository(db.Database())
+		blogsSvc := services.NewBlogService(blogsRepo)
+		api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))
+	}
 
-    return r
+	return r
 }
