@@ -73,3 +73,12 @@ func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Paginati
         Total:    total,
     }, nil
 }
+
+// IncrementViewCount increments the view_count of a post by its ObjectID hex
+func (s *PostService) IncrementViewCount(ctx context.Context, hexID string) error {
+    id, err := primitive.ObjectIDFromHex(hexID)
+    if err != nil {
+        return err
+    }
+    return s.repo.IncrementViewCount(ctx, id)
+}

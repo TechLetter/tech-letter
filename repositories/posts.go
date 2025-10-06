@@ -167,3 +167,12 @@ func (r *PostRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*
 	}
 	return &p, nil
 }
+
+// IncrementViewCount increments the view_count field by 1 for the given post ID
+func (r *PostRepository) IncrementViewCount(ctx context.Context, id primitive.ObjectID) error {
+	_, err := r.col.UpdateByID(ctx, id, bson.M{
+		"$inc": bson.M{"view_count": 1},
+		"$set": bson.M{"updated_at": time.Now()},
+	})
+	return err
+}
