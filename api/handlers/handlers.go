@@ -65,6 +65,28 @@ func GetPostHandler(svc *services.PostService) gin.HandlerFunc {
 	}
 }
 
+// IncrementPostViewCountHandler godoc
+// @Summary      Increment post view count
+// @Description  Increment the view_count of a post by 1
+// @Tags         posts
+// @Param        id   path   string  true  "ObjectID"
+// @Produce      json
+// @Success      200  {object}  object{message=string}
+// @Failure      400  {object}  object{error=string}
+// @Failure      404  {object}  object{error=string}
+// @Router       /posts/{id}/view [post]
+func IncrementPostViewCountHandler(svc *services.PostService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		err := svc.IncrementViewCount(c.Request.Context(), idStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id or post not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "view count incremented successfully"})
+	}
+}
+
 // ListBlogsHandler godoc
 // @Summary      List blogs
 // @Description  List blogs with simple pagination

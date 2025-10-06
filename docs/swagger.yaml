@@ -153,4 +153,40 @@ paths:
       summary: Get post by id
       tags:
       - posts
+  /posts/{id}/view:
+    post:
+      description: Increment the view_count of a post by 1
+      parameters:
+      - description: ObjectID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Increment post view count
+      tags:
+      - posts
 swagger: "2.0"
