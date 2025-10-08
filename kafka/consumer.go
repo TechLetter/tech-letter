@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -114,8 +113,8 @@ func (c *KafkaConsumer) processMessage(ctx context.Context, msg *kafka.Message) 
 		return nil
 	}
 
-	// 이벤트 역직렬화
-	event, err := c.deserializeEvent(eventType, msg.Value)
+	// Events 패키지를 사용하여 역직렬화
+	event, err := events.DeserializeEvent(eventType, msg.Value)
 	if err != nil {
 		return fmt.Errorf("failed to deserialize event: %w", err)
 	}
@@ -129,35 +128,6 @@ func (c *KafkaConsumer) processMessage(ctx context.Context, msg *kafka.Message) 
 	return nil
 }
 
-// deserializeEvent 이벤트 타입에 따라 적절한 구조체로 역직렬화
-func (c *KafkaConsumer) deserializeEvent(eventType events.EventType, data []byte) (interface{}, error) {
-	var event interface{}
-
-	switch eventType {
-	case events.PostCreated:
-		event = &events.PostCreatedEvent{}
-	case events.PostHTMLFetched:
-		event = &events.PostHTMLFetchedEvent{}
-	case events.PostTextParsed:
-		event = &events.PostTextParsedEvent{}
-	case events.PostSummarized:
-		event = &events.PostSummarizedEvent{}
-	case events.NewsletterRequested:
-		event = &events.NewsletterRequestedEvent{}
-	case events.NewsletterGenerated:
-		event = &events.NewsletterGeneratedEvent{}
-	case events.NewsletterSent:
-		event = &events.NewsletterSentEvent{}
-	default:
-		return nil, fmt.Errorf("unknown event type: %s", eventType)
-	}
-
-	if err := json.Unmarshal(data, event); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal event: %w", err)
-	}
-
-	return event, nil
-}
 
 // Close 컨슈머 종료
 func (c *KafkaConsumer) Close() error {
