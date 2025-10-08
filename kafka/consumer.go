@@ -30,8 +30,11 @@ type KafkaConsumer struct {
 }
 
 // NewConsumer 새로운 Kafka 컨슈머 생성
-func NewConsumer() (*KafkaConsumer, error) {
-	kafkaConfig := NewConfig()
+func NewConsumer(kafkaConfig *Config) (*KafkaConsumer, error) {
+	if kafkaConfig == nil {
+		return nil, fmt.Errorf("kafka config is required")
+	}
+	
 	consumerConfig := kafkaConfig.ConsumerConfig()
 
 	consumer, err := kafka.NewConsumer(&consumerConfig)

@@ -23,8 +23,11 @@ type KafkaProducer struct {
 }
 
 // NewProducer 새로운 Kafka 프로듀서 생성
-func NewProducer() (*KafkaProducer, error) {
-	kafkaConfig := NewConfig()
+func NewProducer(kafkaConfig *Config) (*KafkaProducer, error) {
+	if kafkaConfig == nil {
+		return nil, fmt.Errorf("kafka config is required")
+	}
+	
 	producerConfig := kafkaConfig.ProducerConfig()
 
 	producer, err := kafka.NewProducer(&producerConfig)

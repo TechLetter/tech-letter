@@ -10,9 +10,13 @@ import (
 )
 
 // CreateTopicsIfNotExists 토픽이 존재하지 않으면 생성
-func CreateTopicsIfNotExists(bootstrapServers string) error {
+func CreateTopicsIfNotExists(kafkaConfig *Config) error {
+	if kafkaConfig == nil {
+		return fmt.Errorf("kafka config is required")
+	}
+
 	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
+		"bootstrap.servers": kafkaConfig.BootstrapServers,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create admin client: %w", err)
