@@ -12,7 +12,16 @@ services:
       - ./.env:/app/.env:ro
     environment:
       MONGO_URI: ${MONGO_URI}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-api
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   aggregate:
     build:
@@ -25,4 +34,83 @@ services:
       - ./.env:/app/.env:ro
     environment:
       MONGO_URI: ${MONGO_URI}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-aggregate
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  processor-1:
+    image: tech-letter-processor
+    build:
+      context: .
+      dockerfile: Dockerfile.processor
+    container_name: techletter_processor_1
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+    environment:
+      MONGO_URI: ${MONGO_URI}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-processor
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  processor-2:
+    image: tech-letter-processor
+    container_name: techletter_processor_2
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-processor
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  processor-3:
+    image: tech-letter-processor
+    container_name: techletter_processor_3
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-processor
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+networks:
+  tech-letter_default:
+    name: tech-letter_default
