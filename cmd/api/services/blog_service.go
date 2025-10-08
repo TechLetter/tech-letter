@@ -3,7 +3,7 @@ package services
 import (
     "context"
 
-    "tech-letter/dto"
+    "tech-letter/cmd/api/dto"
     "tech-letter/repositories"
 )
 

@@ -176,3 +176,39 @@ func (r *PostRepository) IncrementViewCount(ctx context.Context, id primitive.Ob
 	})
 	return err
 }
+
+// FindUnprocessedPosts 미처리 상태인 포스트들을 조회 (HTML, 텍스트, AI 처리가 완료되지 않은 포스트들)
+func (r *PostRepository) FindUnprocessedPosts(ctx context.Context, limit int) ([]models.Post, error) {
+	filter := bson.M{
+		"$or": []bson.M{
+			{"status.html_fetched": false},
+			{"status.text_parsed": false},
+			{"status.ai_summarized": false},
+		},
+	}
+
+	findOpts := options.Find().
+		SetLimit(int64(limit)).
+		SetSort(bson.D{{Key: "created_at", Value: 1}}) // 오래된 것부터 처리
+
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Post
+	for cur.Next(ctx) {
+		var p models.Post
+		if err := cur.Decode(&p); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	
+	return results, nil
+}

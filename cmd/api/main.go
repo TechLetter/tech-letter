@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"tech-letter/api/router"
+	"tech-letter/cmd/api/router"
 	"tech-letter/config"
 	"tech-letter/db"
 	_ "tech-letter/docs" // swag will generate this package

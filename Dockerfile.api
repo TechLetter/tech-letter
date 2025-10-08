@@ -12,14 +12,25 @@ COPY . .
 
 # buildx에서 전달하는 TARGETARCH (amd64/arm64)에 맞춰 빌드
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /out/api ./cmd/api
+RUN CGO_ENABLED=1 GOOS=linux go build -o /app/api ./cmd/api
 
 # --- Runtime stage ---
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM alpine:3.20
 WORKDIR /app
 
-COPY --from=build /out/api /app/api
+# Install runtime libraries for Kafka and CA certificates
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    librdkafka \
+    musl-dev \
+    libc6-compat \
+  && update-ca-certificates
+
+COPY --from=build /app/api /app/
+RUN chmod +x /app/api
+
+ENV TZ=Asia/Seoul
 
 EXPOSE 8080
-USER nonroot:nonroot
 ENTRYPOINT ["/app/api"]
