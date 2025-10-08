@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -54,10 +53,10 @@ func NewProducer(kafkaConfig *Config) (*KafkaProducer, error) {
 
 // PublishEvent 이벤트를 지정된 토픽에 발행
 func (p *KafkaProducer) PublishEvent(topic string, event interface{}) error {
-	// 이벤트를 JSON으로 직렬화
-	eventBytes, err := json.Marshal(event)
+	// Events 패키지를 사용하여 직렬화
+	eventBytes, eventType, err := events.SerializeEvent(event)
 	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+		return fmt.Errorf("failed to serialize event: %w", err)
 	}
 
 	// 메시지 생성 및 발행
@@ -65,13 +64,9 @@ func (p *KafkaProducer) PublishEvent(topic string, event interface{}) error {
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Value:          eventBytes,
 		Timestamp:      time.Now(),
-	}
-
-	// 이벤트 타입을 헤더로 추가 (타입 안전성을 위해)
-	if baseEvent, ok := event.(interface{ GetType() events.EventType }); ok {
-		message.Headers = []kafka.Header{
-			{Key: "event-type", Value: []byte(baseEvent.GetType())},
-		}
+		Headers: []kafka.Header{
+			{Key: "event-type", Value: []byte(eventType)},
+		},
 	}
 
 	err = p.producer.Produce(message, nil)
@@ -79,7 +74,7 @@ func (p *KafkaProducer) PublishEvent(topic string, event interface{}) error {
 		return fmt.Errorf("failed to produce message: %w", err)
 	}
 
-	config.Logger.Debugf("published event to topic %s", topic)
+	config.Logger.Debugf("published event %s to topic %s", eventType, topic)
 	return nil
 }
 
