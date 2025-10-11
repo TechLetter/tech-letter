@@ -9,6 +9,14 @@ import (
 	"tech-letter/config"
 )
 
+// 토픽 상수 정의
+const (
+	TopicPostEvents       = "tech-letter.post.events"
+	TopicPostEventsRetry  = "tech-letter.post.events.retry"
+	TopicPostEventsDLQ    = "tech-letter.post.events.dlq"
+	TopicNewsletterEvents = "tech-letter.newsletter.events"
+)
+
 // CreateTopicsIfNotExists 토픽이 존재하지 않으면 생성
 func CreateTopicsIfNotExists(kafkaConfig *Config) error {
 	if kafkaConfig == nil {
@@ -28,6 +36,16 @@ func CreateTopicsIfNotExists(kafkaConfig *Config) error {
 		{
 			Topic:             TopicPostEvents,
 			NumPartitions:     3,
+			ReplicationFactor: 1,
+		},
+		{
+			Topic:             TopicPostEventsRetry,
+			NumPartitions:     3,
+			ReplicationFactor: 1,
+		},
+		{
+			Topic:             TopicPostEventsDLQ,
+			NumPartitions:     1,
 			ReplicationFactor: 1,
 		},
 		{

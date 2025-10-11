@@ -1,8 +1,8 @@
 package summarizer_test
 
 import (
+	"tech-letter/cmd/processor/summarizer"
 	"tech-letter/config"
-	"tech-letter/summarizer"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
