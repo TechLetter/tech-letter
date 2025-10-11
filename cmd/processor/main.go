@@ -39,8 +39,8 @@ func main() {
 	}
 	defer producer.Close()
 
-	// Kafka Consumer 초기화
-	consumer, err := kafka.NewConsumer(kafkaConfig)
+	// Kafka Consumer 초기화 (재시도 기능 포함)
+	consumer, err := kafka.NewRetryConsumer(kafkaConfig, producer)
 	if err != nil {
 		config.Logger.Errorf("failed to create kafka consumer: %v", err)
 		os.Exit(1)
@@ -63,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	config.Logger.Info("starting processor service...")
+	config.Logger.Info("starting processor service with retry mechanism...")
 
 	// Graceful shutdown 설정
 	sigChan := make(chan os.Signal, 1)
@@ -71,7 +71,7 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// Kafka Consumer 시작
+	// Kafka Consumer 시작 (재시도 로직 포함)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
