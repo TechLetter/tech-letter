@@ -3,7 +3,6 @@ package eventbus
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -62,19 +61,4 @@ func EnsureTopics(brokers string, topic Topic, basePartitions int) error {
 	}
 
 	return nil
-}
-
-// ParseRetryFromTopicName는 토픽 이름의 ".retry." 접두사 이후의 문자열을 time.Duration으로 파싱합니다.
-// 예: "tech-letter.post.events.retry.1m0s" -> 1m0s
-func ParseRetryFromTopicName(name string) (time.Duration, bool) {
-	idx := strings.LastIndex(name, ".retry.")
-	if idx == -1 || idx+7 >= len(name) {
-		return 0, false
-	}
-	durStr := name[idx+7:]
-	d, err := time.ParseDuration(durStr)
-	if err != nil {
-		return 0, false
-	}
-	return d, true
 }
