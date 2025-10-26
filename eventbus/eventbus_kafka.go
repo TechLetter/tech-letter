@@ -142,7 +142,11 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 			}
 
 			// 1. 핸들러 실행 (비즈니스 로직)
-			log.Printf("[PROCESS] 이벤트 %s 처리 시작 (재시도 %d/%d) - 토픽: %s", evt.ID, evt.Retry, evt.MaxRetry, *msg.TopicPartition.Topic)
+			if evt.Retry > 0 {
+				log.Printf("[PROCESS] 이벤트 %s 처리 시작 (재시도 %d/%d) - 토픽: %s", evt.ID, evt.Retry, evt.MaxRetry, *msg.TopicPartition.Topic)
+			} else {
+				log.Printf("[PROCESS] 이벤트 %s 처리 시작 - 토픽: %s", evt.ID, *msg.TopicPartition.Topic)
+			}
 			err = handler(ctx, evt)
 
 			if err != nil {
@@ -215,6 +219,31 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 				if kerr, ok := err.(kafka.Error); ok && kerr.Code() == kafka.ErrTimedOut {
 					continue
 				}
+				continue
+			}
+
+			// 토픽명에서 재시도 지연 시간 추출 및 준비시간 확인
+			topicName := *msg.TopicPartition.Topic
+			delayDur, ok := ParseRetryDelayFromTopicName(topicName)
+			if !ok {
+				log.Printf("[ERROR] 재시도 토픽 이름 파싱 실패: %s. 메시지를 건너뛰고 커밋합니다.", topicName)
+				c.CommitMessage(msg)
+				continue
+			}
+
+			readyAt := msg.Timestamp.Add(delayDur)
+			now := time.Now()
+			if now.Before(readyAt) {
+				remaining := readyAt.Sub(now)
+				// 전체 컨슈머 스레드 블로킹을 피하기 위해 아주 짧게만 대기
+				sleepDur := remaining
+				if sleepDur > 500*time.Millisecond {
+					sleepDur = 500 * time.Millisecond
+				} else if sleepDur < 50*time.Millisecond {
+					sleepDur = 50 * time.Millisecond
+				}
+				time.Sleep(sleepDur)
+				// 오프셋 커밋 없이 재시도 (메시지는 다시 전달됨)
 				continue
 			}
 

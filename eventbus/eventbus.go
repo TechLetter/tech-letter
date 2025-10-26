@@ -38,9 +38,9 @@ func (t Topic) DLQ() string {
 // GetRetryTopics는 모든 재시도 토픽의 이름을 반환합니다.
 func (t Topic) GetRetryTopics() []string {
 	topics := make([]string, len(RetryDelays))
-	for i, delay := range RetryDelays {
-		// 토픽 이름 형식: base.retry.10s
-		topics[i] = fmt.Sprintf("%s.retry.%s", t.base, delay.String())
+	for i := range RetryDelays {
+		// 토픽 이름 형식: base.retry.1, base.retry.2, ...
+		topics[i] = fmt.Sprintf("%s.retry.%d", t.base, i+1)
 	}
 	return topics
 }
@@ -51,8 +51,7 @@ func (t Topic) GetRetryTopic(retryCount int) (string, error) {
 	if retryCount <= 0 || retryCount > len(RetryDelays) {
 		return "", ErrMaxRetryExceeded
 	}
-	delay := RetryDelays[retryCount-1]
-	return fmt.Sprintf("%s.retry.%s", t.base, delay.String()), nil
+	return fmt.Sprintf("%s.retry.%d", t.base, retryCount), nil
 }
 
 // Event는 Kafka 메시지의 페이로드로 사용되는 구조체입니다.
