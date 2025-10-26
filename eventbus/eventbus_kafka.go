@@ -136,6 +136,11 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 				continue
 			}
 
+			// 이벤트의 최대 재시도 기본값 보정 (설정되지 않았거나 범위를 초과한 경우)
+			if evt.MaxRetry <= 0 || evt.MaxRetry > len(RetryDelays) {
+				evt.MaxRetry = len(RetryDelays)
+			}
+
 			// 1. 핸들러 실행 (비즈니스 로직)
 			log.Printf("[PROCESS] 이벤트 %s 처리 시작 (재시도 %d/%d) - 토픽: %s", evt.ID, evt.Retry, evt.MaxRetry, *msg.TopicPartition.Topic)
 			err = handler(ctx, evt)
@@ -178,8 +183,8 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 	}
 }
 
-// StartDelayReinjector는 모든 지연 토픽을 구독하고 메시지를 기본 토픽으로 재발행(re-publish)합니다.
-func (k *KafkaEventBus) StartDelayReinjector(ctx context.Context, groupID string, topic Topic) error {
+// StartRetryReinjector는 모든 재시도 토픽을 구독하고 메시지를 기본 토픽으로 재발행(re-publish)합니다.
+func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string, topic Topic) error {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":             k.Brokers,
 		"group.id":                      groupID, // 전용 재주입 그룹 ID
@@ -188,21 +193,21 @@ func (k *KafkaEventBus) StartDelayReinjector(ctx context.Context, groupID string
 		"partition.assignment.strategy": "range",
 	})
 	if err != nil {
-		return fmt.Errorf("kafka 지연 재주입기 생성 실패: %w", err)
+		return fmt.Errorf("kafka 재시도 재주입기 생성 실패: %w", err)
 	}
 	defer c.Close()
 
-	delayTopics := topic.GetDelayTopics()
-	if err := c.SubscribeTopics(delayTopics, nil); err != nil {
-		return fmt.Errorf("지연 토픽 구독 실패 %v: %w", delayTopics, err)
+	retryTopics := topic.GetRetryTopics()
+	if err := c.SubscribeTopics(retryTopics, nil); err != nil {
+		return fmt.Errorf("재시도 토픽 구독 실패 %v: %w", retryTopics, err)
 	}
 
-	log.Printf("[INFO] 지연 재주입 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(delayTopics, ", "))
+	log.Printf("[INFO] 재시도 재주입 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(retryTopics, ", "))
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[INFO] 지연 재주입 컨슈머 종료 중.")
+			log.Println("[INFO] 재시도 재주입 컨슈머 종료 중.")
 			return ctx.Err()
 		default:
 			msg, err := c.ReadMessage(100 * time.Millisecond)
@@ -215,7 +220,7 @@ func (k *KafkaEventBus) StartDelayReinjector(ctx context.Context, groupID string
 
 			var evt Event
 			if err := json.Unmarshal(msg.Value, &evt); err != nil {
-				log.Printf("[ERROR] 지연 토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.\n", *msg.TopicPartition.Topic, err)
+				log.Printf("[ERROR] 재시도 토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.\n", *msg.TopicPartition.Topic, err)
 				c.CommitMessage(msg)
 				continue
 			}

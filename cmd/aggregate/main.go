@@ -10,7 +10,7 @@ import (
 	"tech-letter/config"
 	"tech-letter/db"
 	eventServices "tech-letter/cmd/aggregate/services"
-	"tech-letter/kafka"
+	"tech-letter/eventbus"
 )
 
 func main() {
@@ -26,25 +26,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Kafka 설정 초기화
-	kafkaConfig := kafka.NewConfig()
-
-	// Kafka 토픽 생성
-	if err := kafka.CreateTopicsIfNotExists(kafkaConfig); err != nil {
-		config.Logger.Errorf("failed to create kafka topics: %v", err)
-		// 토픽 생성 실패는 치명적이지 않으므로 계속 진행
+	// EventBus 초기화 및 토픽 보장
+	brokers := eventbus.GetBrokers()
+	if err := eventbus.EnsureTopics(brokers, eventbus.TopicPostEvents, 3); err != nil {
+		config.Logger.Errorf("failed to ensure eventbus topics: %v", err)
 	}
 
-	// Kafka Producer 초기화 (이벤트 발행용)
-	producer, err := kafka.NewProducer(kafkaConfig)
+	bus, err := eventbus.NewKafkaEventBus(brokers)
 	if err != nil {
-		config.Logger.Errorf("failed to create kafka producer: %v", err)
+		config.Logger.Errorf("failed to create event bus: %v", err)
 		os.Exit(1)
 	}
-	defer producer.Close()
+	defer bus.Close()
 
 	// 서비스 초기화
-	eventService := eventServices.NewEventService(producer)
+	eventService := eventServices.NewEventService(bus)
 	aggregateService := NewAggregateService(eventService)
 
 	config.Logger.Info("starting aggregate service (RSS feed collection)...")
