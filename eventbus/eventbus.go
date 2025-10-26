@@ -17,7 +17,7 @@ var RetryDelays = []time.Duration{
 	10 * time.Minute, // 5차 재시도 (시도 5)
 }
 
-// Topic은 토픽의 기본 이름, 지연 토픽, DLQ 토픽 이름을 관리합니다.
+// Topic은 토픽의 기본 이름, 재시도 토픽, DLQ 토픽 이름을 관리합니다.
 type Topic struct {
 	base string
 }
@@ -35,24 +35,24 @@ func (t Topic) DLQ() string {
 	return t.base + ".dlq"
 }
 
-// GetDelayTopics는 모든 지연 토픽의 이름을 반환합니다.
-func (t Topic) GetDelayTopics() []string {
+// GetRetryTopics는 모든 재시도 토픽의 이름을 반환합니다.
+func (t Topic) GetRetryTopics() []string {
 	topics := make([]string, len(RetryDelays))
 	for i, delay := range RetryDelays {
-		// 토픽 이름 형식: base.delay.10s
-		topics[i] = fmt.Sprintf("%s.delay.%s", t.base, delay.String())
+		// 토픽 이름 형식: base.retry.10s
+		topics[i] = fmt.Sprintf("%s.retry.%s", t.base, delay.String())
 	}
 	return topics
 }
 
-// GetRetryTopic은 다음 재시도 횟수(1-based)에 해당하는 지연 토픽 이름을 반환합니다.
+// GetRetryTopic은 다음 재시도 횟수(1-based)에 해당하는 재시도 토픽 이름을 반환합니다.
 func (t Topic) GetRetryTopic(retryCount int) (string, error) {
 	// retryCount는 1부터 시작하며, 인덱스 (retryCount-1)를 사용합니다.
 	if retryCount <= 0 || retryCount > len(RetryDelays) {
 		return "", ErrMaxRetryExceeded
 	}
 	delay := RetryDelays[retryCount-1]
-	return fmt.Sprintf("%s.delay.%s", t.base, delay.String()), nil
+	return fmt.Sprintf("%s.retry.%s", t.base, delay.String()), nil
 }
 
 // Event는 Kafka 메시지의 페이로드로 사용되는 구조체입니다.
@@ -72,8 +72,8 @@ type EventBus interface {
 	Publish(ctx context.Context, topic string, event Event) error
 	// Subscribe는 기본 토픽을 구독하여 메인 로직을 실행합니다.
 	Subscribe(ctx context.Context, groupID string, topic Topic, handler EventHandler) error
-	// StartDelayReinjector는 모든 지연 토픽을 구독하고 기본 토픽으로 이벤트를 재발행합니다.
-	StartDelayReinjector(ctx context.Context, groupID string, topic Topic) error
+	// StartRetryReinjector는 모든 재시도 토픽을 구독하고 기본 토픽으로 이벤트를 재발행합니다.
+	StartRetryReinjector(ctx context.Context, groupID string, topic Topic) error
 	Close()
 }
 
