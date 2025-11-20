@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"tech-letter/eventbus"
 	"tech-letter/events"
-	"tech-letter/kafka"
 	"tech-letter/models"
 
 	"github.com/google/uuid"
@@ -13,19 +14,19 @@ import (
 
 // EventService Aggregate용 이벤트 발행 서비스
 type EventService struct {
-	producer kafka.Producer
+	bus eventbus.EventBus
 }
 
 // NewEventService 새로운 이벤트 서비스 생성
-func NewEventService(producer kafka.Producer) *EventService {
+func NewEventService(bus eventbus.EventBus) *EventService {
 	return &EventService{
-		producer: producer,
+		bus: bus,
 	}
 }
 
 // PublishPostCreated 포스트 생성 이벤트 발행
 func (s *EventService) PublishPostCreated(ctx context.Context, post *models.Post) error {
-	event := events.PostCreatedEvent{
+	e := events.PostCreatedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
 			Type:      events.PostCreated,
@@ -40,5 +41,9 @@ func (s *EventService) PublishPostCreated(ctx context.Context, post *models.Post
 		Link:     post.Link,
 	}
 
-	return s.producer.PublishEvent(kafka.TopicPostEvents, event)
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil {
+		return fmt.Errorf("failed to build event: %w", err)
+	}
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }

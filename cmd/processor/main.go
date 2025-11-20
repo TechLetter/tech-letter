@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,8 +12,8 @@ import (
 	eventServices "tech-letter/cmd/processor/services"
 	"tech-letter/config"
 	"tech-letter/db"
+	"tech-letter/eventbus"
 	"tech-letter/events"
-	"tech-letter/kafka"
 )
 
 func main() {
@@ -28,42 +29,69 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Kafka 설정 초기화
-	kafkaConfig := kafka.NewConfig()
+	// EventBus 초기화 및 토픽 보장
+	brokers := eventbus.GetBrokers()
+	if err := eventbus.EnsureTopics(brokers, eventbus.TopicPostEvents, 3); err != nil {
+		config.Logger.Errorf("failed to ensure eventbus topics: %v", err)
+	}
 
-	// Kafka Producer 초기화
-	producer, err := kafka.NewProducer(kafkaConfig)
+	bus, err := eventbus.NewKafkaEventBus(brokers)
 	if err != nil {
-		config.Logger.Errorf("failed to create kafka producer: %v", err)
+		config.Logger.Errorf("failed to create event bus: %v", err)
 		os.Exit(1)
 	}
-	defer producer.Close()
-
-	// Kafka Consumer 초기화 (재시도 기능 포함)
-	consumer, err := kafka.NewRetryConsumer(kafkaConfig, producer)
-	if err != nil {
-		config.Logger.Errorf("failed to create kafka consumer: %v", err)
-		os.Exit(1)
-	}
-	defer consumer.Close()
+	defer bus.Close()
 
 	// 서비스 초기화
-	eventService := eventServices.NewEventService(producer)
+	eventService := eventServices.NewEventService(bus)
 	handlers := eventHandlers.NewEventHandlers(eventService)
 
-	// 이벤트 핸들러 등록
-	consumer.RegisterHandler(events.PostCreated, handlers.HandlePostCreated)
-	consumer.RegisterHandler(events.PostHTMLFetched, handlers.HandlePostHTMLFetched)
-	consumer.RegisterHandler(events.PostTextParsed, handlers.HandlePostTextParsed)
-	consumer.RegisterHandler(events.PostSummarized, handlers.HandlePostSummarized)
+	// 재주입기 시작 (지연 토픽 -> 기본 토픽)
+	groupID := eventbus.GetGroupID()
 
-	// 토픽 구독
-	if err := consumer.Subscribe([]string{kafka.TopicPostEvents}); err != nil {
-		config.Logger.Errorf("failed to subscribe to topics: %v", err)
-		os.Exit(1)
+	// 메인 구독 러너
+	subscribeRunner := func() error {
+		return bus.Subscribe(ctx, groupID, eventbus.TopicPostEvents, func(ctx context.Context, ev eventbus.Event) error {
+			// 이벤트 타입만 먼저 파싱 (BaseEvent.Type는 top-level에 있음)
+			var peek struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(ev.Payload, &peek); err != nil {
+				return err
+			}
+			switch events.EventType(peek.Type) {
+			case events.PostCreated:
+				v, err := eventbus.DecodeJSON[events.PostCreatedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostCreated(ctx, &v)
+			case events.PostHTMLFetched:
+				v, err := eventbus.DecodeJSON[events.PostHTMLFetchedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostHTMLFetched(ctx, &v)
+			case events.PostTextParsed:
+				v, err := eventbus.DecodeJSON[events.PostTextParsedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostTextParsed(ctx, &v)
+			case events.PostSummarized:
+				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostSummarized(ctx, &v)
+			default:
+				// 알 수 없는 타입은 무시 (커밋)
+				return nil
+			}
+		})
 	}
 
-	config.Logger.Info("starting processor service with retry mechanism...")
+	config.Logger.Info("starting processor service with eventbus...")
 
 	// Graceful shutdown 설정
 	sigChan := make(chan os.Signal, 1)
@@ -71,12 +99,21 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// Kafka Consumer 시작 (재시도 로직 포함)
+	// 메인 구독 시작
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := consumer.Start(ctx); err != nil && err != context.Canceled {
-			config.Logger.Errorf("kafka consumer error: %v", err)
+		if err := subscribeRunner(); err != nil && err != context.Canceled {
+			config.Logger.Errorf("eventbus subscribe error: %v", err)
+		}
+	}()
+
+	// 재시도 재주입기 시작
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := bus.StartRetryReinjector(ctx, groupID+"-reinject", eventbus.TopicPostEvents); err != nil && err != context.Canceled {
+			config.Logger.Errorf("eventbus retry reinjector error: %v", err)
 		}
 	}()
 
