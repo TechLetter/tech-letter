@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"tech-letter/eventbus"
 	"tech-letter/events"
-	"tech-letter/kafka"
 	"tech-letter/models"
 
 	"github.com/google/uuid"
@@ -14,19 +15,19 @@ import (
 
 // EventService Processor용 이벤트 발행 서비스
 type EventService struct {
-	producer kafka.Producer
+	bus eventbus.EventBus
 }
 
 // NewEventService 새로운 이벤트 서비스 생성
-func NewEventService(producer kafka.Producer) *EventService {
+func NewEventService(bus eventbus.EventBus) *EventService {
 	return &EventService{
-		producer: producer,
+		bus: bus,
 	}
 }
 
 // PublishPostHTMLFetched HTML 렌더링 완료 이벤트 발행
 func (s *EventService) PublishPostHTMLFetched(ctx context.Context, postID primitive.ObjectID, link string) error {
-	event := events.PostHTMLFetchedEvent{
+	e := events.PostHTMLFetchedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
 			Type:      events.PostHTMLFetched,
@@ -37,13 +38,14 @@ func (s *EventService) PublishPostHTMLFetched(ctx context.Context, postID primit
 		PostID: postID,
 		Link:   link,
 	}
-
-	return s.producer.PublishEvent(kafka.TopicPostEvents, event)
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }
 
 // PublishPostTextParsed 텍스트 파싱 완료 이벤트 발행
 func (s *EventService) PublishPostTextParsed(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string) error {
-	event := events.PostTextParsedEvent{
+	e := events.PostTextParsedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
 			Type:      events.PostTextParsed,
@@ -55,13 +57,14 @@ func (s *EventService) PublishPostTextParsed(ctx context.Context, postID primiti
 		Link:         link,
 		ThumbnailURL: thumbnailURL,
 	}
-
-	return s.producer.PublishEvent(kafka.TopicPostEvents, event)
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }
 
 // PublishPostSummarized AI 요약 완료 이벤트 발행
 func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link string, summary models.AISummary) error {
-	event := events.PostSummarizedEvent{
+	e := events.PostSummarizedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
 			Type:      events.PostSummarized,
@@ -76,6 +79,7 @@ func (s *EventService) PublishPostSummarized(ctx context.Context, postID primiti
 		Summary:    summary.Summary,
 		ModelName:  summary.ModelName,
 	}
-
-	return s.producer.PublishEvent(kafka.TopicPostEvents, event)
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }
