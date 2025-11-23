@@ -66,26 +66,8 @@ func main() {
 					return err
 				}
 				return handlers.HandlePostCreated(ctx, &v)
-			case events.PostHTMLFetched:
-				v, err := eventbus.DecodeJSON[events.PostHTMLFetchedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostHTMLFetched(ctx, &v)
-			case events.PostTextParsed:
-				v, err := eventbus.DecodeJSON[events.PostTextParsedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostTextParsed(ctx, &v)
-			case events.PostSummarized:
-				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostSummarized(ctx, &v)
 			default:
-				// 알 수 없는 타입은 무시 (커밋)
+				// 알 수 없는 타입 또는 다른 서비스용 이벤트는 무시 (커밋)
 				return nil
 			}
 		})

@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	aggHandlers "tech-letter/cmd/aggregate/handlers"
+	eventServices "tech-letter/cmd/aggregate/services"
 	"tech-letter/config"
 	"tech-letter/db"
-	eventServices "tech-letter/cmd/aggregate/services"
 	"tech-letter/eventbus"
+	"tech-letter/events"
 )
 
 func main() {
@@ -42,8 +45,9 @@ func main() {
 	// 서비스 초기화
 	eventService := eventServices.NewEventService(bus)
 	aggregateService := NewAggregateService(eventService)
+	handlers := aggHandlers.NewEventHandlers()
 
-	config.Logger.Info("starting aggregate service (RSS feed collection)...")
+	config.Logger.Info("starting aggregate service (RSS feed collection and DB writer)...")
 
 	// Graceful shutdown 설정
 	sigChan := make(chan os.Signal, 1)
@@ -68,6 +72,32 @@ func main() {
 					config.Logger.Errorf("feed collection failed: %v", err)
 				}
 			}
+		}
+	}()
+
+	// PostSummarized 이벤트를 소비하여 DB에 결과 반영
+	go func() {
+		groupID := eventbus.GetGroupID() + "-aggregate-writer"
+		if err := bus.Subscribe(ctx, groupID, eventbus.TopicPostEvents, func(ctx context.Context, ev eventbus.Event) error {
+			var peek struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(ev.Payload, &peek); err != nil {
+				return err
+			}
+			switch events.EventType(peek.Type) {
+			case events.PostSummarized:
+				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostSummarized(ctx, &v)
+			default:
+				// Aggregate는 요약 결과만 관심 있음. 나머지 이벤트는 무시.
+				return nil
+			}
+		}); err != nil && err != context.Canceled {
+			config.Logger.Errorf("aggregate eventbus subscribe error: %v", err)
 		}
 	}()
 
