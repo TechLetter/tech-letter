@@ -20,8 +20,8 @@ type _Logger interface {
 
 var Logger _Logger
 
-func InitLogger() {
-	level := strings.ToLower(GetConfig().Logging.Level)
+func InitLogger(logging LoggingConfig) {
+	level := strings.ToLower(logging.Level)
 	switch level {
 	case "debug", "info", "warn", "error":
 		Logger = NewLogger(level)

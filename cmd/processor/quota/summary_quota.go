@@ -26,7 +26,7 @@ type SummaryQuotaLimiter struct {
 // NewSummaryQuotaLimiterFromConfig 는 config.yaml 의 summary_quota 설정을 기반으로
 // SummaryQuotaLimiter 를 생성한다. 설정 값이 0 이하인 경우에는 해당 방향의 제한을 두지 않는다.
 func NewSummaryQuotaLimiterFromConfig(cfg config.AppConfig) *SummaryQuotaLimiter {
-	q := cfg.SummaryQuota
+	q := cfg.Processor.SummaryQuota
 
 	requestsPerDay := q.RequestsPerDay
 	if requestsPerDay < 0 {

@@ -69,8 +69,12 @@ func SummarizeText(text string) (*SummarizeResult, *LLMRequestLog, error) {
 	if apiKey == "" {
 		return nil, nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
-	modelName := config.GetConfig().GeminiModel
-	
+	llmCfg := config.GetConfig().Processor.LLM
+	if llmCfg.Provider != "google" {
+		return nil, nil, fmt.Errorf("unsupported LLM provider: %s", llmCfg.Provider)
+	}
+	modelName := llmCfg.ModelName
+
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,

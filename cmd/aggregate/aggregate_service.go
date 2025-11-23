@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"tech-letter/cmd/aggregate/feeder"
+	eventServices "tech-letter/cmd/aggregate/services"
 	"tech-letter/config"
 	"tech-letter/db"
-	"tech-letter/cmd/aggregate/feeder"
 	"tech-letter/models"
 	"tech-letter/repositories"
-	eventServices "tech-letter/cmd/aggregate/services"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // AggregateService RSS 피드 수집 서비스
@@ -30,7 +31,7 @@ func NewAggregateService(eventService *eventServices.EventService) *AggregateSer
 
 // RunFeedCollection RSS 피드 수집 및 새 포스트 생성
 func (s *AggregateService) RunFeedCollection(ctx context.Context) error {
-	cfgBlogs := config.GetConfig().Blogs
+	cfgBlogs := config.GetConfig().Aggregate.Blogs
 	if len(cfgBlogs) == 0 {
 		config.Logger.Warn("no blogs configured in config.yaml (key: blogs)")
 		return nil
@@ -73,7 +74,7 @@ func (s *AggregateService) collectPostsFromBlog(ctx context.Context, blog config
 	}
 
 	// RSS 피드 가져오기
-	feed, err := feeder.FetchRssFeeds(blog.RSSURL, config.GetConfig().BlogFetchBatchSize)
+	feed, err := feeder.FetchRssFeeds(blog.RSSURL, config.GetConfig().Aggregate.BlogFetchBatchSize)
 	if err != nil {
 		return err
 	}
