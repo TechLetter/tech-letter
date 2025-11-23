@@ -1,71 +1,99 @@
-logging:
-  level: info
+api:
+  logging:
+    level: info
 
-gemini_model: gemini-2.5-flash
+processor:
+  logging:
+    level: info
+  llm:
+    provider: google
+    model_name: gemini-2.5-flash
+  summary_quota:
+    requests_per_minute: 10
+    requests_per_day: 250
 
-blog_fetch_batch_size: 10
-blogs:
-  - name: 카카오
-    url: https://tech.kakao.com/blog
-    rss_url: https://tech.kakao.com/feed/
-    blog_type: company
+aggregate:
+  logging:
+    level: info
+  blog_fetch_batch_size: 10
+  blogs:
+    - name: 카카오
+      url: https://tech.kakao.com/blog
+      rss_url: https://tech.kakao.com/feed/
+      blog_type: company
 
-  - name: 카카오페이
-    url: https://tech.kakaopay.com
-    rss_url: https://tech.kakaopay.com/rss
-    blog_type: company
+    - name: 카카오페이
+      url: https://tech.kakaopay.com
+      rss_url: https://tech.kakaopay.com/rss
+      blog_type: company
 
-  - name: 네이버
-    url: https://d2.naver.com/home
-    rss_url: https://d2.naver.com/d2.atom
-    blog_type: company
+    - name: 네이버
+      url: https://d2.naver.com/home
+      rss_url: https://d2.naver.com/d2.atom
+      blog_type: company
 
-  - name: 우아한형제들
-    url: https://techblog.woowahan.com
-    rss_url: https://techblog.woowahan.com/feed/
-    blog_type: company
+    - name: 우아한형제들
+      url: https://techblog.woowahan.com
+      rss_url: https://techblog.woowahan.com/feed/
+      blog_type: company
 
-  - name: 당근마켓
-    url: https://medium.com/daangn
-    rss_url: https://medium.com/feed/daangn
-    blog_type: company
+    - name: 당근마켓
+      url: https://medium.com/daangn
+      rss_url: https://medium.com/feed/daangn
+      blog_type: company
 
-  - name: 리멤버
-    url: https://tech.remember.co.kr
-    rss_url: https://tech.remember.co.kr/feed
-    blog_type: company
+    - name: 리멤버
+      url: https://tech.remember.co.kr
+      rss_url: https://tech.remember.co.kr/feed
+      blog_type: company
 
-  - name: 여기어때
-    url: https://techblog.gccompany.co.kr/
-    rss_url: https://techblog.gccompany.co.kr/feed
-    blog_type: company
+    - name: 여기어때
+      url: https://techblog.gccompany.co.kr/
+      rss_url: https://techblog.gccompany.co.kr/feed
+      blog_type: company
 
-  - name: 무신사
-    url: https://medium.com/musinsa-tech
-    rss_url: https://medium.com/feed/musinsa-tech
-    blog_type: company
+    - name: 무신사
+      url: https://medium.com/musinsa-tech
+      rss_url: https://medium.com/feed/musinsa-tech
+      blog_type: company
 
-  - name: 쏘카
-    url: https://tech.socarcorp.kr/
-    rss_url: https://tech.socarcorp.kr/feed
-    blog_type: company
+    - name: 쏘카
+      url: https://tech.socarcorp.kr/
+      rss_url: https://tech.socarcorp.kr/feed
+      blog_type: company
 
-  - name: NHN클라우드
-    url: https://meetup.nhncloud.com/
-    rss_url: https://meetup.nhncloud.com/rss
-    blog_type: company
+    - name: NHN클라우드
+      url: https://meetup.nhncloud.com/
+      rss_url: https://meetup.nhncloud.com/rss
+      blog_type: company
 
-  - name: 컬리
-    url: https://helloworld.kurly.com/
-    rss_url: https://helloworld.kurly.com/feed
-    blog_type: company
+    - name: 컬리
+      url: https://helloworld.kurly.com/
+      rss_url: https://helloworld.kurly.com/feed
+      blog_type: company
 
-  - name: 토스
-    url: https://toss.tech/
-    rss_url: https://toss.tech/rss.xml
-    blog_type: company
+    - name: 토스
+      url: https://toss.tech/
+      rss_url: https://toss.tech/rss.xml
+      blog_type: company
 
-  - name: 더핑크퐁컴퍼니
-    url: https://medium.com/pinkfong
-    rss_url: https://medium.com/feed/pinkfong
-    blog_type: company
+    - name: 더핑크퐁컴퍼니
+      url: https://medium.com/pinkfong
+      rss_url: https://medium.com/feed/pinkfong
+      blog_type: company
+
+    - name: 라인
+      url: https://techblog.lycorp.co.jp/ko
+      rss_url: https://techblog.lycorp.co.jp/ko/feed/index.xml
+      blog_type: company
+
+    - name: 44bits
+      url: https://44bits.io/ko
+      rss_url: https://www.44bits.io/ko/feed/all
+      blog_type: creator
+
+
+    - name: microservices.io
+      url: https://microservices.io/
+      rss_url: https://microservices.io/feed.xml
+      blog_type: creator

@@ -2,189 +2,129 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	aggHandlers "tech-letter/cmd/aggregate/handlers"
+	eventServices "tech-letter/cmd/aggregate/services"
 	"tech-letter/config"
 	"tech-letter/db"
-	"tech-letter/feeder"
-	"tech-letter/models"
-	"tech-letter/parser"
-	"tech-letter/renderer"
-	"tech-letter/repositories"
-	"tech-letter/summarizer"
-	"time"
+	"tech-letter/eventbus"
+	"tech-letter/events"
 )
 
 func main() {
 	config.InitApp()
-	config.InitLogger()
+	cfg := config.GetConfig()
+	config.InitLogger(cfg.Aggregate.Logging)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// MongoDB 초기화
 	if err := db.Init(ctx); err != nil {
 		config.Logger.Errorf("failed to initialize MongoDB: %v", err)
+		os.Exit(1)
 	}
 
-	if err := runOnce(ctx); err != nil {
-		config.Logger.Errorf("aggregate runOnce error: %v", err)
+	// EventBus 초기화 및 토픽 보장
+	brokers := eventbus.GetBrokers()
+	if err := eventbus.EnsureTopics(brokers, eventbus.TopicPostEvents, 3); err != nil {
+		config.Logger.Errorf("failed to ensure eventbus topics: %v", err)
 	}
 
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if err := runOnce(ctx); err != nil {
-			config.Logger.Errorf("aggregate runOnce error: %v", err)
-		}
+	bus, err := eventbus.NewKafkaEventBus(brokers)
+	if err != nil {
+		config.Logger.Errorf("failed to create event bus: %v", err)
+		os.Exit(1)
 	}
-}
+	defer bus.Close()
 
-func runOnce(ctx context.Context) error {
-	blogRepo := repositories.NewBlogRepository(db.Database())
-	postRepo := repositories.NewPostRepository(db.Database())
+	// 서비스 초기화
+	eventService := eventServices.NewEventService(bus)
+	aggregateService := NewAggregateService(eventService)
+	recoveryService := NewSummaryRecoveryService(eventService)
+	handlers := aggHandlers.NewEventHandlers()
 
-	cfgBlogs := config.GetConfig().Blogs
-	if len(cfgBlogs) == 0 {
-		config.Logger.Warn("no blogs configured in config.yaml (key: blogs)")
-		return nil
-	}
+	config.Logger.Info("starting aggregate service (RSS feed collection and DB writer)...")
 
-	for _, b := range cfgBlogs {
-		mb := &models.Blog{
-			Name:   b.Name,
-			URL:    b.URL,
-			RSSURL: b.RSSURL,
-			BlogType: func() string {
-				if b.BlogType != "" {
-					return b.BlogType
-				}
-				return "company"
-			}(),
-		}
-		if _, err := blogRepo.UpsertByRSSURL(ctx, mb); err != nil {
-			config.Logger.Errorf("failed to upsert blog %s: %v", b.Name, err)
-		}
-	}
+	// Graceful shutdown 설정
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	for _, blog := range cfgBlogs {
-		// Find blog doc to get BlogID
-		blogDoc, err := blogRepo.GetByRSSURL(ctx, blog.RSSURL)
-		if err != nil {
-			config.Logger.Errorf("skip fetching posts for %s: failed to find blog doc: %v", blog.Name, err)
-			continue
+	// RSS 피드 수집 고루틴 시작
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute) // 30분마다 실행
+		defer ticker.Stop()
+
+		// 시작 시 즉시 한 번 실행
+		if err := aggregateService.RunFeedCollection(ctx); err != nil {
+			config.Logger.Errorf("initial feed collection failed: %v", err)
 		}
 
-		feed, err := feeder.FetchRssFeeds(blog.RSSURL, config.GetConfig().BlogFetchBatchSize)
-		if err != nil {
-			config.Logger.Errorf("fetch rss error for %s: %v", blog.Name, err)
-			continue
-		}
-
-		for _, item := range feed {
-			// Ensure post exists by link (no upsert)
-			exists, err := postRepo.IsExistByLink(ctx, item.Link)
-			if err != nil {
-				config.Logger.Errorf("failed to check post existence (link=%s): %v", item.Link, err)
-				continue
-			}
-			if !exists {
-				p := &models.Post{
-					BlogID:   blogDoc.ID,
-					BlogName: blogDoc.Name,
-					Title:    item.Title,
-					Link:     item.Link,
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := aggregateService.RunFeedCollection(ctx); err != nil {
+					config.Logger.Errorf("feed collection failed: %v", err)
 				}
-				if !item.PublishedAt.IsZero() {
-					p.PublishedAt = item.PublishedAt
-				}
-				if _, err := postRepo.Insert(ctx, p); err != nil {
-					config.Logger.Errorf("failed to insert post (blog=%s, title=%s): %v", blog.Name, item.Title, err)
-					continue
-				}
-			}
-
-			// Load saved post to get its ID
-			savedPost, err := postRepo.FindByLink(ctx, item.Link)
-			if err != nil {
-				config.Logger.Errorf("failed to reload post (blog=%s, link=%s): %v", blog.Name, item.Link, err)
-				continue
-			}
-
-			// Prepare flags from existing doc
-			flags := savedPost.Status
-
-			if flags.HTMLFetched && flags.TextParsed && flags.AISummarized {
-				config.Logger.Debugf("skip processing post (blog=%s, link=%s): already processed", blog.Name, item.Link)
-				continue
-			}
-
-			// 1) HTML 단계: 렌더링은 메모리 상에서만 수행 (저장하지 않음)
-			htmlStr, err := renderer.RenderHTML(item.Link)
-			if err != nil {
-				config.Logger.Errorf("failed to render HTML: %v", err)
-				continue
-			}
-
-			config.Logger.Infof("rendered HTML for %s: %s", item.Title, item.Link)
-
-			flags.HTMLFetched = true
-			if err := postRepo.UpdateStatusFlags(ctx, savedPost.ID, flags); err != nil {
-				config.Logger.Errorf("failed to update post status flags: %v", err)
-				continue
-			}
-
-			// 2) TEXT 단계: 파싱을 메모리 상에서만 수행 (저장하지 않음)
-			article, err := parser.ParseArticleOfHTML(htmlStr)
-			if err != nil {
-				config.Logger.Errorf("failed to parse HTML: %v", err)
-				continue
-			}
-
-			if article.TopImage != "" && savedPost.ThumbnailURL == "" {
-				_ = postRepo.UpdateThumbnailURL(ctx, savedPost.ID, article.TopImage)
-			}
-
-			flags.TextParsed = true
-			if err := postRepo.UpdateStatusFlags(ctx, savedPost.ID, flags); err != nil {
-				config.Logger.Errorf("failed to update post status flags: %v", err)
-				continue
-			}
-
-			config.Logger.Infof("parsed Plain Text for %s: %s", item.Title, item.Link)
-
-			// 3) AI 단계: AI를 메모리 상에서만 수행 (저장하지 않음)
-			if !flags.AISummarized {
-				summaryResult, reqLog, err := summarizer.SummarizeText(article.PlainTextContent)
-				if err != nil || summaryResult.Error != nil {
-					config.Logger.Errorf("failed to summarize: %v", err)
-					continue
-				}
-				config.Logger.Infof("model:%s time:%s input:%d output:%d total:%d",
-					reqLog.ModelName,
-					reqLog.GeneratedAt,
-					reqLog.TokenUsage.InputTokens,
-					reqLog.TokenUsage.OutputTokens,
-					reqLog.TokenUsage.TotalTokens)
-
-				// Denormalized snapshot on posts (single summary field)
-				summary := models.AISummary{
-					Categories:  summaryResult.Categories,
-					Tags:        summaryResult.Tags,
-					Summary:     summaryResult.Summary,
-					ModelName:   reqLog.ModelName,
-					GeneratedAt: reqLog.GeneratedAt,
-				}
-				if err := postRepo.UpdateAISummary(ctx, savedPost.ID, summary); err != nil {
-					config.Logger.Errorf("failed to update post AISummary: %v", err)
-					continue
-				}
-
-				flags.AISummarized = true
-				if err := postRepo.UpdateStatusFlags(ctx, savedPost.ID, flags); err != nil {
-					config.Logger.Errorf("failed to update post status flags: %v", err)
-					continue
-				}
-
-				config.Logger.Infof("summarized %s: %s", item.Title, item.Link)
 			}
 		}
-	}
-	return nil
+	}()
+
+	// 요약이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := recoveryService.RunRecovery(ctx, 100); err != nil {
+					config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
+				}
+			}
+		}
+	}()
+
+	// PostSummarized 이벤트를 소비하여 DB에 결과 반영
+	go func() {
+		groupID := eventbus.GetGroupID() + "-aggregate-writer"
+		if err := bus.Subscribe(ctx, groupID, eventbus.TopicPostEvents, func(ctx context.Context, ev eventbus.Event) error {
+			var peek struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(ev.Payload, &peek); err != nil {
+				return err
+			}
+			switch events.EventType(peek.Type) {
+			case events.PostSummarized:
+				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostSummarized(ctx, &v)
+			default:
+				// Aggregate는 요약 결과만 관심 있음. 나머지 이벤트는 무시.
+				return nil
+			}
+		}); err != nil && err != context.Canceled {
+			config.Logger.Errorf("aggregate eventbus subscribe error: %v", err)
+		}
+	}()
+
+	// 종료 신호 대기
+	<-sigChan
+	config.Logger.Info("received shutdown signal, shutting down aggregate service...")
+
+	cancel()
+
+	config.Logger.Info("aggregate service stopped")
 }

@@ -12,8 +12,26 @@ const ENV_FILE = ".env"
 const CONFIG_FILE = "config.yaml"
 
 type AppConfig struct {
+	API       APIConfig       `yaml:"api"`
+	Processor ProcessorConfig `yaml:"processor"`
+	Aggregate AggregateConfig `yaml:"aggregate"`
+}
+
+// APIConfig 는 API 애플리케이션 설정을 담는다.
+type APIConfig struct {
+	Logging LoggingConfig `yaml:"logging"`
+}
+
+// ProcessorConfig 는 Processor 애플리케이션 설정을 담는다.
+type ProcessorConfig struct {
+	Logging      LoggingConfig      `yaml:"logging"`
+	LLM          LLMConfig          `yaml:"llm"`
+	SummaryQuota SummaryQuotaConfig `yaml:"summary_quota"`
+}
+
+// AggregateConfig 는 Aggregate 애플리케이션 설정을 담는다.
+type AggregateConfig struct {
 	Logging            LoggingConfig `yaml:"logging"`
-	GeminiModel        string        `yaml:"gemini_model"`
 	BlogFetchBatchSize int           `yaml:"blog_fetch_batch_size"`
 	Blogs              []BlogSource  `yaml:"blogs"`
 }
@@ -22,12 +40,31 @@ type LoggingConfig struct {
 	Level string `yaml:"level"`
 }
 
+// SummaryQuotaConfig 는 요약용 LLM 호출에 대한 속도/일일 한도를 정의한다.
+// 애플리케이션 별로 설정을 분리할 수 있지만, 현재는 common.summary_quota 에서 공통 사용한다.
+type SummaryQuotaConfig struct {
+	// RequestsPerMinute 는 요약용 LLM 호출에 대한 분당 최대 요청 수이다.
+	// 0 이하면 제한 없음으로 간주한다.
+	RequestsPerMinute int `yaml:"requests_per_minute"`
+
+	// RequestsPerDay 는 요약용 LLM 호출에 대한 일일 최대 요청 수이다.
+	// 0 이하면 제한 없음으로 간주한다.
+	RequestsPerDay int `yaml:"requests_per_day"`
+}
+
 // BlogSource is a single blog configuration item
 type BlogSource struct {
 	Name     string `yaml:"name"`
 	URL      string `yaml:"url"`
 	RSSURL   string `yaml:"rss_url"`
 	BlogType string `yaml:"blog_type"`
+}
+
+// LLMConfig 는 Processor 에서 사용하는 LLM 제공자와 모델 이름을 정의한다.
+// 현재는 provider=google 만 지원하지만, 추후 멀티 프로바이더로 확장 가능하다.
+type LLMConfig struct {
+	Provider  string `yaml:"provider"`
+	ModelName string `yaml:"model_name"`
 }
 
 var config *AppConfig
