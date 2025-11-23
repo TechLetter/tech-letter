@@ -19,7 +19,8 @@ import (
 
 func main() {
 	config.InitApp()
-	config.InitLogger()
+	cfg := config.GetConfig()
+	config.InitLogger(cfg.Processor.Logging)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
