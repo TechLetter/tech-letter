@@ -4,7 +4,7 @@ import (
     "context"
 
     "go.mongodb.org/mongo-driver/bson/primitive"
-    "tech-letter/dto"
+    "tech-letter/cmd/api/dto"
     "tech-letter/repositories"
 )
 

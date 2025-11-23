@@ -1,9 +1,8 @@
 package feeder_test
 
 import (
+	"tech-letter/cmd/aggregate/feeder"
 	"testing"
-
-	"tech-letter/feeder"
 )
 
 func TestFetchRssFeeds(t *testing.T) {

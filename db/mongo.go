@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
@@ -12,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+
+	"tech-letter/config"
 )
 
 var (
@@ -56,14 +57,12 @@ func Init(ctx context.Context) error {
 			initErr = err
 			return
 		}
-		log.Println("MongoDB connected and indexes ensured")
+		config.Logger.Info("MongoDB connected and indexes ensured")
 	})
 	return initErr
 }
 
-
-
-func Client() *mongo.Client { return client }
+func Client() *mongo.Client     { return client }
 func Database() *mongo.Database { return db }
 
 func ensureIndexes(ctx context.Context, d *mongo.Database) error {

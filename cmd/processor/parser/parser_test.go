@@ -1,8 +1,8 @@
 package parser_test
 
 import (
-	"tech-letter/parser"
-	"tech-letter/renderer"
+	"tech-letter/cmd/processor/parser"
+	"tech-letter/cmd/processor/renderer"
 	"testing"
 )
 
