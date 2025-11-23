@@ -35,30 +35,16 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
 
   - 필드:
     - `eventService *eventServices.EventService`
-    - `postRepo *repositories.PostRepository`
   - 생성자: `NewEventHandlers(eventService *eventServices.EventService)`
 
-- 주요 메서드:
+- 주요 메서드 (현재 구현 기준):
 
-  - `HandlePostCreated` → `processHTMLStep`
-  - `HandlePostHTMLFetched` → `processTextStep`
-  - `HandlePostTextParsed` → `processAIStep`
-  - `HandlePostSummarized` → 로그 출력만 수행
+  - `HandlePostCreated`
+    - `PostCreated` 이벤트를 받아 HTML 렌더링 → 텍스트 파싱 → AI 요약을 한 번에 수행
+    - 결과를 `PostSummarized` 이벤트로 발행 (DB에는 직접 쓰지 않음)
 
-- 내부 헬퍼 메서드:
-  - `processHTMLStep`
-    - HTML 렌더링(`renderer.RenderHTML`) 호출
-    - 상태 플래그 `HTMLFetched` 업데이트
-    - `PublishPostHTMLFetched` 이벤트 발행
-  - `processTextStep`
-    - HTML 재렌더링 → `parser.ParseArticleOfHTML`
-    - 텍스트 파싱 결과 기반으로 상태 플래그 `TextParsed` 업데이트
-    - `PublishPostTextParsed` 이벤트 발행
-  - `processAIStep`
-    - HTML 재렌더링 + 재파싱
-    - `summarizer.SummarizeText` 호출 (Gemini 기반 LLM 직접 호출)
-    - AI 요약을 Mongo에 저장 + 상태 플래그 `AISummarized` 업데이트
-    - `PublishPostSummarized` 이벤트 발행
+과거에는 `HandlePostHTMLFetched`, `HandlePostTextParsed` 등의 중간 단계용 핸들러와
+`process*Step` 헬퍼들이 존재했지만, 현재는 모두 제거되었고 파이프라인이 단일 핸들러로 통합되었다.
 
 ### 2.3 이벤트 발행 서비스 레이어
 
@@ -66,10 +52,8 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
 - 구조체: `EventService`
   - 필드: `bus eventbus.EventBus`
   - 책임: Processor에서 발생한 도메인 이벤트를 EventBus를 통해 발행
-- 주요 메서드:
-  - `PublishPostHTMLFetched`
-  - `PublishPostTextParsed`
-  - `PublishPostSummarized`
+- 주요 메서드 (현재 구현 기준):
+  - `PublishPostSummarized` (HTML/텍스트/요약 처리 결과를 `PostSummarized` 이벤트로 발행)
 
 ### 2.4 Summarizer (LLM 호출)
 
@@ -83,10 +67,10 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
 
 ## 3. Processor 내부의 문제점 (Tidy 대상)
 
-1. **서비스 내부까지 과도한 이벤트 사용**
+1. **서비스 내부까지 과도한 이벤트 사용 (과거 구조)**
 
-   - `PostCreated → PostHTMLFetched → PostTextParsed → PostSummarized` 순서가 모두 동일한 Processor 프로세스 안에서 처리됨에도, 각 단계를 이벤트로 연결하고 있다.
-   - 서비스 경계(다른 프로세스/컨테이너 간 통신)가 아니라 **내부 파이프라인 단계**까지 이벤트로 쪼개져 있어 복잡도가 올라간다.
+   - 과거에는 `PostCreated → PostHTMLFetched → PostTextParsed → PostSummarized` 순서가 모두 동일한 Processor 프로세스 안에서 처리되면서, 각 단계를 이벤트로 연결하고 있었다.
+   - 현재는 리팩터링을 통해 **외부에 노출되는 이벤트를 `PostCreated`와 `PostSummarized` 두 가지로 줄이고**, HTML/텍스트/요약 단계는 단일 핸들러 내부 로직으로 통합되었다.
 
 2. **EventHandlers의 과도한 책임**
 
@@ -165,16 +149,15 @@ Processor 내부를 다음과 같은 그림으로 단순화하는 것을 목표�
 
 ### 5.3 3단계: 이벤트 경계 역할 정리 (논리적 분류)
 
-- 각 이벤트의 역할을 다음과 같이 분류한다.
+- 현재 이벤트의 역할은 다음과 같다.
 
-| 이벤트 타입       | 현재 사용 위치         | 성격                 | Tidy 방향                 |
-| ----------------- | ---------------------- | -------------------- | ------------------------- |
-| `PostCreated`     | Aggregate → Processor  | 서비스 간 경계       | **유지**                  |
-| `PostHTMLFetched` | Processor 내부         | 내부 파이프라인 단계 | 장기적으로 축소/제거 후보 |
-| `PostTextParsed`  | Processor 내부         | 내부 파이프라인 단계 | 장기적으로 축소/제거 후보 |
-| `PostSummarized`  | Processor → (미래) RAG | 서비스 간 경계       | **유지**, RAG 진입점      |
+| 이벤트 타입      | 생산자    | 소비자                | 성격           |
+| ---------------- | --------- | --------------------- | -------------- |
+| `PostCreated`    | Aggregate | Processor             | 서비스 간 경계 |
+| `PostSummarized` | Processor | Aggregate, (미래) RAG | 서비스 간 경계 |
 
-- 지금 당장은 `PostHTMLFetched`, `PostTextParsed` 를 제거하지 않고, 위와 같은 역할 정의만 문서로 남긴다.
+과거에는 `PostHTMLFetched`, `PostTextParsed` 와 같은 내부 단계용 이벤트가 존재했으나,
+현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다.
 
 ### 5.4 4단계: 향후 구조 변경을 위한 사전 작업
 
