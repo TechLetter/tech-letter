@@ -3,6 +3,10 @@ logging:
 
 gemini_model: gemini-2.5-flash
 
+summary_quota:
+  requests_per_minute: 10
+  requests_per_day: 250
+
 blog_fetch_batch_size: 10
 blogs:
   - name: 카카오

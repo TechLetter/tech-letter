@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"tech-letter/cmd/processor/parser"
+	"tech-letter/cmd/processor/quota"
 	"tech-letter/cmd/processor/renderer"
 	eventServices "tech-letter/cmd/processor/services"
 	"tech-letter/cmd/processor/summarizer"
@@ -16,12 +17,15 @@ import (
 // EventHandlers 이벤트 핸들러 모음
 type EventHandlers struct {
 	eventService *eventServices.EventService
+	summaryQuota *quota.SummaryQuotaLimiter
 }
 
 // NewEventHandlers 새로운 이벤트 핸들러 생성
-func NewEventHandlers(eventService *eventServices.EventService) *EventHandlers {
+
+func NewEventHandlers(eventService *eventServices.EventService, summaryQuota *quota.SummaryQuotaLimiter) *EventHandlers {
 	return &EventHandlers{
 		eventService: eventService,
+		summaryQuota: summaryQuota,
 	}
 }
 
@@ -30,6 +34,18 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 	postCreatedEvent, ok := event.(*events.PostCreatedEvent)
 	if !ok {
 		return fmt.Errorf("invalid event type for PostCreated handler")
+	}
+
+	allowed, err := h.summaryQuota.WaitAndReserve(ctx)
+	if err != nil {
+		config.Logger.Errorf("failed to apply summary quota for %s: %v", postCreatedEvent.Link, err)
+		return err
+	}
+	if !allowed {
+		// 일일 한도 초과: 이번 이벤트는 요약을 스킵한다.
+		// 에러를 반환하지 않음으로써 DLQ로 가지 않고 정상 소비되도록 한다.
+		config.Logger.Warnf("summary daily quota exceeded, skip summarization for %s", postCreatedEvent.Link)
+		return nil
 	}
 
 	config.Logger.Infof("handling PostCreated event for post: %s", postCreatedEvent.Title)

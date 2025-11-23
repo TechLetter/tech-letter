@@ -52,10 +52,14 @@ func (r *PostRepository) FindByLink(ctx context.Context, link string) (*models.P
 	return &p, nil
 }
 
-// UpdateStatusFlags sets status flags and updated_at
-func (r *PostRepository) UpdateStatusFlags(ctx context.Context, postID interface{}, flags models.StatusFlags) error {
+// SetAISummarized updates only the status.ai_summarized flag and updated_at.
+// 다른 상태 필드는 건드리지 않으므로, 향후 StatusFlags 필드가 늘어나더라도 안전하다.
+func (r *PostRepository) SetAISummarized(ctx context.Context, postID interface{}, summarized bool) error {
 	_, err := r.col.UpdateByID(ctx, postID, bson.M{
-		"$set": bson.M{"status": flags, "updated_at": time.Now()},
+		"$set": bson.M{
+			"status.ai_summarized": summarized,
+			"updated_at":           time.Now(),
+		},
 	})
 	return err
 }
@@ -178,5 +182,32 @@ func (r *PostRepository) IncrementViewCount(ctx context.Context, id primitive.Ob
 	return err
 }
 
-// FindUnprocessedPosts 는 이전 Processor DB 기반 파이프라인에서 사용되던 헬퍼였으나,
-// Processor가 DB와 완전히 분리되면서 더 이상 사용되지 않아 제거되었다.
+// FindUnsummarized 는 아직 AI 요약이 완료되지 않은 포스트들을 조회한다.
+// Aggregate 서비스에서 요약 재시도를 트리거할 때 사용한다.
+func (r *PostRepository) FindUnsummarized(ctx context.Context, limit int64) ([]models.Post, error) {
+	filter := bson.M{"status.ai_summarized": false}
+	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
+		{Key: "created_at", Value: 1},
+		{Key: "_id", Value: 1},
+	})
+
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Post
+	for cur.Next(ctx) {
+		var p models.Post
+		if err := cur.Decode(&p); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
