@@ -41,13 +41,7 @@ func (h *EventHandlers) HandlePostSummarized(ctx context.Context, event *events.
 		return err
 	}
 
-	flags := models.StatusFlags{
-		HTMLFetched:  true,
-		TextParsed:   true,
-		AISummarized: true,
-	}
-
-	if err := h.postRepo.UpdateStatusFlags(ctx, event.PostID, flags); err != nil {
+	if err := h.postRepo.SetAISummarized(ctx, event.PostID, true); err != nil {
 		config.Logger.Errorf("failed to update status flags for %s: %v", event.PostID.Hex(), err)
 		return err
 	}

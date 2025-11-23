@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	eventHandlers "tech-letter/cmd/processor/handlers"
+	"tech-letter/cmd/processor/quota"
 	eventServices "tech-letter/cmd/processor/services"
 	"tech-letter/config"
 	"tech-letter/db"
@@ -44,7 +45,8 @@ func main() {
 
 	// 서비스 초기화
 	eventService := eventServices.NewEventService(bus)
-	handlers := eventHandlers.NewEventHandlers(eventService)
+	quotaLimiter := quota.NewSummaryQuotaLimiterFromConfig(config.GetConfig())
+	handlers := eventHandlers.NewEventHandlers(eventService, quotaLimiter)
 
 	// 재주입기 시작 (지연 토픽 -> 기본 토픽)
 	groupID := eventbus.GetGroupID()
