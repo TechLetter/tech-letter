@@ -13,8 +13,6 @@ type EventType string
 
 const (
 	PostCreated         EventType = "post.created"
-	PostHTMLFetched     EventType = "post.html_fetched"
-	PostTextParsed      EventType = "post.text_parsed"
 	PostSummarized      EventType = "post.summarized"
 	NewsletterRequested EventType = "newsletter.requested"
 	NewsletterGenerated EventType = "newsletter.generated"
@@ -40,30 +38,16 @@ type PostCreatedEvent struct {
 	Link     string             `json:"link"`
 }
 
-// PostHTMLFetchedEvent HTML 렌더링 완료 이벤트
-type PostHTMLFetchedEvent struct {
-	BaseEvent
-	PostID primitive.ObjectID `json:"post_id"`
-	Link   string             `json:"link"`
-}
-
-// PostTextParsedEvent 텍스트 파싱 완료 이벤트
-type PostTextParsedEvent struct {
+// PostSummarizedEvent AI 요약 완료 이벤트
+type PostSummarizedEvent struct {
 	BaseEvent
 	PostID       primitive.ObjectID `json:"post_id"`
 	Link         string             `json:"link"`
 	ThumbnailURL string             `json:"thumbnail_url"`
-}
-
-// PostSummarizedEvent AI 요약 완료 이벤트
-type PostSummarizedEvent struct {
-	BaseEvent
-	PostID     primitive.ObjectID `json:"post_id"`
-	Link       string             `json:"link"`
-	Categories []string           `json:"categories"`
-	Tags       []string           `json:"tags"`
-	Summary    string             `json:"summary"`
-	ModelName  string             `json:"model_name"`
+	Categories   []string           `json:"categories"`
+	Tags         []string           `json:"tags"`
+	Summary      string             `json:"summary"`
+	ModelName    string             `json:"model_name"`
 }
 
 // DateRange 날짜 범위
@@ -98,13 +82,9 @@ type NewsletterSentEvent struct {
 // SerializeEvent 이벤트를 JSON으로 직렬화하고 타입 정보 반환
 func SerializeEvent(event interface{}) ([]byte, EventType, error) {
 	var eventType EventType
-	
+
 	switch e := event.(type) {
 	case PostCreatedEvent:
-		eventType = e.Type
-	case PostHTMLFetchedEvent:
-		eventType = e.Type
-	case PostTextParsedEvent:
 		eventType = e.Type
 	case PostSummarizedEvent:
 		eventType = e.Type
@@ -133,10 +113,6 @@ func DeserializeEvent(eventType EventType, data []byte) (interface{}, error) {
 	switch eventType {
 	case PostCreated:
 		event = &PostCreatedEvent{}
-	case PostHTMLFetched:
-		event = &PostHTMLFetchedEvent{}
-	case PostTextParsed:
-		event = &PostTextParsedEvent{}
 	case PostSummarized:
 		event = &PostSummarizedEvent{}
 	case NewsletterRequested:

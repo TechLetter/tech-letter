@@ -25,45 +25,8 @@ func NewEventService(bus eventbus.EventBus) *EventService {
 	}
 }
 
-// PublishPostHTMLFetched HTML 렌더링 완료 이벤트 발행
-func (s *EventService) PublishPostHTMLFetched(ctx context.Context, postID primitive.ObjectID, link string) error {
-	e := events.PostHTMLFetchedEvent{
-		BaseEvent: events.BaseEvent{
-			ID:        uuid.New().String(),
-			Type:      events.PostHTMLFetched,
-			Timestamp: time.Now(),
-			Source:    "processor",
-			Version:   "1.0",
-		},
-		PostID: postID,
-		Link:   link,
-	}
-	evt, err := eventbus.NewJSONEvent("", e, 0)
-	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
-	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
-}
-
-// PublishPostTextParsed 텍스트 파싱 완료 이벤트 발행
-func (s *EventService) PublishPostTextParsed(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string) error {
-	e := events.PostTextParsedEvent{
-		BaseEvent: events.BaseEvent{
-			ID:        uuid.New().String(),
-			Type:      events.PostTextParsed,
-			Timestamp: time.Now(),
-			Source:    "processor",
-			Version:   "1.0",
-		},
-		PostID:       postID,
-		Link:         link,
-		ThumbnailURL: thumbnailURL,
-	}
-	evt, err := eventbus.NewJSONEvent("", e, 0)
-	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
-	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
-}
-
 // PublishPostSummarized AI 요약 완료 이벤트 발행
-func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link string, summary models.AISummary) error {
+func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string, summary models.AISummary) error {
 	e := events.PostSummarizedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
@@ -72,14 +35,17 @@ func (s *EventService) PublishPostSummarized(ctx context.Context, postID primiti
 			Source:    "processor",
 			Version:   "1.0",
 		},
-		PostID:     postID,
-		Link:       link,
-		Categories: summary.Categories,
-		Tags:       summary.Tags,
-		Summary:    summary.Summary,
-		ModelName:  summary.ModelName,
+		PostID:       postID,
+		Link:         link,
+		ThumbnailURL: thumbnailURL,
+		Categories:   summary.Categories,
+		Tags:         summary.Tags,
+		Summary:      summary.Summary,
+		ModelName:    summary.ModelName,
 	}
 	evt, err := eventbus.NewJSONEvent("", e, 0)
-	if err != nil { return fmt.Errorf("failed to build event: %w", err) }
+	if err != nil {
+		return fmt.Errorf("failed to build event: %w", err)
+	}
 	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }
