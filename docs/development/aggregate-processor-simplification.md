@@ -33,7 +33,7 @@ RAG 기반 챗봇 도입 전에, Tech-Letter의 **Aggregate ↔ Processor 파이
    - `PostCreated` 이벤트만 구독
    - 해당 포스트에 대해 **HTML 렌더링 → 텍스트 파싱 → AI 요약**을 하나의 파이프라인으로 처리
    - 중간 단계들(HTML 렌더링 완료, 텍스트 파싱 완료)은 **Processor 내부 로직**으로 통합하고, 외부 이벤트로 쪼개지 않음
-   - 처리 완료 후 MongoDB에 요약/상태를 반영하고 `PostSummarized` 이벤트 발행
+   - 처리 완료 후 **MongoDB에는 직접 접근하지 않고**, 요약 결과를 담은 `PostSummarized` 이벤트만 발행
 
 3. **(미래) RAG 인덱서**
    - `PostSummarized` 이벤트만 구독하여 벡터 인덱싱 수행
@@ -85,20 +85,15 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 
   - EventBus 구독: `TopicPostEvents`
   - Kafka 메시지를 디코딩 후 `events.BaseEvent.Type` 에 따라 switch
-  - 타입별로 `EventHandlers`의 핸들러 호출
+  - `PostCreated` 타입에 대해서만 `EventHandlers.HandlePostCreated`를 호출
 
 - `EventHandlers` (`cmd/processor/handlers/event_handlers.go`)
 
-  - `HandlePostCreated` → `processHTMLStep`
-  - `HandlePostHTMLFetched` → `processTextStep`
-  - `HandlePostTextParsed` → `processAIStep`
-  - `HandlePostSummarized` → 로그 출력
+  - `HandlePostCreated` 내부에서:
+    - `PostCreated` 이벤트의 `Link`를 사용해 HTML 렌더링 → 텍스트 파싱 → AI 요약을 순차적으로 수행
+    - 결과를 `PostSummarized` 이벤트로 발행
 
-- 내부 단계(`process*Step`)에서:
-  - HTML 렌더링, 텍스트 파싱, 요약 수행
-  - DB 업데이트 및 후속 이벤트 발행
-
-즉, Processor 내부의 단계별 상태 전이가 **모두 이벤트 체인**으로 표현되어 있다.
+- Processor는 MongoDB에 직접 접근하지 않으며, 오직 **입력 이벤트(`PostCreated`) → 출력 이벤트(`PostSummarized`)** 변환만 담당한다.
 
 ### 4.2 목표 Processor 파이프라인
 
@@ -110,20 +105,19 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 
    - 예: `PostProcessingService`
    - 책임: 하나의 포스트에 대해 다음 단계를 순차적으로 수행
-     1. MongoDB에서 포스트 조회
-     2. HTML 렌더링 (renderer)
-     3. 텍스트 파싱 (parser)
-     4. AI 요약 (summarizer / LLM 클라이언트)
-     5. 요약/카테고리/태그를 MongoDB에 저장
-     6. 상태 플래그 업데이트 (`HTMLFetched`, `TextParsed`, `AISummarized` 등)
-     7. `PostSummarized` 이벤트 발행
 
-3. **이벤트 핸들러의 역할 축소**
+     1. HTML 렌더링 (renderer)
+     2. 텍스트 파싱 (parser)
+     3. AI 요약 (summarizer / LLM 클라이언트)
+     4. 요약/카테고리/태그를 포함한 `PostSummarized` 이벤트 발행
+
+   - MongoDB에 대한 쓰기 책임은 Aggregate에 있으며, Processor는 이벤트 변환에만 집중한다.
+
+3. **이벤트 핸들러의 역할**
 
    - `HandlePostCreated(ctx, event)`:
-     - 포스트 ID/링크를 읽고, `PostProcessingService.Run(ctx, postID)` 같은 메서드를 호출
-     - 파이프라인 내부 세부 단계를 알지 못한다.
-   - `PostHTMLFetched`, `PostTextParsed`는 외부에 공개되는 이벤트라기보다는, 현재 코드 상의 "중간 단계" 표현이므로 장기적으로는 내부 상태로 통합하는 방향을 목표로 한다.
+     - 이벤트 payload(특히 `Link`)를 사용해 파이프라인을 직접 실행하고, `PostSummarized`를 발행한다.
+     - DB에 대한 책임은 갖지 않는다.
 
 4. **출력 이벤트**: `PostSummarized` 하나로 외부에 처리 완료를 알림
 
@@ -142,11 +136,8 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 | `PostTextParsed`  | Processor | Processor     | 내부 파이프라인 단계 | 장기적으로 내부 상태로 통합  |
 | `PostSummarized`  | Processor | (미래) RAG 등 | 서비스 간 경계       | **유지** (RAG 인덱서 진입점) |
 
-Tidy First 관점에서:
-
-- 지금 당장 `PostHTMLFetched`, `PostTextParsed`를 제거하지 않고,
-- 위와 같이 **역할과 최종 방향성을 문서로 먼저 고정**해 둔다.
-- 추후 실제 리팩터링 시 이 표를 기준으로 단계별로 변경 범위를 관리한다.
+과거에는 `PostHTMLFetched`, `PostTextParsed` 와 같은 내부 단계용 이벤트가 존재했으나,
+현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다.
 
 ---
 
