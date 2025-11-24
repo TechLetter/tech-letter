@@ -63,12 +63,12 @@ func main() {
 				return err
 			}
 			switch events.EventType(peek.Type) {
-			case events.PostCreated:
-				v, err := eventbus.DecodeJSON[events.PostCreatedEvent](ev)
+			case events.PostSummaryRequested:
+				v, err := eventbus.DecodeJSON[events.PostSummaryRequestedEvent](ev)
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostCreated(ctx, &v)
+				return handlers.HandlePostSummaryRequested(ctx, &v)
 			case events.PostThumbnailRequested:
 				v, err := eventbus.DecodeJSON[events.PostThumbnailRequestedEvent](ev)
 				if err != nil {
