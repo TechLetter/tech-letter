@@ -32,6 +32,13 @@ func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) e
 		return err
 	}
 
+	if len(posts) == 0 {
+		config.Logger.Infof("RunSummaryRecovery: no posts found for recovery - skipping")
+		return nil
+	}
+
+	config.Logger.Infof("RunSummaryRecovery: found %d posts to recover summary", len(posts))
+
 	for _, p := range posts {
 		if err := s.eventService.PublishPostSummaryRequested(ctx, &p); err != nil {
 			config.Logger.Errorf("failed to re-publish PostSummaryRequested for unsummarized post %s: %v", p.ID.Hex(), err)
@@ -43,10 +50,17 @@ func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) e
 	return nil
 }
 
+// RunThumbnailRecovery 는 썸네일 파싱이 완료되지 않은 포스트들에 대해
+// 썸네일 요청 이벤트(PostThumbnailRequested)를 재발행하여 파싱을 재시도한다.
 func (s *RecoveryService) RunThumbnailRecovery(ctx context.Context, limit int64) error {
 	posts, err := s.postRepo.FindThumbnailNotParsed(ctx, limit)
 	if err != nil {
 		return err
+	}
+
+	if len(posts) == 0 {
+		config.Logger.Infof("RunThumbnailRecovery: no posts found for recovery - skipping")
+		return nil
 	}
 
 	for _, p := range posts {
