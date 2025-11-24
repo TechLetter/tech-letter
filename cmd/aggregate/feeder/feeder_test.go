@@ -2,14 +2,17 @@ package feeder_test
 
 import (
 	"tech-letter/cmd/aggregate/feeder"
+	"tech-letter/config"
 	"testing"
 )
 
 func TestFetchRssFeeds(t *testing.T) {
 
-	var rssUrls = []string{
-		"https://tech.kakao.com/feed/",
-		"https://medium.com/feed/pinkfong",
+	config.InitApp()
+
+	var rssUrls []string
+	for _, blog := range config.GetConfig().Aggregate.Blogs {
+		rssUrls = append(rssUrls, blog.RSSURL)
 	}
 
 	for _, rssUrl := range rssUrls {
