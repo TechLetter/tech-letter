@@ -12,7 +12,7 @@ import (
 type EventType string
 
 const (
-	PostCreated            EventType = "post.created"
+	PostSummaryRequested   EventType = "post.summary_requested"
 	PostSummarized         EventType = "post.summarized"
 	PostThumbnailRequested EventType = "post.thumbnail_requested"
 	PostThumbnailParsed    EventType = "post.thumbnail_parsed"
@@ -30,8 +30,8 @@ type BaseEvent struct {
 	Version   string    `json:"version"`
 }
 
-// PostCreatedEvent 포스트 생성 이벤트
-type PostCreatedEvent struct {
+// PostSummaryRequestedEvent 포스트 요약 파이프라인 트리거 이벤트
+type PostSummaryRequestedEvent struct {
 	BaseEvent
 	PostID   primitive.ObjectID `json:"post_id"`
 	BlogID   primitive.ObjectID `json:"blog_id"`
@@ -100,7 +100,7 @@ func SerializeEvent(event interface{}) ([]byte, EventType, error) {
 	var eventType EventType
 
 	switch e := event.(type) {
-	case PostCreatedEvent:
+	case PostSummaryRequestedEvent:
 		eventType = e.Type
 	case PostSummarizedEvent:
 		eventType = e.Type
@@ -131,8 +131,8 @@ func DeserializeEvent(eventType EventType, data []byte) (interface{}, error) {
 	var event interface{}
 
 	switch eventType {
-	case PostCreated:
-		event = &PostCreatedEvent{}
+	case PostSummaryRequested:
+		event = &PostSummaryRequestedEvent{}
 	case PostSummarized:
 		event = &PostSummarizedEvent{}
 	case PostThumbnailRequested:

@@ -29,11 +29,11 @@ func NewEventHandlers(eventService *eventServices.EventService, summaryQuota *qu
 	}
 }
 
-// HandlePostCreated 포스트 생성 이벤트 처리
-func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}) error {
-	postCreatedEvent, ok := event.(*events.PostCreatedEvent)
+// HandlePostSummaryRequested 포스트 요약 요청 이벤트 처리
+func (h *EventHandlers) HandlePostSummaryRequested(ctx context.Context, event interface{}) error {
+	postCreatedEvent, ok := event.(*events.PostSummaryRequestedEvent)
 	if !ok {
-		return fmt.Errorf("invalid event type for PostCreated handler")
+		return fmt.Errorf("invalid event type for PostSummaryRequested handler")
 	}
 
 	allowed, err := h.summaryQuota.WaitAndReserve(ctx)
@@ -48,7 +48,7 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 		return nil
 	}
 
-	config.Logger.Infof("handling PostCreated event for post: %s", postCreatedEvent.Title)
+	config.Logger.Infof("handling PostSummaryRequested event for post: %s", postCreatedEvent.Title)
 
 	// HTML 렌더링
 	htmlStr, err := renderer.RenderHTML(postCreatedEvent.Link)

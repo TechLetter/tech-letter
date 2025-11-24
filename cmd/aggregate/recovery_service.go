@@ -10,7 +10,7 @@ import (
 )
 
 // RecoveryService 는 요약이 완료되지 않은 포스트들에 대해
-// PostCreated 이벤트를 재발행하여 요약을 재시도하는 책임을 가진다.
+// 요약 요청 이벤트(PostCreated)를 재발행하여 요약을 재시도하는 책임을 가진다.
 type RecoveryService struct {
 	eventService *services.EventService
 	postRepo     *repositories.PostRepository
@@ -25,7 +25,7 @@ func NewRecoveryService(eventService *services.EventService) *RecoveryService {
 }
 
 // RunSummaryRecovery 는 아직 AI 요약이 완료되지 않은 포스트 일부를 선택하여
-// PostCreated 이벤트를 다시 발행한다.
+// 요약 요청 이벤트(PostCreated)를 다시 발행한다.
 func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) error {
 	posts, err := s.postRepo.FindUnsummarized(ctx, limit)
 	if err != nil {
@@ -33,10 +33,10 @@ func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) e
 	}
 
 	for _, p := range posts {
-		if err := s.eventService.PublishPostCreated(ctx, &p); err != nil {
-			config.Logger.Errorf("failed to re-publish PostCreated for unsummarized post %s: %v", p.ID.Hex(), err)
+		if err := s.eventService.PublishPostSummaryRequested(ctx, &p); err != nil {
+			config.Logger.Errorf("failed to re-publish PostSummaryRequested for unsummarized post %s: %v", p.ID.Hex(), err)
 		} else {
-			config.Logger.Infof("re-published PostCreated for unsummarized post: %s", p.ID.Hex())
+			config.Logger.Infof("re-published PostSummaryRequested for unsummarized post: %s", p.ID.Hex())
 		}
 	}
 

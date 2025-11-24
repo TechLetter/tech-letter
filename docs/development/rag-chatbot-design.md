@@ -79,7 +79,7 @@ Tech-Letter는 RSS 기반 기술 블로그 수집 → HTML 렌더링/파싱 → 
 ### 3.1 현재 아키텍처 요약
 
 - **API 서버 (`cmd/api`)**: REST API (Gin), MongoDB 읽기/쓰기
-- **Aggregate 서버 (`cmd/aggregate`)**: RSS 피드 수집, `PostCreated` 이벤트 발행
+- **Aggregate 서버 (`cmd/aggregate`)**: RSS 피드 수집, `PostSummaryRequested` 이벤트 발행
 - **Processor 서버 (`cmd/processor`)**: 렌더링/파싱/요약 처리, 후속 이벤트 발행
 - **메시지 브로커**: Kafka 기반, 신규 기능은 `eventbus` 패키지의 `KafkaEventBus` 사용 권장
 - **DB**: MongoDB (포스트/요약/메타데이터 저장)

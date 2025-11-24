@@ -4,7 +4,7 @@
 
 Tech-Letter는 현재 다음과 같은 이벤트 기반 아키텍처를 사용하고 있다.
 
-- Aggregate 서버: RSS 수집 → `PostCreated` 이벤트 발행
+- Aggregate 서버: RSS 수집 → `PostSummaryRequested`(요약 요청) 이벤트 발행
 - Processor 서버: 이벤트를 구독하여 HTML 렌더링, 텍스트 파싱, AI 요약 수행
 - EventBus: Kafka 기반, `eventbus.EventBus` 인터페이스를 통해 추상화
 
@@ -39,8 +39,8 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
 
 - 주요 메서드 (현재 구현 기준):
 
-  - `HandlePostCreated`
-    - `PostCreated` 이벤트를 받아 HTML 렌더링 → 텍스트 파싱 → AI 요약을 한 번에 수행
+  - `HandlePostSummaryRequested`
+    - `PostSummaryRequested` 이벤트를 받아 HTML 렌더링 → 텍스트 파싱 → AI 요약을 한 번에 수행
     - 결과를 `PostSummarized` 이벤트로 발행 (DB에는 직접 쓰지 않음)
   - `HandlePostThumbnailRequested`
     - `PostThumbnailRequested` 이벤트를 받아 HTML 렌더링 → 썸네일 파싱만 수행
@@ -74,7 +74,7 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
 1. **서비스 내부까지 과도한 이벤트 사용 (과거 구조)**
 
    - 과거에는 `PostCreated → PostHTMLFetched → PostTextParsed → PostSummarized` 순서가 모두 동일한 Processor 프로세스 안에서 처리되면서, 각 단계를 이벤트로 연결하고 있었다.
-   - 현재는 리팩터링을 통해 **외부에 노출되는 이벤트를 `PostCreated`와 `PostSummarized` 두 가지로 줄이고**, HTML/텍스트/요약 단계는 단일 핸들러 내부 로직으로 통합되었다.
+   - 현재는 리팩터링을 통해 **외부에 노출되는 이벤트를 `PostSummaryRequested`와 `PostSummarized` 두 가지로 줄이고**, HTML/텍스트/요약 단계는 단일 핸들러 내부 로직으로 통합되었다.
 
 2. **EventHandlers의 과도한 책임**
 
@@ -111,14 +111,14 @@ Processor 내부를 다음과 같은 그림으로 단순화하는 것을 목표�
 ### 4.2 이벤트 핸들러의 역할 축소
 
 - `EventHandlers`의 역할을 "이벤트 → 파이프라인 서비스 호출"로 한정한다.
-  - `HandlePostCreated(ctx, event)`:
+  - `HandlePostSummaryRequested(ctx, event)`:
     - 포스트 ID를 추출하고, PostProcessingService에 전달하여 전체 파이프라인을 실행시키는 진입점 역할만 한다.
   - `HandlePostHTMLFetched`, `HandlePostTextParsed` 는 장기적으로는 축소 또는 제거 대상이며, 현재는 기존 이벤트 플로우를 깨지 않는 선에서 유지/정리 전략을 세운다.
 
 ### 4.3 외부 서비스 경계에 해당하는 이벤트만 남기기
 
 - **유지할 이벤트 경계(후보)**
-  - Aggregate → Processor: `PostCreated`
+  - Aggregate → Processor: `PostSummaryRequested`
   - Processor → (미래) RAG Indexer: `PostSummarized`
 - **내부 단계 이벤트는 장기적으로 축소 대상**
   - `PostHTMLFetched`, `PostTextParsed` 는 동일 Processor 내 파이프라인 단계로 간주하고, 향후에는 내부 함수 호출의 결과로 대체 가능하도록 설계 방향을 잡는다.
@@ -157,7 +157,7 @@ Processor 내부를 다음과 같은 그림으로 단순화하는 것을 목표�
 
 | 이벤트 타입              | 생산자    | 소비자                | 성격           |
 | ------------------------ | --------- | --------------------- | -------------- |
-| `PostCreated`            | Aggregate | Processor             | 서비스 간 경계 |
+| `PostSummaryRequested`   | Aggregate | Processor             | 서비스 간 경계 |
 | `PostSummarized`         | Processor | Aggregate, (미래) RAG | 서비스 간 경계 |
 | `PostThumbnailRequested` | Aggregate | Processor             | 서비스 간 경계 |
 | `PostThumbnailParsed`    | Processor | Aggregate             | 서비스 간 경계 |
