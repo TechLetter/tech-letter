@@ -12,13 +12,15 @@ import (
 type EventType string
 
 const (
-	PostSummaryRequested   EventType = "post.summary_requested"
-	PostSummarized         EventType = "post.summarized"
-	PostThumbnailRequested EventType = "post.thumbnail_requested"
-	PostThumbnailParsed    EventType = "post.thumbnail_parsed"
-	NewsletterRequested    EventType = "newsletter.requested"
-	NewsletterGenerated    EventType = "newsletter.generated"
-	NewsletterSent         EventType = "newsletter.sent"
+	PostCreated                 EventType = "post.created"
+	PostHTMLRendered            EventType = "post.html_rendered"
+	PostThumbnailParseRequested EventType = "post.thumbnail_parse_requested"
+	PostThumbnailParsed         EventType = "post.thumbnail_parsed"
+	PostContentParsed           EventType = "post.content_parsed"
+	PostSummarized              EventType = "post.summarized"
+	NewsletterRequested         EventType = "newsletter.requested"
+	NewsletterGenerated         EventType = "newsletter.generated"
+	NewsletterSent              EventType = "newsletter.sent"
 )
 
 // BaseEvent 모든 이벤트의 기본 구조
@@ -30,14 +32,47 @@ type BaseEvent struct {
 	Version   string    `json:"version"`
 }
 
-// PostSummaryRequestedEvent 포스트 요약 파이프라인 트리거 이벤트
-type PostSummaryRequestedEvent struct {
+// PostCreatedEvent 포스트 생성 이벤트 (파이프라인 시작)
+type PostCreatedEvent struct {
 	BaseEvent
 	PostID   primitive.ObjectID `json:"post_id"`
 	BlogID   primitive.ObjectID `json:"blog_id"`
 	BlogName string             `json:"blog_name"`
 	Title    string             `json:"title"`
 	Link     string             `json:"link"`
+}
+
+// PostHTMLRenderedEvent HTML 렌더링 완료 이벤트 (Processor → Aggregate)
+type PostHTMLRenderedEvent struct {
+	BaseEvent
+	PostID       primitive.ObjectID `json:"post_id"`
+	Link         string             `json:"link"`
+	RenderedHTML string             `json:"rendered_html"`
+	ThumbnailURL string             `json:"thumbnail_url"`
+}
+
+// PostThumbnailParseRequestedEvent 썸네일 파싱 요청 이벤트 (Aggregate → Processor, RenderedHTML 포함)
+type PostThumbnailParseRequestedEvent struct {
+	BaseEvent
+	PostID       primitive.ObjectID `json:"post_id"`
+	Link         string             `json:"link"`
+	RenderedHTML string             `json:"rendered_html"`
+}
+
+// PostThumbnailParsedEvent 썸네일 파싱 완료 이벤트 (Processor → Aggregate)
+type PostThumbnailParsedEvent struct {
+	BaseEvent
+	PostID       primitive.ObjectID `json:"post_id"`
+	Link         string             `json:"link"`
+	ThumbnailURL string             `json:"thumbnail_url"`
+}
+
+// PostContentParsedEvent 본문 파싱 완료 이벤트 (Aggregate → Processor, RenderedHTML 포함)
+type PostContentParsedEvent struct {
+	BaseEvent
+	PostID       primitive.ObjectID `json:"post_id"`
+	Link         string             `json:"link"`
+	RenderedHTML string             `json:"rendered_html"`
 }
 
 // PostSummarizedEvent AI 요약 완료 이벤트
@@ -49,21 +84,6 @@ type PostSummarizedEvent struct {
 	Tags       []string           `json:"tags"`
 	Summary    string             `json:"summary"`
 	ModelName  string             `json:"model_name"`
-}
-
-// PostThumbnailRequestedEvent 썸네일 파싱 요청 이벤트
-type PostThumbnailRequestedEvent struct {
-	BaseEvent
-	PostID primitive.ObjectID `json:"post_id"`
-	Link   string             `json:"link"`
-}
-
-// PostThumbnailParsedEvent 썸네일 파싱 완료 이벤트
-type PostThumbnailParsedEvent struct {
-	BaseEvent
-	PostID       primitive.ObjectID `json:"post_id"`
-	Link         string             `json:"link"`
-	ThumbnailURL string             `json:"thumbnail_url"`
 }
 
 // DateRange 날짜 범위
@@ -100,13 +120,17 @@ func SerializeEvent(event interface{}) ([]byte, EventType, error) {
 	var eventType EventType
 
 	switch e := event.(type) {
-	case PostSummaryRequestedEvent:
+	case PostCreatedEvent:
 		eventType = e.Type
-	case PostSummarizedEvent:
+	case PostHTMLRenderedEvent:
 		eventType = e.Type
-	case PostThumbnailRequestedEvent:
+	case PostThumbnailParseRequestedEvent:
 		eventType = e.Type
 	case PostThumbnailParsedEvent:
+		eventType = e.Type
+	case PostContentParsedEvent:
+		eventType = e.Type
+	case PostSummarizedEvent:
 		eventType = e.Type
 	case NewsletterRequestedEvent:
 		eventType = e.Type
@@ -131,14 +155,18 @@ func DeserializeEvent(eventType EventType, data []byte) (interface{}, error) {
 	var event interface{}
 
 	switch eventType {
-	case PostSummaryRequested:
-		event = &PostSummaryRequestedEvent{}
-	case PostSummarized:
-		event = &PostSummarizedEvent{}
-	case PostThumbnailRequested:
-		event = &PostThumbnailRequestedEvent{}
+	case PostCreated:
+		event = &PostCreatedEvent{}
+	case PostHTMLRendered:
+		event = &PostHTMLRenderedEvent{}
+	case PostThumbnailParseRequested:
+		event = &PostThumbnailParseRequestedEvent{}
 	case PostThumbnailParsed:
 		event = &PostThumbnailParsedEvent{}
+	case PostContentParsed:
+		event = &PostContentParsedEvent{}
+	case PostSummarized:
+		event = &PostSummarizedEvent{}
 	case NewsletterRequested:
 		event = &NewsletterRequestedEvent{}
 	case NewsletterGenerated:

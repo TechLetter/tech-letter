@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"tech-letter/cmd/aggregate/services"
 	"tech-letter/config"
@@ -9,14 +10,13 @@ import (
 	"tech-letter/repositories"
 )
 
-// RecoveryService 는 요약이 완료되지 않은 포스트들에 대해
-// 요약 요청 이벤트(PostCreated)를 재발행하여 요약을 재시도하는 책임을 가진다.
+// RecoveryService 는 미완료 포스트들에 대해 적절한 이벤트를 재발행하는 책임을 가진다.
 type RecoveryService struct {
 	eventService *services.EventService
 	postRepo     *repositories.PostRepository
 }
 
-// NewRecoveryService 새로운 요약 복구 서비스를 생성한다.
+// NewRecoveryService 새로운 복구 서비스를 생성한다.
 func NewRecoveryService(eventService *services.EventService) *RecoveryService {
 	return &RecoveryService{
 		eventService: eventService,
@@ -24,34 +24,32 @@ func NewRecoveryService(eventService *services.EventService) *RecoveryService {
 	}
 }
 
-// RunSummaryRecovery 는 아직 AI 요약이 완료되지 않은 포스트 일부를 선택하여
-// 요약 요청 이벤트(PostCreated)를 다시 발행한다.
-func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) error {
-	posts, err := s.postRepo.FindUnsummarized(ctx, limit)
+// RunHtmlRenderRecovery RenderedHTML이 없는 포스트를 조회하여 PostCreated 재발행
+func (s *RecoveryService) RunHtmlRenderRecovery(ctx context.Context, limit int64, duration time.Duration) error {
+	posts, err := s.postRepo.FindPostsWithoutRenderedHTML(ctx, limit, duration)
 	if err != nil {
 		return err
 	}
 
 	if len(posts) == 0 {
-		config.Logger.Infof("RunSummaryRecovery: no posts found for recovery - skipping")
+		config.Logger.Infof("RunHtmlRenderRecovery: no posts found for recovery - skipping")
 		return nil
 	}
 
 	for _, p := range posts {
-		if err := s.eventService.PublishPostSummaryRequested(ctx, &p); err != nil {
-			config.Logger.Errorf("failed to re-publish PostSummaryRequested for unsummarized post %s: %v", p.ID.Hex(), err)
+		if err := s.eventService.PublishPostCreated(ctx, &p); err != nil {
+			config.Logger.Errorf("failed to re-publish PostCreated for post %s: %v", p.ID.Hex(), err)
 		} else {
-			config.Logger.Infof("re-published PostSummaryRequested for unsummarized post: %s", p.ID.Hex())
+			config.Logger.Infof("re-published PostCreated for HTML render recovery: %s", p.ID.Hex())
 		}
 	}
 
 	return nil
 }
 
-// RunThumbnailRecovery 는 썸네일 파싱이 완료되지 않은 포스트들에 대해
-// 썸네일 요청 이벤트(PostThumbnailRequested)를 재발행하여 파싱을 재시도한다.
-func (s *RecoveryService) RunThumbnailRecovery(ctx context.Context, limit int64) error {
-	posts, err := s.postRepo.FindThumbnailNotParsed(ctx, limit)
+// RunThumbnailRecovery ThumbnailURL이 없지만 RenderedHTML은 있는 포스트를 조회하여 PostThumbnailParseRequested 재발행
+func (s *RecoveryService) RunThumbnailRecovery(ctx context.Context, limit int64, duration time.Duration) error {
+	posts, err := s.postRepo.FindPostsWithoutThumbnail(ctx, limit, duration)
 	if err != nil {
 		return err
 	}
@@ -62,10 +60,43 @@ func (s *RecoveryService) RunThumbnailRecovery(ctx context.Context, limit int64)
 	}
 
 	for _, p := range posts {
-		if err := s.eventService.PublishPostThumbnailRequested(ctx, &p); err != nil {
-			config.Logger.Errorf("failed to publish PostThumbnailRequested for post %s: %v", p.ID.Hex(), err)
+		if p.RenderedHTML == "" {
+			config.Logger.Warnf("post %s has no RenderedHTML, skipping", p.ID.Hex())
+			continue
+		}
+
+		if err := s.eventService.PublishPostThumbnailParseRequested(ctx, p.ID, p.Link, p.RenderedHTML); err != nil {
+			config.Logger.Errorf("failed to re-publish PostThumbnailParseRequested for post %s: %v", p.ID.Hex(), err)
 		} else {
-			config.Logger.Infof("published PostThumbnailRequested for post: %s", p.ID.Hex())
+			config.Logger.Infof("re-published PostThumbnailParseRequested for thumbnail recovery: %s", p.ID.Hex())
+		}
+	}
+
+	return nil
+}
+
+// RunSummaryRecovery 는 아직 AI 요약이 완료되지 않았지만 RenderedHTML은 있는 포스트를 조회하여 PostContentParsed 재발행
+func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64, duration time.Duration) error {
+	posts, err := s.postRepo.FindPostsWithoutSummary(ctx, limit, duration)
+	if err != nil {
+		return err
+	}
+
+	if len(posts) == 0 {
+		config.Logger.Infof("RunSummaryRecovery: no posts found for recovery - skipping")
+		return nil
+	}
+
+	for _, p := range posts {
+		if p.RenderedHTML == "" {
+			config.Logger.Warnf("post %s has no RenderedHTML, skipping", p.ID.Hex())
+			continue
+		}
+
+		if err := s.eventService.PublishPostContentParsed(ctx, p.ID, p.Link, p.RenderedHTML); err != nil {
+			config.Logger.Errorf("failed to re-publish PostContentParsed for unsummarized post %s: %v", p.ID.Hex(), err)
+		} else {
+			config.Logger.Infof("re-published PostContentParsed for unsummarized post: %s", p.ID.Hex())
 		}
 	}
 

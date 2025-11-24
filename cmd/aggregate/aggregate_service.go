@@ -113,17 +113,11 @@ func (s *AggregateService) collectPostsFromBlog(ctx context.Context, blog config
 				continue
 			}
 
-			// 포스트 생성 및 요약/썸네일 파이프라인 트리거 이벤트 발행
-			if err := s.eventService.PublishPostSummaryRequested(ctx, p); err != nil {
-				config.Logger.Errorf("failed to publish PostSummaryRequested event: %v", err)
+			// 포스트 생성 이벤트 발행 (파이프라인 시작)
+			if err := s.eventService.PublishPostCreated(ctx, p); err != nil {
+				config.Logger.Errorf("failed to publish PostCreated event: %v", err)
 			} else {
-				config.Logger.Infof("published PostSummaryRequested event for: %s (ID: %s)", item.Title, p.ID.Hex())
-			}
-
-			if err := s.eventService.PublishPostThumbnailRequested(ctx, p); err != nil {
-				config.Logger.Errorf("failed to publish PostThumbnailRequested event: %v", err)
-			} else {
-				config.Logger.Infof("published PostThumbnailRequested event for: %s (ID: %s)", item.Title, p.ID.Hex())
+				config.Logger.Infof("published PostCreated event for: %s (ID: %s)", item.Title, p.ID.Hex())
 			}
 		}
 	}

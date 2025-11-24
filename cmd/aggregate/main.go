@@ -47,7 +47,7 @@ func main() {
 	eventService := eventServices.NewEventService(bus)
 	aggregateService := NewAggregateService(eventService)
 	recoveryService := NewRecoveryService(eventService)
-	handlers := aggHandlers.NewEventHandlers()
+	handlers := aggHandlers.NewEventHandlers(eventService)
 
 	config.Logger.Info("starting aggregate service (RSS feed collection and DB writer)...")
 
@@ -57,7 +57,8 @@ func main() {
 
 	// RSS 피드 수집 고루틴 시작
 	go func() {
-		ticker := time.NewTicker(30 * time.Minute) // 30분마다 실행
+		const RSSFeedCollectionInterval = 30 * time.Minute
+		ticker := time.NewTicker(RSSFeedCollectionInterval) // 30분마다 실행
 		defer ticker.Stop()
 
 		// 시작 시 즉시 한 번 실행
@@ -79,11 +80,12 @@ func main() {
 
 	// 요약이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
 	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
+		const SummaryRecoveryInterval = 1 * time.Hour
+		ticker := time.NewTicker(SummaryRecoveryInterval)
 		defer ticker.Stop()
 
 		// 시작 시 즉시 한 번 실행
-		if err := recoveryService.RunSummaryRecovery(ctx, 60); err != nil {
+		if err := recoveryService.RunSummaryRecovery(ctx, 60, SummaryRecoveryInterval); err != nil {
 			config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
 		}
 
@@ -92,8 +94,31 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := recoveryService.RunSummaryRecovery(ctx, 60); err != nil {
+				if err := recoveryService.RunSummaryRecovery(ctx, 60, SummaryRecoveryInterval); err != nil {
 					config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
+				}
+			}
+		}
+	}()
+
+	// HTML 렌더링이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
+	go func() {
+		const HtmlRenderRecoveryInterval = 1 * time.Hour
+		ticker := time.NewTicker(HtmlRenderRecoveryInterval)
+		defer ticker.Stop()
+
+		// 시작 시 즉시 한 번 실행
+		if err := recoveryService.RunHtmlRenderRecovery(ctx, 60, HtmlRenderRecoveryInterval); err != nil {
+			config.Logger.Errorf("html render recovery failed: %v", err)
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := recoveryService.RunHtmlRenderRecovery(ctx, 60, HtmlRenderRecoveryInterval); err != nil {
+					config.Logger.Errorf("html render recovery failed: %v", err)
 				}
 			}
 		}
@@ -101,11 +126,12 @@ func main() {
 
 	// 썸네일 파싱이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
 	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
+		const ThumbnailRecoveryInterval = 1 * time.Hour
+		ticker := time.NewTicker(ThumbnailRecoveryInterval)
 		defer ticker.Stop()
 
 		// 시작 시 즉시 한 번 실행
-		if err := recoveryService.RunThumbnailRecovery(ctx, 60); err != nil {
+		if err := recoveryService.RunThumbnailRecovery(ctx, 60, ThumbnailRecoveryInterval); err != nil {
 			config.Logger.Errorf("thumbnail recovery failed: %v", err)
 		}
 
@@ -114,7 +140,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := recoveryService.RunThumbnailRecovery(ctx, 60); err != nil {
+				if err := recoveryService.RunThumbnailRecovery(ctx, 60, ThumbnailRecoveryInterval); err != nil {
 					config.Logger.Errorf("thumbnail recovery failed: %v", err)
 				}
 			}
@@ -132,20 +158,26 @@ func main() {
 				return err
 			}
 			switch events.EventType(peek.Type) {
-			case events.PostSummarized:
-				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
+			case events.PostHTMLRendered:
+				v, err := eventbus.DecodeJSON[events.PostHTMLRenderedEvent](ev)
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostSummarized(ctx, &v)
+				return handlers.HandlePostHTMLRendered(ctx, &v)
 			case events.PostThumbnailParsed:
 				v, err := eventbus.DecodeJSON[events.PostThumbnailParsedEvent](ev)
 				if err != nil {
 					return err
 				}
 				return handlers.HandlePostThumbnailParsed(ctx, &v)
+			case events.PostSummarized:
+				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostSummarized(ctx, &v)
 			default:
-				// Aggregate는 요약 결과와 썸네일 결과만 관심 있음. 나머지 이벤트는 무시.
+				// Aggregate는 PostHTMLRendered, PostThumbnailParsed, PostSummarized 처리
 				return nil
 			}
 		}); err != nil && err != context.Canceled {
