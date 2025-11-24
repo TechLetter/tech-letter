@@ -25,6 +25,29 @@ func NewEventService(bus eventbus.EventBus) *EventService {
 	}
 }
 
+// PublishPostHTMLRendered HTML 렌더링 완료 이벤트 발행 (Processor → Aggregate)
+func (s *EventService) PublishPostHTMLRendered(ctx context.Context, postID primitive.ObjectID, link, renderedHTML, thumbnailURL string) error {
+	e := events.PostHTMLRenderedEvent{
+		BaseEvent: events.BaseEvent{
+			ID:        uuid.New().String(),
+			Type:      events.PostHTMLRendered,
+			Timestamp: time.Now(),
+			Source:    "processor",
+			Version:   "1.0",
+		},
+		PostID:       postID,
+		Link:         link,
+		RenderedHTML: renderedHTML,
+		ThumbnailURL: thumbnailURL,
+	}
+
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil {
+		return fmt.Errorf("failed to build event: %w", err)
+	}
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
+}
+
 // PublishPostSummarized AI 요약 완료 이벤트 발행
 func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link string, summary models.AISummary) error {
 	e := events.PostSummarizedEvent{
@@ -51,22 +74,21 @@ func (s *EventService) PublishPostSummarized(ctx context.Context, postID primiti
 
 // PublishPostThumbnailParsed 썸네일 파싱 완료 이벤트 발행
 func (s *EventService) PublishPostThumbnailParsed(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string) error {
-	e := events.PostThumbnailParsedEvent{
-		BaseEvent: events.BaseEvent{
-			ID:        uuid.New().String(),
-			Type:      events.PostThumbnailParsed,
-			Timestamp: time.Now(),
-			Source:    "processor",
-			Version:   "1.0",
-		},
-		PostID:       postID,
-		Link:         link,
-		ThumbnailURL: thumbnailURL,
-	}
-
-	evt, err := eventbus.NewJSONEvent("", e, 0)
-	if err != nil {
-		return fmt.Errorf("failed to build event: %w", err)
-	}
-	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
+e := events.PostThumbnailParsedEvent{
+BaseEvent: events.BaseEvent{
+ID:        uuid.New().String(),
+Type:      events.PostThumbnailParsed,
+Timestamp: time.Now(),
+Source:    "processor",
+Version:   "1.0",
+},
+PostID:       postID,
+Link:         link,
+ThumbnailURL: thumbnailURL,
+}
+evt, err := eventbus.NewJSONEvent("", e, 0)
+if err != nil {
+return fmt.Errorf("failed to build event: %w", err)
+}
+return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }

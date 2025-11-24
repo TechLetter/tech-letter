@@ -63,18 +63,24 @@ func main() {
 				return err
 			}
 			switch events.EventType(peek.Type) {
-			case events.PostSummaryRequested:
-				v, err := eventbus.DecodeJSON[events.PostSummaryRequestedEvent](ev)
+			case events.PostCreated:
+				v, err := eventbus.DecodeJSON[events.PostCreatedEvent](ev)
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostSummaryRequested(ctx, &v)
-			case events.PostThumbnailRequested:
-				v, err := eventbus.DecodeJSON[events.PostThumbnailRequestedEvent](ev)
+				return handlers.HandlePostCreated(ctx, &v)
+			case events.PostThumbnailParseRequested:
+				v, err := eventbus.DecodeJSON[events.PostThumbnailParseRequestedEvent](ev)
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostThumbnailRequested(ctx, &v)
+				return handlers.HandlePostThumbnailParseRequested(ctx, &v)
+			case events.PostContentParsed:
+				v, err := eventbus.DecodeJSON[events.PostContentParsedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostContentParsed(ctx, &v)
 			default:
 				// 알 수 없는 타입 또는 다른 서비스용 이벤트는 무시 (커밋)
 				return nil
