@@ -3,3 +3,6 @@ config.yaml
 .env
 .env.production
 .env.docker
+aggregate
+api
+processor
