@@ -24,12 +24,12 @@ func NewEventService(bus eventbus.EventBus) *EventService {
 	}
 }
 
-// PublishPostCreated 포스트 생성 이벤트 발행
-func (s *EventService) PublishPostCreated(ctx context.Context, post *models.Post) error {
-	e := events.PostCreatedEvent{
+// PublishPostSummaryRequested 는 새 포스트에 대한 요약 요청(PostSummaryRequested) 이벤트를 발행한다.
+func (s *EventService) PublishPostSummaryRequested(ctx context.Context, post *models.Post) error {
+	e := events.PostSummaryRequestedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
-			Type:      events.PostCreated,
+			Type:      events.PostSummaryRequested,
 			Timestamp: time.Now(),
 			Source:    "aggregate",
 			Version:   "1.0",
