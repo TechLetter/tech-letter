@@ -16,10 +16,10 @@ func TestRenderHTML(t *testing.T) {
 		return
 	}
 
-	article, err := parser.ParseArticleOfHTML(html)
+	plainText, err := parser.ParseHtmlWithReadability(html)
 	if err != nil {
 		t.Logf("Failed to parse article: %v", err)
 		return
 	}
-	assert.Greater(t, len(article.PlainTextContent), 60000)
+	assert.Greater(t, len(plainText), 60000)
 }
