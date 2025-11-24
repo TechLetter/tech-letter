@@ -82,6 +82,11 @@ func main() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 
+		// 시작 시 즉시 한 번 실행
+		if err := recoveryService.RunSummaryRecovery(ctx, 60); err != nil {
+			config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
+		}
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -98,6 +103,11 @@ func main() {
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
+
+		// 시작 시 즉시 한 번 실행
+		if err := recoveryService.RunThumbnailRecovery(ctx, 60); err != nil {
+			config.Logger.Errorf("thumbnail recovery failed: %v", err)
+		}
 
 		for {
 			select {
