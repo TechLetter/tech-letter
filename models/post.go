@@ -12,7 +12,8 @@ import (
 //
 //	ai_summarized: AI 요약/분류가 저장됨
 type StatusFlags struct {
-	AISummarized bool `bson:"ai_summarized" json:"ai_summarized"`
+	AISummarized    bool `bson:"ai_summarized" json:"ai_summarized"`
+	ThumbnailParsed bool `bson:"thumbnail_parsed" json:"thumbnail_parsed"`
 }
 
 // Post represents a summarized post document

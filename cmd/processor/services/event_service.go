@@ -26,7 +26,7 @@ func NewEventService(bus eventbus.EventBus) *EventService {
 }
 
 // PublishPostSummarized AI 요약 완료 이벤트 발행
-func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string, summary models.AISummary) error {
+func (s *EventService) PublishPostSummarized(ctx context.Context, postID primitive.ObjectID, link string, summary models.AISummary) error {
 	e := events.PostSummarizedEvent{
 		BaseEvent: events.BaseEvent{
 			ID:        uuid.New().String(),
@@ -35,14 +35,35 @@ func (s *EventService) PublishPostSummarized(ctx context.Context, postID primiti
 			Source:    "processor",
 			Version:   "1.0",
 		},
+		PostID:     postID,
+		Link:       link,
+		Categories: summary.Categories,
+		Tags:       summary.Tags,
+		Summary:    summary.Summary,
+		ModelName:  summary.ModelName,
+	}
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil {
+		return fmt.Errorf("failed to build event: %w", err)
+	}
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
+}
+
+// PublishPostThumbnailParsed 썸네일 파싱 완료 이벤트 발행
+func (s *EventService) PublishPostThumbnailParsed(ctx context.Context, postID primitive.ObjectID, link, thumbnailURL string) error {
+	e := events.PostThumbnailParsedEvent{
+		BaseEvent: events.BaseEvent{
+			ID:        uuid.New().String(),
+			Type:      events.PostThumbnailParsed,
+			Timestamp: time.Now(),
+			Source:    "processor",
+			Version:   "1.0",
+		},
 		PostID:       postID,
 		Link:         link,
 		ThumbnailURL: thumbnailURL,
-		Categories:   summary.Categories,
-		Tags:         summary.Tags,
-		Summary:      summary.Summary,
-		ModelName:    summary.ModelName,
 	}
+
 	evt, err := eventbus.NewJSONEvent("", e, 0)
 	if err != nil {
 		return fmt.Errorf("failed to build event: %w", err)
