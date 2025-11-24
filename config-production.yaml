@@ -87,10 +87,10 @@ aggregate:
       rss_url: https://techblog.lycorp.co.jp/ko/feed/index.xml
       blog_type: company
 
-    # - name: 44bits
-    #   url: https://44bits.io/ko
-    #   rss_url: https://www.44bits.io/ko/feed/all
-    #   blog_type: creator
+    - name: 44bits
+      url: https://44bits.io/ko
+      rss_url: https://www.44bits.io/ko/feed/all
+      blog_type: creator
 
 
     - name: microservices.io
