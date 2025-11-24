@@ -37,8 +37,6 @@ func (s *RecoveryService) RunSummaryRecovery(ctx context.Context, limit int64) e
 		return nil
 	}
 
-	config.Logger.Infof("RunSummaryRecovery: found %d posts to recover summary", len(posts))
-
 	for _, p := range posts {
 		if err := s.eventService.PublishPostSummaryRequested(ctx, &p); err != nil {
 			config.Logger.Errorf("failed to re-publish PostSummaryRequested for unsummarized post %s: %v", p.ID.Hex(), err)
