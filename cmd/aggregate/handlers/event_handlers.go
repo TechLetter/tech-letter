@@ -46,6 +46,14 @@ func (h *EventHandlers) HandlePostSummarized(ctx context.Context, event *events.
 		return err
 	}
 
+	config.Logger.Infof("aggregate DB updated for summarized post: %s", event.Link)
+	return nil
+}
+
+// HandlePostThumbnailParsed Processor에서 발행한 PostThumbnailParsed 이벤트를 받아 DB에 썸네일 정보를 반영한다.
+func (h *EventHandlers) HandlePostThumbnailParsed(ctx context.Context, event *events.PostThumbnailParsedEvent) error {
+	config.Logger.Infof("aggregate handling PostThumbnailParsed event for post: %s", event.Link)
+
 	if event.ThumbnailURL != "" {
 		if err := h.postRepo.UpdateThumbnailURL(ctx, event.PostID, event.ThumbnailURL); err != nil {
 			config.Logger.Errorf("failed to update thumbnail URL for %s: %v", event.PostID.Hex(), err)
@@ -53,6 +61,11 @@ func (h *EventHandlers) HandlePostSummarized(ctx context.Context, event *events.
 		}
 	}
 
-	config.Logger.Infof("aggregate DB updated for summarized post: %s", event.Link)
+	if err := h.postRepo.SetThumbnailParsed(ctx, event.PostID, true); err != nil {
+		config.Logger.Errorf("failed to update thumbnail status for %s: %v", event.PostID.Hex(), err)
+		return err
+	}
+
+	config.Logger.Infof("aggregate DB updated for post thumbnail: %s", event.Link)
 	return nil
 }

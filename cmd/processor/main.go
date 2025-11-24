@@ -69,6 +69,12 @@ func main() {
 					return err
 				}
 				return handlers.HandlePostCreated(ctx, &v)
+			case events.PostThumbnailRequested:
+				v, err := eventbus.DecodeJSON[events.PostThumbnailRequestedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostThumbnailRequested(ctx, &v)
 			default:
 				// 알 수 없는 타입 또는 다른 서비스용 이벤트는 무시 (커밋)
 				return nil

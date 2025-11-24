@@ -34,8 +34,16 @@ RAG 기반 챗봇 도입 전에, Tech-Letter의 **Aggregate ↔ Processor 파이
    - 해당 포스트에 대해 **HTML 렌더링 → 텍스트 파싱 → AI 요약**을 하나의 파이프라인으로 처리
    - 중간 단계들(HTML 렌더링 완료, 텍스트 파싱 완료)은 **Processor 내부 로직**으로 통합하고, 외부 이벤트로 쪼개지 않음
    - 처리 완료 후 **MongoDB에는 직접 접근하지 않고**, 요약 결과를 담은 `PostSummarized` 이벤트만 발행
+   - `PostThumbnailRequested` 이벤트를 구독
+   - HTML 렌더링 및 썸네일 파싱(메타 태그, `<link>`, `<img>` + 실제 이미지 사이즈 검사)을 수행
+   - 결과를 `PostThumbnailParsed` 이벤트로 발행
 
-3. **(미래) RAG 인덱서**
+3. **Aggregate**
+
+   - `PostThumbnailParsed` 이벤트를 구독하여 `thumbnail_url` 필드와 `status.thumbnail_parsed` 플래그를 업데이트
+
+4. **(미래) RAG 인덱서**
+
    - `PostSummarized` 이벤트만 구독하여 벡터 인덱싱 수행
 
 ---
@@ -129,15 +137,16 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 
 현재 이벤트들을 다음과 같이 분류한다.
 
-| 이벤트 타입       | 생산자    | 소비자        | 성격                 | 단순화 방향                  |
-| ----------------- | --------- | ------------- | -------------------- | ---------------------------- |
-| `PostCreated`     | Aggregate | Processor     | 서비스 간 경계       | **유지** (Processor 진입점)  |
-| `PostHTMLFetched` | Processor | Processor     | 내부 파이프라인 단계 | 장기적으로 내부 상태로 통합  |
-| `PostTextParsed`  | Processor | Processor     | 내부 파이프라인 단계 | 장기적으로 내부 상태로 통합  |
-| `PostSummarized`  | Processor | (미래) RAG 등 | 서비스 간 경계       | **유지** (RAG 인덱서 진입점) |
+| 이벤트 타입              | 생산자    | 소비자                | 성격           | 단순화 방향                          |
+| ------------------------ | --------- | --------------------- | -------------- | ------------------------------------ |
+| `PostCreated`            | Aggregate | Processor             | 서비스 간 경계 | **유지** (요약 파이프라인 진입점)    |
+| `PostSummarized`         | Processor | Aggregate, (미래) RAG | 서비스 간 경계 | **유지** (요약/RAG 인덱서 진입점)    |
+| `PostThumbnailRequested` | Aggregate | Processor             | 서비스 간 경계 | **유지** (썸네일 파이프라인 진입점)  |
+| `PostThumbnailParsed`    | Processor | Aggregate             | 서비스 간 경계 | **유지** (썸네일 결과 반영용 이벤트) |
 
 과거에는 `PostHTMLFetched`, `PostTextParsed` 와 같은 내부 단계용 이벤트가 존재했으나,
-현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다.
+현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다. 썸네일은 별도의
+`PostThumbnailRequested` / `PostThumbnailParsed` 이벤트 쌍을 통해서만 비동기 처리된다.
 
 ---
 
@@ -193,7 +202,9 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 
 ## 7. 요약
 
-- Aggregate는 **RSS → 신규 포스트 감지 → PostCreated 발행**에만 집중한다.
-- Processor는 **PostCreated → (내부 파이프라인) → PostSummarized**로 단순한 흐름을 목표로 한다.
+- Aggregate는 **RSS → 신규 포스트 감지 → PostCreated 발행**에 집중한다.
+- Processor는 **PostCreated → (내부 파이프라인) → PostSummarized**로 요약 흐름을 단순화한다.
+- 썸네일은 **PostThumbnailRequested → PostThumbnailParsed** 로 이루어진 별도의 파이프라인에서 처리되며,
+  `models.StatusFlags.ThumbnailParsed` 플래그를 통해 진행 여부를 추적한다.
 - 중간 단계 이벤트(`PostHTMLFetched`, `PostTextParsed`)는 Processor 내부 상태로 통합하는 방향을 문서로 고정했다.
 - 이 설계를 기반으로, 이후 Tidy First 리팩터링과 RAG 인덱서 도입을 단계적으로 진행할 수 있다.

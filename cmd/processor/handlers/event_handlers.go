@@ -58,14 +58,14 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 	}
 
 	// 텍스트 파싱
-	article, err := parser.ParseArticleOfHTML(htmlStr)
+	plainText, err := parser.ParseHtmlWithReadability(htmlStr)
 	if err != nil {
 		config.Logger.Errorf("failed to parse HTML for %s: %v", postCreatedEvent.Link, err)
 		return err
 	}
 
 	// AI 요약
-	summaryResult, reqLog, err := summarizer.SummarizeText(article.PlainTextContent)
+	summaryResult, reqLog, err := summarizer.SummarizeText(plainText)
 	if err != nil || summaryResult.Error != nil {
 		config.Logger.Errorf("failed to summarize %s: %v", postCreatedEvent.Link, err)
 		return err
@@ -87,7 +87,7 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 		GeneratedAt: reqLog.GeneratedAt,
 	}
 
-	if err := h.eventService.PublishPostSummarized(ctx, postCreatedEvent.PostID, postCreatedEvent.Link, article.TopImage, summary); err != nil {
+	if err := h.eventService.PublishPostSummarized(ctx, postCreatedEvent.PostID, postCreatedEvent.Link, summary); err != nil {
 		config.Logger.Errorf("failed to publish PostSummarized event: %v", err)
 		return err
 	}
@@ -96,5 +96,29 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 	return nil
 }
 
-// 이전에 사용하던 중간 단계 이벤트(PostHTMLFetched, PostTextParsed)와
-// DB 업데이트 로직은 Aggregate 쪽으로 옮겨졌고, Processor는 더 이상 해당 책임을 갖지 않는다.
+// HandlePostThumbnailRequested 썸네일 파싱 요청 이벤트 처리
+func (h *EventHandlers) HandlePostThumbnailRequested(ctx context.Context, event *events.PostThumbnailRequestedEvent) error {
+	config.Logger.Infof("handling PostThumbnailRequested event for post: %s", event.Link)
+
+	// HTML 렌더링
+	htmlStr, err := renderer.RenderHTML(event.Link)
+	if err != nil {
+		config.Logger.Errorf("failed to render HTML for thumbnail parsing %s: %v", event.Link, err)
+		return err
+	}
+
+	// 썸네일 파싱
+	thumbnailURL, err := parser.ParseTopImageFromHTML(htmlStr, event.Link)
+	if err != nil {
+		config.Logger.Errorf("failed to parse thumbnail for %s: %v", event.Link, err)
+		return err
+	}
+
+	if err := h.eventService.PublishPostThumbnailParsed(ctx, event.PostID, event.Link, thumbnailURL); err != nil {
+		config.Logger.Errorf("failed to publish PostThumbnailParsed event: %v", err)
+		return err
+	}
+
+	config.Logger.Infof("thumbnail parsing completed for: %s (thumbnail=%s)", event.Link, thumbnailURL)
+	return nil
+}

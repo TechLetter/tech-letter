@@ -47,3 +47,24 @@ func (s *EventService) PublishPostCreated(ctx context.Context, post *models.Post
 	}
 	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
 }
+
+// PublishPostThumbnailRequested 썸네일 파싱 요청 이벤트 발행
+func (s *EventService) PublishPostThumbnailRequested(ctx context.Context, post *models.Post) error {
+	e := events.PostThumbnailRequestedEvent{
+		BaseEvent: events.BaseEvent{
+			ID:        uuid.New().String(),
+			Type:      events.PostThumbnailRequested,
+			Timestamp: time.Now(),
+			Source:    "aggregate",
+			Version:   "1.0",
+		},
+		PostID: post.ID,
+		Link:   post.Link,
+	}
+
+	evt, err := eventbus.NewJSONEvent("", e, 0)
+	if err != nil {
+		return fmt.Errorf("failed to build event: %w", err)
+	}
+	return s.bus.Publish(ctx, eventbus.TopicPostEvents.Base(), evt)
+}

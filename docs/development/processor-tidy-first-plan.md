@@ -42,6 +42,9 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
   - `HandlePostCreated`
     - `PostCreated` 이벤트를 받아 HTML 렌더링 → 텍스트 파싱 → AI 요약을 한 번에 수행
     - 결과를 `PostSummarized` 이벤트로 발행 (DB에는 직접 쓰지 않음)
+  - `HandlePostThumbnailRequested`
+    - `PostThumbnailRequested` 이벤트를 받아 HTML 렌더링 → 썸네일 파싱만 수행
+    - 결과를 `PostThumbnailParsed` 이벤트로 발행 (썸네일 전용 파이프라인)
 
 과거에는 `HandlePostHTMLFetched`, `HandlePostTextParsed` 등의 중간 단계용 핸들러와
 `process*Step` 헬퍼들이 존재했지만, 현재는 모두 제거되었고 파이프라인이 단일 핸들러로 통합되었다.
@@ -54,6 +57,7 @@ RAG 기반 챗봇을 도입하기 전에, Processor 내부 구조가 **과도하
   - 책임: Processor에서 발생한 도메인 이벤트를 EventBus를 통해 발행
 - 주요 메서드 (현재 구현 기준):
   - `PublishPostSummarized` (HTML/텍스트/요약 처리 결과를 `PostSummarized` 이벤트로 발행)
+  - `PublishPostThumbnailParsed` (썸네일 파싱 결과를 `PostThumbnailParsed` 이벤트로 발행)
 
 ### 2.4 Summarizer (LLM 호출)
 
@@ -149,15 +153,18 @@ Processor 내부를 다음과 같은 그림으로 단순화하는 것을 목표�
 
 ### 5.3 3단계: 이벤트 경계 역할 정리 (논리적 분류)
 
-- 현재 이벤트의 역할은 다음과 같다.
+> 현재 이벤트의 역할은 다음과 같다.
 
-| 이벤트 타입      | 생산자    | 소비자                | 성격           |
-| ---------------- | --------- | --------------------- | -------------- |
-| `PostCreated`    | Aggregate | Processor             | 서비스 간 경계 |
-| `PostSummarized` | Processor | Aggregate, (미래) RAG | 서비스 간 경계 |
+| 이벤트 타입              | 생산자    | 소비자                | 성격           |
+| ------------------------ | --------- | --------------------- | -------------- |
+| `PostCreated`            | Aggregate | Processor             | 서비스 간 경계 |
+| `PostSummarized`         | Processor | Aggregate, (미래) RAG | 서비스 간 경계 |
+| `PostThumbnailRequested` | Aggregate | Processor             | 서비스 간 경계 |
+| `PostThumbnailParsed`    | Processor | Aggregate             | 서비스 간 경계 |
 
 과거에는 `PostHTMLFetched`, `PostTextParsed` 와 같은 내부 단계용 이벤트가 존재했으나,
-현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다.
+현재는 Processor 내부 파이프라인 로직으로 통합되어 외부에 노출되지 않는다. 썸네일은
+전용 이벤트(`PostThumbnailRequested`, `PostThumbnailParsed`)를 통해 별도 파이프라인으로 처리된다.
 
 ### 5.4 4단계: 향후 구조 변경을 위한 사전 작업
 

@@ -12,11 +12,13 @@ import (
 type EventType string
 
 const (
-	PostCreated         EventType = "post.created"
-	PostSummarized      EventType = "post.summarized"
-	NewsletterRequested EventType = "newsletter.requested"
-	NewsletterGenerated EventType = "newsletter.generated"
-	NewsletterSent      EventType = "newsletter.sent"
+	PostCreated            EventType = "post.created"
+	PostSummarized         EventType = "post.summarized"
+	PostThumbnailRequested EventType = "post.thumbnail_requested"
+	PostThumbnailParsed    EventType = "post.thumbnail_parsed"
+	NewsletterRequested    EventType = "newsletter.requested"
+	NewsletterGenerated    EventType = "newsletter.generated"
+	NewsletterSent         EventType = "newsletter.sent"
 )
 
 // BaseEvent 모든 이벤트의 기본 구조
@@ -41,13 +43,27 @@ type PostCreatedEvent struct {
 // PostSummarizedEvent AI 요약 완료 이벤트
 type PostSummarizedEvent struct {
 	BaseEvent
+	PostID     primitive.ObjectID `json:"post_id"`
+	Link       string             `json:"link"`
+	Categories []string           `json:"categories"`
+	Tags       []string           `json:"tags"`
+	Summary    string             `json:"summary"`
+	ModelName  string             `json:"model_name"`
+}
+
+// PostThumbnailRequestedEvent 썸네일 파싱 요청 이벤트
+type PostThumbnailRequestedEvent struct {
+	BaseEvent
+	PostID primitive.ObjectID `json:"post_id"`
+	Link   string             `json:"link"`
+}
+
+// PostThumbnailParsedEvent 썸네일 파싱 완료 이벤트
+type PostThumbnailParsedEvent struct {
+	BaseEvent
 	PostID       primitive.ObjectID `json:"post_id"`
 	Link         string             `json:"link"`
 	ThumbnailURL string             `json:"thumbnail_url"`
-	Categories   []string           `json:"categories"`
-	Tags         []string           `json:"tags"`
-	Summary      string             `json:"summary"`
-	ModelName    string             `json:"model_name"`
 }
 
 // DateRange 날짜 범위
@@ -88,6 +104,10 @@ func SerializeEvent(event interface{}) ([]byte, EventType, error) {
 		eventType = e.Type
 	case PostSummarizedEvent:
 		eventType = e.Type
+	case PostThumbnailRequestedEvent:
+		eventType = e.Type
+	case PostThumbnailParsedEvent:
+		eventType = e.Type
 	case NewsletterRequestedEvent:
 		eventType = e.Type
 	case NewsletterGeneratedEvent:
@@ -115,6 +135,10 @@ func DeserializeEvent(eventType EventType, data []byte) (interface{}, error) {
 		event = &PostCreatedEvent{}
 	case PostSummarized:
 		event = &PostSummarizedEvent{}
+	case PostThumbnailRequested:
+		event = &PostThumbnailRequestedEvent{}
+	case PostThumbnailParsed:
+		event = &PostThumbnailParsedEvent{}
 	case NewsletterRequested:
 		event = &NewsletterRequestedEvent{}
 	case NewsletterGenerated:
