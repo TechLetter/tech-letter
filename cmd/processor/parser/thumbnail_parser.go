@@ -11,8 +11,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"tech-letter/config"
 	"time"
 
+	"github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
 )
 
@@ -29,6 +31,10 @@ func ParseTopImageFromHTML(htmlStr string, pageURL string) (string, error) {
 		}
 	}
 
+	if imgURL := findTopImageWithReadability(doc, baseURL); imgURL != "" {
+		return resolveImageURL(imgURL, baseURL), nil
+	}
+
 	if imgURL := findTopImageFromMeta(doc); imgURL != "" {
 		return resolveImageURL(imgURL, baseURL), nil
 	}
@@ -41,7 +47,26 @@ func ParseTopImageFromHTML(htmlStr string, pageURL string) (string, error) {
 		return imgURL, nil
 	}
 
+	config.Logger.Infof("there is no top image (rendered html: %d chars)", len(htmlStr))
+
 	return "", nil
+}
+
+func findTopImageWithReadability(doc *html.Node, baseURL *url.URL) string {
+	if doc == nil {
+		return ""
+	}
+
+	article, err := readability.FromDocument(doc, baseURL)
+	if err != nil {
+		return ""
+	}
+
+	if article.Image == "" {
+		return ""
+	}
+
+	return article.Image
 }
 
 func findTopImageFromMeta(doc *html.Node) string {
@@ -191,6 +216,11 @@ func findTopImageFromImg(doc *html.Node, baseURL *url.URL, minWidth, minHeight i
 			}
 			if declaredHeight > 0 && declaredHeight < minHeight {
 				goto next
+			}
+
+			if declaredWidth >= minWidth && declaredHeight >= minHeight {
+				result = absURL
+				return
 			}
 
 			width, height, err := fetchImageDimensions(absURL)

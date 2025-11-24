@@ -28,7 +28,23 @@ func TestParseArticleWithReadability(t *testing.T) {
 		if err != nil || plainText == "" {
 			t.Fatalf("failed to parse article with readability: %v", err)
 		}
+		t.Log(plainText)
 	}
+}
+
+// 현재 제대로 동작 x
+func TestParseArticleMusinsaBlog(t *testing.T) {
+	var url string = "https://medium.com/musinsa-tech/ai%EC%99%80%EC%9D%98-%EC%84%B1%EA%B3%B5%EC%A0%81%EC%9D%B8-%EC%B2%AB-co-work-%EB%B0%94%EC%9D%B4%EB%B8%8C-%EC%BD%94%EB%94%A9%EC%9C%BC%EB%A1%9C-%ED%83%84%EC%83%9D%EB%90%9C-%EB%A7%9E%EC%B6%A4%ED%98%95-testcase-management-system-29tms-74062a620119"
+	renderedHtml, err := renderer.RenderHTML(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plainText, err := parser.ParseHtmlWithReadability(renderedHtml)
+	if err != nil || plainText == "" {
+		t.Fatalf("failed to parse article with readability: %v", err)
+	}
+	t.Log(plainText)
 }
 
 func TestParseArticleWithTrafilatura(t *testing.T) {
