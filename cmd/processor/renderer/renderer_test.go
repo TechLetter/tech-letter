@@ -16,7 +16,7 @@ func TestRenderHTML(t *testing.T) {
 		return
 	}
 
-	article, err := parser.ParseArticleOfHTML(html)
+	article, err := parser.ParseHtmlWithReadability(html)
 	if err != nil {
 		t.Logf("Failed to parse article: %v", err)
 		return

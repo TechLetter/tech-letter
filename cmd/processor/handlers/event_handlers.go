@@ -58,7 +58,7 @@ func (h *EventHandlers) HandlePostCreated(ctx context.Context, event interface{}
 	}
 
 	// 텍스트 파싱
-	article, err := parser.ParseArticleOfHTML(htmlStr)
+	article, err := parser.ParseHtmlWithReadability(htmlStr)
 	if err != nil {
 		config.Logger.Errorf("failed to parse HTML for %s: %v", postCreatedEvent.Link, err)
 		return err
