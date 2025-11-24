@@ -194,10 +194,32 @@ func (r *PostRepository) IncrementViewCount(ctx context.Context, id primitive.Ob
 	return err
 }
 
-// FindUnsummarized 는 아직 AI 요약이 완료되지 않은 포스트들을 조회한다.
-// Aggregate 서비스에서 요약 재시도를 트리거할 때 사용한다.
-func (r *PostRepository) FindUnsummarized(ctx context.Context, limit int64) ([]models.Post, error) {
-	filter := bson.M{"status.ai_summarized": false}
+// UpdateFields updates specific fields of a post
+func (r *PostRepository) UpdateFields(ctx context.Context, id primitive.ObjectID, updates map[string]interface{}) error {
+	update := bson.M{
+		"$set": bson.M{
+			"updated_at": time.Now(),
+		},
+	}
+	for k, v := range updates {
+		update["$set"].(bson.M)[k] = v
+	}
+	_, err := r.col.UpdateByID(ctx, id, update)
+	return err
+}
+
+// FindPostsWithoutRenderedHTML RenderedHTML이 없거나 빈 문자열인 포스트 조회
+// duration: 현재 시간으로부터 과거로 얼마나 떨어진 시점까지의 새로 추가된 데이터를 가져올지 결정하는 시간 간격
+func (r *PostRepository) FindPostsWithoutRenderedHTML(ctx context.Context, limit int64, duration time.Duration) ([]models.Post, error) {
+	targetTime := time.Now().Add(-duration)
+
+	filter := bson.M{
+		"$or": []bson.M{
+			{"rendered_html": bson.M{"$exists": false}},
+			{"rendered_html": ""},
+		},
+		"created_at": bson.M{"$lt": targetTime},
+	}
 	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
 		{Key: "created_at", Value: 1},
 		{Key: "_id", Value: 1},
@@ -224,10 +246,64 @@ func (r *PostRepository) FindUnsummarized(ctx context.Context, limit int64) ([]m
 	return results, nil
 }
 
-// FindThumbnailNotParsed 는 아직 썸네일 파싱이 완료되지 않은 포스트들을 조회한다.
-// Aggregate 서비스에서 썸네일 파싱을 트리거할 때 사용한다.
-func (r *PostRepository) FindThumbnailNotParsed(ctx context.Context, limit int64) ([]models.Post, error) {
-	filter := bson.M{"status.thumbnail_parsed": false}
+// FindPostsWithoutThumbnail ThumbnailURL이 없거나 빈 문자열이지만 RenderedHTML은 있는 포스트 조회
+// duration: 현재 시간으로부터 과거로 얼마나 떨어진 시점까지의 새로 추가된 데이터를 가져올지 결정하는 시간 간격
+func (r *PostRepository) FindPostsWithoutThumbnail(ctx context.Context, limit int64, duration time.Duration) ([]models.Post, error) {
+
+	// 현재 시간에서 입력받은 duration을 뺀 시점을 계산합니다.
+	targetTime := time.Now().Add(-duration)
+
+	filter := bson.M{
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"thumbnail_url": bson.M{"$exists": false}},
+					{"thumbnail_url": ""},
+				},
+			},
+			{"rendered_html": bson.M{"$exists": true, "$ne": ""}},
+			{"created_at": bson.M{"$lt": targetTime}},
+		},
+	}
+
+	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
+		{Key: "created_at", Value: 1},
+		{Key: "_id", Value: 1},
+	})
+
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Post
+	for cur.Next(ctx) {
+		var p models.Post
+		if err := cur.Decode(&p); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// FindPostsWithoutSummary AI 요약이 없지만 RenderedHTML은 있는 포스트 조회 (duration 인자 추가됨)
+// duration: 현재 시간으로부터 과거로 얼마나 떨어진 시점까지의 새로 추가된 데이터를 가져올지 결정하는 시간 간격
+func (r *PostRepository) FindPostsWithoutSummary(ctx context.Context, limit int64, duration time.Duration) ([]models.Post, error) {
+
+	targetTime := time.Now().Add(-duration)
+
+	filter := bson.M{
+		"status.ai_summarized": false,
+		"rendered_html":        bson.M{"$exists": true, "$ne": ""},
+		"created_at":           bson.M{"$lt": targetTime},
+	}
+
 	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
 		{Key: "created_at", Value: 1},
 		{Key: "_id", Value: 1},

@@ -21,7 +21,6 @@ type EventHandlers struct {
 }
 
 // NewEventHandlers 새로운 이벤트 핸들러 생성
-
 func NewEventHandlers(eventService *eventServices.EventService, summaryQuota *quota.SummaryQuotaLimiter) *EventHandlers {
 	return &EventHandlers{
 		eventService: eventService,
@@ -29,45 +28,65 @@ func NewEventHandlers(eventService *eventServices.EventService, summaryQuota *qu
 	}
 }
 
-// HandlePostSummaryRequested 포스트 요약 요청 이벤트 처리
-func (h *EventHandlers) HandlePostSummaryRequested(ctx context.Context, event interface{}) error {
-	postCreatedEvent, ok := event.(*events.PostSummaryRequestedEvent)
-	if !ok {
-		return fmt.Errorf("invalid event type for PostSummaryRequested handler")
+// HandlePostCreated 포스트 생성 이벤트 처리 (HTML 렌더링만 수행, DB 접근 없음)
+func (h *EventHandlers) HandlePostCreated(ctx context.Context, event *events.PostCreatedEvent) error {
+	config.Logger.Infof("handling PostCreated event for post: %s", event.Title)
+
+	// 1. HTML 렌더링
+	htmlStr, err := renderer.RenderHTML(event.Link)
+	if err != nil {
+		config.Logger.Errorf("failed to render HTML for %s: %v", event.Link, err)
+		return err
 	}
 
+	// 2. 썸네일 파싱
+	thumbnailURL, err := parser.ParseTopImageFromHTML(htmlStr, event.Link)
+	if err != nil {
+		config.Logger.Warnf("failed to parse thumbnail for %s: %v", event.Link, err)
+		// 썸네일 실패는 치명적이지 않음, 계속 진행
+	}
+
+	// 3. PostHTMLRendered 이벤트 발행 (Aggregate가 DB 저장)
+	if err := h.eventService.PublishPostHTMLRendered(ctx, event.PostID, event.Link, htmlStr, thumbnailURL); err != nil {
+		config.Logger.Errorf("failed to publish PostHTMLRendered event: %v", err)
+		return err
+	}
+
+	config.Logger.Infof("post HTML rendered for: %s", event.Link)
+	return nil
+}
+
+// HandlePostContentParsed 본문 파싱 완료 이벤트 처리 (이벤트에서 RenderedHTML 받아서 AI 요약, DB 접근 없음)
+func (h *EventHandlers) HandlePostContentParsed(ctx context.Context, event *events.PostContentParsedEvent) error {
 	allowed, err := h.summaryQuota.WaitAndReserve(ctx)
 	if err != nil {
-		config.Logger.Errorf("failed to apply summary quota for %s: %v", postCreatedEvent.Link, err)
+		config.Logger.Errorf("failed to apply summary quota for %s: %v", event.Link, err)
 		return err
 	}
 	if !allowed {
-		// 일일 한도 초과: 이번 이벤트는 요약을 스킵한다.
-		// 에러를 반환하지 않음으로써 DLQ로 가지 않고 정상 소비되도록 한다.
-		config.Logger.Warnf("summary daily quota exceeded, skip summarization for %s", postCreatedEvent.Link)
+		config.Logger.Warnf("summary daily quota exceeded, skip summarization for %s", event.Link)
 		return nil
 	}
 
-	config.Logger.Infof("handling PostSummaryRequested event for post: %s", postCreatedEvent.Title)
+	config.Logger.Infof("handling PostContentParsed event for post: %s", event.Link)
 
-	// HTML 렌더링
-	htmlStr, err := renderer.RenderHTML(postCreatedEvent.Link)
-	if err != nil {
-		config.Logger.Errorf("failed to render HTML for %s: %v", postCreatedEvent.Link, err)
-		return err
+	// 이벤트에서 RenderedHTML 확인
+	if event.RenderedHTML == "" {
+		config.Logger.Errorf("post rendered HTML is empty in event for %s", event.Link)
+		return fmt.Errorf("post rendered HTML is empty")
 	}
 
-	// 텍스트 파싱
-	plainText, err := parser.ParseHtmlWithReadability(htmlStr)
+	// HTML에서 plain text 추출
+	plainText, err := parser.ParseHtmlWithReadability(event.RenderedHTML)
 	if err != nil {
-		config.Logger.Errorf("failed to parse HTML for %s: %v", postCreatedEvent.Link, err)
+		config.Logger.Errorf("failed to parse HTML to plain text for %s: %v", event.Link, err)
 		return err
 	}
 
 	// AI 요약
 	summaryResult, reqLog, err := summarizer.SummarizeText(plainText)
 	if err != nil || summaryResult.Error != nil {
-		config.Logger.Errorf("failed to summarize %s: %v", postCreatedEvent.Link, err)
+		config.Logger.Errorf("failed to summarize %s: %v", event.Link, err)
 		return err
 	}
 
@@ -87,38 +106,38 @@ func (h *EventHandlers) HandlePostSummaryRequested(ctx context.Context, event in
 		GeneratedAt: reqLog.GeneratedAt,
 	}
 
-	if err := h.eventService.PublishPostSummarized(ctx, postCreatedEvent.PostID, postCreatedEvent.Link, summary); err != nil {
+	// PostSummarized 이벤트 발행 (Aggregate가 DB 저장)
+	if err := h.eventService.PublishPostSummarized(ctx, event.PostID, event.Link, summary); err != nil {
 		config.Logger.Errorf("failed to publish PostSummarized event: %v", err)
 		return err
 	}
 
-	config.Logger.Infof("post processing pipeline completed for: %s", postCreatedEvent.Link)
+	config.Logger.Infof("post AI summary completed for: %s", event.Link)
 	return nil
 }
 
-// HandlePostThumbnailRequested 썸네일 파싱 요청 이벤트 처리
-func (h *EventHandlers) HandlePostThumbnailRequested(ctx context.Context, event *events.PostThumbnailRequestedEvent) error {
-	config.Logger.Infof("handling PostThumbnailRequested event for post: %s", event.Link)
+// HandlePostThumbnailParseRequested 썸네일 파싱 요청 이벤트 처리 (RenderedHTML 기반)
+func (h *EventHandlers) HandlePostThumbnailParseRequested(ctx context.Context, event *events.PostThumbnailParseRequestedEvent) error {
+config.Logger.Infof("handling PostThumbnailParseRequested event for post: %s", event.Link)
 
-	// HTML 렌더링
-	htmlStr, err := renderer.RenderHTML(event.Link)
-	if err != nil {
-		config.Logger.Errorf("failed to render HTML for thumbnail parsing %s: %v", event.Link, err)
-		return err
-	}
+if event.RenderedHTML == "" {
+config.Logger.Errorf("empty rendered HTML for post: %s", event.Link)
+return fmt.Errorf("empty rendered HTML")
+}
 
-	// 썸네일 파싱
-	thumbnailURL, err := parser.ParseTopImageFromHTML(htmlStr, event.Link)
-	if err != nil {
-		config.Logger.Errorf("failed to parse thumbnail for %s: %v", event.Link, err)
-		return err
-	}
+// RenderedHTML에서 썸네일 파싱
+thumbnailURL, err := parser.ParseTopImageFromHTML(event.RenderedHTML, event.Link)
+if err != nil {
+config.Logger.Warnf("failed to parse thumbnail for %s: %v", event.Link, err)
+// 썸네일 실패는 치명적이지 않음
+}
 
-	if err := h.eventService.PublishPostThumbnailParsed(ctx, event.PostID, event.Link, thumbnailURL); err != nil {
-		config.Logger.Errorf("failed to publish PostThumbnailParsed event: %v", err)
-		return err
-	}
+// PostThumbnailParsed 이벤트 발행
+if err := h.eventService.PublishPostThumbnailParsed(ctx, event.PostID, event.Link, thumbnailURL); err != nil {
+config.Logger.Errorf("failed to publish PostThumbnailParsed event: %v", err)
+return err
+}
 
-	config.Logger.Infof("thumbnail parsing completed for: %s (thumbnail=%s)", event.Link, thumbnailURL)
-	return nil
+config.Logger.Infof("post thumbnail parsed for: %s", event.Link)
+return nil
 }
