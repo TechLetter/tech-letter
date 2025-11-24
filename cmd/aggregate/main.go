@@ -79,7 +79,7 @@ func main() {
 
 	// 요약이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
 	go func() {
-		ticker := time.NewTicker(6 * time.Hour)
+		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 
 		for {
@@ -87,7 +87,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := recoveryService.RunSummaryRecovery(ctx, 100); err != nil {
+				if err := recoveryService.RunSummaryRecovery(ctx, 60); err != nil {
 					config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
 				}
 			}
@@ -96,7 +96,7 @@ func main() {
 
 	// 썸네일 파싱이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
 	go func() {
-		ticker := time.NewTicker(6 * time.Hour)
+		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 
 		for {
@@ -104,7 +104,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := recoveryService.RunThumbnailRecovery(ctx, 100); err != nil {
+				if err := recoveryService.RunThumbnailRecovery(ctx, 60); err != nil {
 					config.Logger.Errorf("thumbnail recovery failed: %v", err)
 				}
 			}
