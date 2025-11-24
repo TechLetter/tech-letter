@@ -7,8 +7,13 @@
 ### 이벤트 기반 마이크로서비스 구조
 
 - **API 서버** (`cmd/api/main.go`): REST API 제공 (포트 8080)
-- **Aggregate 서버** (`cmd/aggregate/main.go`): 기존 동기식 처리 (레거시)
-- **Aggregate-Event 서버** (`cmd/aggregate-event/main.go`): 이벤트 기반 비동기 처리 (신규)
+- **Aggregate 서버** (`cmd/aggregate/main.go`):
+  - RSS 수집 및 신규 포스트 MongoDB 저장
+  - `PostSummaryRequested`, `PostThumbnailRequested` 이벤트 발행
+  - `PostSummarized`, `PostThumbnailParsed` 이벤트를 구독해 DB 업데이트
+- **Processor 서버** (`cmd/processor/main.go`):
+  - `PostSummaryRequested` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → AI 요약 → `PostSummarized` 발행
+  - `PostThumbnailRequested` 이벤트를 구독해 썸네일 파싱 → `PostThumbnailParsed` 발행
 
 ### 기술 스택
 
@@ -22,11 +27,13 @@
 ### 이벤트 플로우
 
 1. **포스트 수집 (Aggregate)**  
-   RSS 피드에서 새 포스트 발견 → MongoDB에 새 포스트 저장(`status.ai_summarized=false`, `status.thumbnail_parsed=false`) → `PostCreated` 이벤트 발행
+   RSS 피드에서 새 포스트 발견 → MongoDB에 새 포스트 저장
+   (`status.ai_summarized=false`, `status.thumbnail_parsed=false`) →
+   요약 요청 이벤트 `PostSummaryRequested` 와 썸네일 요청 이벤트 `PostThumbnailRequested` 를 **동시에 발행**
 
 2. **요약 파이프라인 (Processor)**
 
-   - `PostCreated` 이벤트를 구독
+   - `PostSummaryRequested` 이벤트를 구독
    - HTML 렌더링 → 텍스트 파싱 → Gemini 요약 수행
    - 요약 결과를 포함한 `PostSummarized` 이벤트 발행 (DB에는 직접 쓰지 않음)
 
@@ -36,21 +43,24 @@
    - `posts.aisummary` 업데이트
    - `status.ai_summarized = true` 로 상태 플래그 갱신
 
-4. **썸네일 파이프라인 트리거 (Aggregate)**
-
-   - 주기적으로 `status.thumbnail_parsed=false` 인 포스트를 조회
-   - 각 포스트에 대해 `PostThumbnailRequested` 이벤트 발행
-
-5. **썸네일 파이프라인 (Processor)**
+4. **썸네일 파이프라인 (Processor)**
 
    - `PostThumbnailRequested` 이벤트를 구독
    - HTML 렌더링 → 썸네일 파싱(메타 태그, `<link>`, `<img>` + 실제 이미지 사이즈 검사)
    - 파싱 결과를 담은 `PostThumbnailParsed` 이벤트 발행
 
-6. **썸네일 DB 반영 (Aggregate)**
+5. **썸네일 DB 반영 (Aggregate)**
+
    - `PostThumbnailParsed` 이벤트를 구독
    - `posts.thumbnail_url` 업데이트
    - `status.thumbnail_parsed = true` 로 상태 플래그 갱신
+
+6. **자동 복구 파이프라인 (Aggregate)**
+
+   - 6시간마다 `status.ai_summarized=false` 인 포스트 일부를 조회 →
+     각 포스트에 대해 `PostSummaryRequested` 재발행 (요약 재시도)
+   - 6시간마다 `status.thumbnail_parsed=false` 인 포스트 일부를 조회 →
+     각 포스트에 대해 `PostThumbnailRequested` 재발행 (썸네일 파싱 재시도)
 
 #### Event Flow Diagram
 
@@ -61,16 +71,17 @@ sequenceDiagram
     participant DB as MongoDB
 
     Agg->>DB: Insert new Post (status.ai_summarized=false, thumbnail_parsed=false)
-    Agg->>Proc: PostCreated
+    Agg->>Proc: PostSummaryRequested
     Proc->>Proc: RenderHTML + ParseText + Summarize
     Proc->>Agg: PostSummarized
     Agg->>DB: Update AISummary + status.ai_summarized=true
 
-    Agg->>Agg: periodic scan status.thumbnail_parsed=false
     Agg->>Proc: PostThumbnailRequested
     Proc->>Proc: RenderHTML + ParseTopImageFromHTML
     Proc->>Agg: PostThumbnailParsed
     Agg->>DB: Update thumbnail_url + status.thumbnail_parsed=true
+
+    note over Agg,Proc: 주기적으로 Aggregate는\n요약 미완료/썸네일 미완료 포스트에 대해\nPostSummaryRequested / PostThumbnailRequested를 재발행
 ```
 
 ## 개발 가이드

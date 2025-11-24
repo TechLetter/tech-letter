@@ -63,7 +63,7 @@ RAG 기반 챗봇 도입 전에, Tech-Letter의 **Aggregate ↔ Processor 파이
 - `AggregateService` (개략)
   - RSS 피드 수집 (feeder 사용)
   - MongoDB에 포스트 저장
-  - 새 포스트에 대해 `EventService.PublishPostCreated` 호출
+  - 새 포스트에 대해 요약 요청 이벤트(`EventService.PublishPostCreated`, type=`PostCreated`) 호출
 
 ### 3.2 목표 역할
 
@@ -79,7 +79,7 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
      - 기준: 보통 `link` 또는 RSS `guid`
    - 존재하지 않는 항목에 대해서만:
      - MongoDB에 새 `Post` 도큐먼트를 삽입
-     - `PostCreated` 이벤트 발행
+     - 요약 요청 이벤트인 `PostCreated` 발행
 
 > Aggregate는 **요약, HTML 렌더링, 텍스트 파싱 등 콘텐츠 처리에는 관여하지 않고**, 단지 "새 글이 생겼다"는 사실만 Processor에게 알려주는 역할에 집중한다.
 
@@ -202,8 +202,8 @@ Aggregate는 다음 두 가지에만 집중하도록 단순화한다.
 
 ## 7. 요약
 
-- Aggregate는 **RSS → 신규 포스트 감지 → PostCreated 발행**에 집중한다.
-- Processor는 **PostCreated → (내부 파이프라인) → PostSummarized**로 요약 흐름을 단순화한다.
+- Aggregate는 **RSS → 신규 포스트 감지 → PostSummaryRequested(요약 요청) 발행**에 집중한다.
+- Processor는 **PostSummaryRequested(요약 요청) → (내부 파이프라인) → PostSummarized**로 요약 흐름을 단순화한다.
 - 썸네일은 **PostThumbnailRequested → PostThumbnailParsed** 로 이루어진 별도의 파이프라인에서 처리되며,
   `models.StatusFlags.ThumbnailParsed` 플래그를 통해 진행 여부를 추적한다.
 - 중간 단계 이벤트(`PostHTMLFetched`, `PostTextParsed`)는 Processor 내부 상태로 통합하는 방향을 문서로 고정했다.
