@@ -46,7 +46,7 @@ func main() {
 	// 서비스 초기화
 	eventService := eventServices.NewEventService(bus)
 	aggregateService := NewAggregateService(eventService)
-	recoveryService := NewSummaryRecoveryService(eventService)
+	recoveryService := NewRecoveryService(eventService)
 	handlers := aggHandlers.NewEventHandlers()
 
 	config.Logger.Info("starting aggregate service (RSS feed collection and DB writer)...")
@@ -87,8 +87,25 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := recoveryService.RunRecovery(ctx, 100); err != nil {
+				if err := recoveryService.RunSummaryRecovery(ctx, 100); err != nil {
 					config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
+				}
+			}
+		}
+	}()
+
+	// 썸네일 파싱이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := recoveryService.RunThumbnailRecovery(ctx, 100); err != nil {
+					config.Logger.Errorf("thumbnail recovery failed: %v", err)
 				}
 			}
 		}
@@ -111,8 +128,14 @@ func main() {
 					return err
 				}
 				return handlers.HandlePostSummarized(ctx, &v)
+			case events.PostThumbnailParsed:
+				v, err := eventbus.DecodeJSON[events.PostThumbnailParsedEvent](ev)
+				if err != nil {
+					return err
+				}
+				return handlers.HandlePostThumbnailParsed(ctx, &v)
 			default:
-				// Aggregate는 요약 결과만 관심 있음. 나머지 이벤트는 무시.
+				// Aggregate는 요약 결과와 썸네일 결과만 관심 있음. 나머지 이벤트는 무시.
 				return nil
 			}
 		}); err != nil && err != context.Canceled {

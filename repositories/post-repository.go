@@ -80,6 +80,18 @@ func (r *PostRepository) UpdateThumbnailURL(ctx context.Context, postID interfac
 	return err
 }
 
+// SetThumbnailParsed updates only the status.thumbnail_parsed flag and updated_at.
+// AISummarized와 마찬가지로, 다른 상태 필드는 건드리지 않는다.
+func (r *PostRepository) SetThumbnailParsed(ctx context.Context, postID interface{}, parsed bool) error {
+	_, err := r.col.UpdateByID(ctx, postID, bson.M{
+		"$set": bson.M{
+			"status.thumbnail_parsed": parsed,
+			"updated_at":              time.Now(),
+		},
+	})
+	return err
+}
+
 type ListPostsOptions struct {
 	Page       int
 	PageSize   int
@@ -186,6 +198,36 @@ func (r *PostRepository) IncrementViewCount(ctx context.Context, id primitive.Ob
 // Aggregate 서비스에서 요약 재시도를 트리거할 때 사용한다.
 func (r *PostRepository) FindUnsummarized(ctx context.Context, limit int64) ([]models.Post, error) {
 	filter := bson.M{"status.ai_summarized": false}
+	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
+		{Key: "created_at", Value: 1},
+		{Key: "_id", Value: 1},
+	})
+
+	cur, err := r.col.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var results []models.Post
+	for cur.Next(ctx) {
+		var p models.Post
+		if err := cur.Decode(&p); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// FindThumbnailNotParsed 는 아직 썸네일 파싱이 완료되지 않은 포스트들을 조회한다.
+// Aggregate 서비스에서 썸네일 파싱을 트리거할 때 사용한다.
+func (r *PostRepository) FindThumbnailNotParsed(ctx context.Context, limit int64) ([]models.Post, error) {
+	filter := bson.M{"status.thumbnail_parsed": false}
 	findOpts := options.Find().SetLimit(limit).SetSort(bson.D{
 		{Key: "created_at", Value: 1},
 		{Key: "_id", Value: 1},
