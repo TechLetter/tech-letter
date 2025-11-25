@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
+	"tech-letter/cmd/aggregate/event/dispatcher"
 	"tech-letter/cmd/aggregate/feeder"
-	eventServices "tech-letter/cmd/aggregate/services"
 	"tech-letter/config"
 	"tech-letter/db"
 	"tech-letter/models"
@@ -15,17 +15,17 @@ import (
 
 // AggregateService RSS 피드 수집 서비스
 type AggregateService struct {
-	eventService *eventServices.EventService
-	blogRepo     *repositories.BlogRepository
-	postRepo     *repositories.PostRepository
+	eventDispatcher *dispatcher.EventDispatcher
+	blogRepo        *repositories.BlogRepository
+	postRepo        *repositories.PostRepository
 }
 
 // NewAggregateService 새로운 집계 서비스 생성
-func NewAggregateService(eventService *eventServices.EventService) *AggregateService {
+func NewAggregateService(eventDispatcher *dispatcher.EventDispatcher) *AggregateService {
 	return &AggregateService{
-		eventService: eventService,
-		blogRepo:     repositories.NewBlogRepository(db.Database()),
-		postRepo:     repositories.NewPostRepository(db.Database()),
+		eventDispatcher: eventDispatcher,
+		blogRepo:        repositories.NewBlogRepository(db.Database()),
+		postRepo:        repositories.NewPostRepository(db.Database()),
 	}
 }
 
@@ -114,7 +114,7 @@ func (s *AggregateService) collectPostsFromBlog(ctx context.Context, blog config
 			}
 
 			// 포스트 생성 이벤트 발행 (파이프라인 시작)
-			if err := s.eventService.PublishPostCreated(ctx, p); err != nil {
+			if err := s.eventDispatcher.PublishPostCreated(ctx, p); err != nil {
 				config.Logger.Errorf("failed to publish PostCreated event: %v", err)
 			} else {
 				config.Logger.Infof("published PostCreated event for: %s (ID: %s)", item.Title, p.ID.Hex())
