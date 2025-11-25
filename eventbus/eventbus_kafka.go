@@ -243,7 +243,7 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 			now := time.Now()
 			if now.Before(readyAt) {
 				remaining := readyAt.Sub(now)
-				// 전체 컨슈머 스레드 블로킹을 피하기 위해 아주 짧게만 대기
+				// 전체 컨슈머 스레드를 오래 블로킹하지 않기 위해 짧게만 대기하면서, 동일 오프셋으로 Seek하여 같은 메시지를 재검사한다.
 				sleepDur := remaining
 				if sleepDur > 500*time.Millisecond {
 					sleepDur = 500 * time.Millisecond
@@ -251,7 +251,13 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 					sleepDur = 50 * time.Millisecond
 				}
 				time.Sleep(sleepDur)
-				// 오프셋 커밋 없이 재시도 (메시지는 다시 전달됨)
+				if err := c.Seek(kafka.TopicPartition{
+					Topic:     msg.TopicPartition.Topic,
+					Partition: msg.TopicPartition.Partition,
+					Offset:    msg.TopicPartition.Offset,
+				}, 1000); err != nil {
+					config.Logger.Errorf("재시도 재주입 컨슈머 seek 오류: %v", err)
+				}
 				continue
 			}
 
