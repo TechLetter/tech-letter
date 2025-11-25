@@ -1,0 +1,13 @@
+[project]
+name = "techletter-common"
+version = "0.1.0"
+description = "Common Python utilities for Tech-Letter services (eventbus, shared models, etc.)."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "langchain-core",
+  "langchain-openai",
+  "langchain-google-genai",
+  "langchain-community",
+  "chromadb",
+  "confluent-kafka==2.5.0",
+]
