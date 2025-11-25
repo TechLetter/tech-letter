@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"tech-letter/cmd/processor/event/dispatcher"
 	"tech-letter/cmd/processor/event/handler"
@@ -97,8 +98,25 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := bus.StartRetryReinjector(ctx, groupID+"-reinject", eventbus.TopicPostEvents); err != nil && err != context.Canceled {
-			config.Logger.Errorf("eventbus retry reinjector error: %v", err)
+		retryGroupID := groupID + "-reinject"
+		backoff := 5 * time.Second
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			if err := bus.StartRetryReinjector(ctx, retryGroupID, eventbus.TopicPostEvents); err != nil && err != context.Canceled {
+				config.Logger.Errorf("eventbus retry reinjector error: %v", err)
+			}
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			time.Sleep(backoff)
 		}
 	}()
 
