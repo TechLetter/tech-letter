@@ -217,9 +217,16 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 		default:
 			msg, err := c.ReadMessage(100 * time.Millisecond)
 			if err != nil {
-				if kerr, ok := err.(kafka.Error); ok && kerr.Code() == kafka.ErrTimedOut {
-					continue
+				if kerr, ok := err.(kafka.Error); ok {
+					if kerr.Code() == kafka.ErrTimedOut {
+						continue
+					}
+					if kerr.IsFatal() {
+						return fmt.Errorf("재시도 재주입 컨슈머 치명적 오류: %w", err)
+					}
 				}
+				config.Logger.Errorf("재시도 재주입 컨슈머 ReadMessage 오류: %v", err)
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
 
