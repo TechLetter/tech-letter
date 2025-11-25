@@ -3,3 +3,40 @@ config.yaml
 .env
 .env.production
 .env.docker
+
+# Python bytecode files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and distribution
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Logs and temporary files
+*.log
+tmp/
+.ipynb_checkpoints/ # Jupyter notebooks
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files (Uncomment if needed)
+.vscode/
+.idea/
+
+# Local configuration and secrets
+.flaskenv
+secrets.json
+*.local.py
+
