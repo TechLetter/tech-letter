@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	aggHandlers "tech-letter/cmd/aggregate/handlers"
-	eventServices "tech-letter/cmd/aggregate/services"
+	"tech-letter/cmd/aggregate/event/dispatcher"
+	"tech-letter/cmd/aggregate/event/handler"
 	"tech-letter/config"
 	"tech-letter/db"
 	"tech-letter/eventbus"
@@ -44,10 +44,11 @@ func main() {
 	defer bus.Close()
 
 	// 서비스 초기화
-	eventService := eventServices.NewEventService(bus)
-	aggregateService := NewAggregateService(eventService)
-	recoveryService := NewRecoveryService(eventService)
-	handlers := aggHandlers.NewEventHandlers(eventService)
+
+	eventDispatcher := dispatcher.NewEventDispatcher(bus)
+	eventHandler := handler.NewEventHandler(eventDispatcher)
+	aggregateService := NewAggregateService(eventDispatcher)
+	_ = NewRecoveryService(eventDispatcher)
 
 	config.Logger.Info("starting aggregate service (RSS feed collection and DB writer)...")
 
@@ -78,75 +79,6 @@ func main() {
 		}
 	}()
 
-	// 요약이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
-	go func() {
-		const SummaryRecoveryInterval = 1 * time.Hour
-		ticker := time.NewTicker(SummaryRecoveryInterval)
-		defer ticker.Stop()
-
-		// 시작 시 즉시 한 번 실행
-		if err := recoveryService.RunSummaryRecovery(ctx, 60, SummaryRecoveryInterval); err != nil {
-			config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := recoveryService.RunSummaryRecovery(ctx, 60, SummaryRecoveryInterval); err != nil {
-					config.Logger.Errorf("unsummarized posts recovery failed: %v", err)
-				}
-			}
-		}
-	}()
-
-	// HTML 렌더링이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
-	go func() {
-		const HtmlRenderRecoveryInterval = 1 * time.Hour
-		ticker := time.NewTicker(HtmlRenderRecoveryInterval)
-		defer ticker.Stop()
-
-		// 시작 시 즉시 한 번 실행
-		if err := recoveryService.RunHtmlRenderRecovery(ctx, 60, HtmlRenderRecoveryInterval); err != nil {
-			config.Logger.Errorf("html render recovery failed: %v", err)
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := recoveryService.RunHtmlRenderRecovery(ctx, 60, HtmlRenderRecoveryInterval); err != nil {
-					config.Logger.Errorf("html render recovery failed: %v", err)
-				}
-			}
-		}
-	}()
-
-	// 썸네일 파싱이 완료되지 않은 포스트에 대한 자동 복구 고루틴 시작
-	go func() {
-		const ThumbnailRecoveryInterval = 1 * time.Hour
-		ticker := time.NewTicker(ThumbnailRecoveryInterval)
-		defer ticker.Stop()
-
-		// 시작 시 즉시 한 번 실행
-		if err := recoveryService.RunThumbnailRecovery(ctx, 60, ThumbnailRecoveryInterval); err != nil {
-			config.Logger.Errorf("thumbnail recovery failed: %v", err)
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := recoveryService.RunThumbnailRecovery(ctx, 60, ThumbnailRecoveryInterval); err != nil {
-					config.Logger.Errorf("thumbnail recovery failed: %v", err)
-				}
-			}
-		}
-	}()
-
 	// PostSummarized 이벤트를 소비하여 DB에 결과 반영
 	go func() {
 		groupID := eventbus.GetGroupID() + "-aggregate-writer"
@@ -158,24 +90,13 @@ func main() {
 				return err
 			}
 			switch events.EventType(peek.Type) {
-			case events.PostHTMLRendered:
-				v, err := eventbus.DecodeJSON[events.PostHTMLRenderedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostHTMLRendered(ctx, &v)
-			case events.PostThumbnailParsed:
-				v, err := eventbus.DecodeJSON[events.PostThumbnailParsedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostThumbnailParsed(ctx, &v)
+
 			case events.PostSummarized:
 				v, err := eventbus.DecodeJSON[events.PostSummarizedEvent](ev)
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostSummarized(ctx, &v)
+				return eventHandler.HandlePostSummarized(ctx, &v)
 			default:
 				// Aggregate는 PostHTMLRendered, PostThumbnailParsed, PostSummarized 처리
 				return nil
