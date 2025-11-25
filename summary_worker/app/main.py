@@ -34,21 +34,72 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: Any) -> None:
         # 다른 타입의 이벤트는 이 워커의 책임이 아니므로 무시한다.
         return
 
-    created = PostCreatedEvent.from_dict(payload)
+    try:
+        created = PostCreatedEvent.from_dict(payload)
+    except Exception:
+        logger.exception(
+            "failed to decode PostCreatedEvent id=%s payload=%r",
+            payload.get("id"),
+            payload,
+        )
+        raise
+
+    logger.info(
+        "handling PostCreatedEvent id=%s post_id=%s link=%s",
+        created.id,
+        created.post_id,
+        created.link,
+    )
 
     # 1. HTML 렌더링
-    rendered_html = render_html(created.link)
+    try:
+        rendered_html = render_html(created.link)
+    except Exception:
+        logger.exception(
+            "failed at render_html for PostCreatedEvent id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
 
     # 2. 본문 텍스트 추출
-    plain_text = extract_plain_text(rendered_html)
+    try:
+        plain_text = extract_plain_text(rendered_html)
+    except Exception:
+        logger.exception(
+            "failed at extract_plain_text for PostCreatedEvent id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
 
     # 3. 썸네일 URL 추출
-    thumbnail_url = extract_thumbnail(rendered_html, created.link)
+    try:
+        thumbnail_url = extract_thumbnail(rendered_html, created.link)
+    except Exception:
+        logger.exception(
+            "failed at extract_thumbnail for PostCreatedEvent id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
 
     # 4. AI 요약
-    summary_result = summarize_post(chat_model=chat_model, plain_text=plain_text)
+    try:
+        summary_result = summarize_post(chat_model=chat_model, plain_text=plain_text)
+    except Exception:
+        logger.exception(
+            "failed at summarize_post for PostCreatedEvent id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
 
-    # 5. PostSummarized 이벤트 구성 (Aggregate가 DB 저장)
+    # 5. PostSummarized 이벤트 구성 (Aggregate가 DB 저장) 및 publish
     now = datetime.now(timezone.utc).isoformat()
     summarized_event = PostSummarizedEvent(
         id=created.id,
@@ -66,8 +117,27 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: Any) -> None:
         model_name=getattr(chat_model, "model_name", "unknown"),
     )
 
-    out_evt = new_json_event(payload=asdict(summarized_event))
-    bus.publish(TOPIC_POST_EVENTS.base, out_evt)
+    try:
+        out_evt = new_json_event(payload=asdict(summarized_event))
+        bus.publish(TOPIC_POST_EVENTS.base, out_evt)
+    except Exception:
+        logger.exception(
+            "failed to publish PostSummarizedEvent for original id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
+
+    logger.info(
+        "successfully processed PostCreatedEvent id=%s post_id=%s link=%s summary_len=%d categories=%s tags=%s",
+        created.id,
+        created.post_id,
+        created.link,
+        len(summary_result.summary),
+        summary_result.categories,
+        summary_result.tags,
+    )
 
 
 def main() -> None:
