@@ -87,11 +87,15 @@ aggregate:
       rss_url: https://techblog.lycorp.co.jp/ko/feed/index.xml
       blog_type: company
 
-    - name: 44bits
+    - name: DEVOCEAN
+      url: https://devocean.sk.com/tech
+      rss_url: https://devocean.sk.com/blog/rss.do
+      blog_type: company
+
+    - name: 44BITS
       url: https://44bits.io/ko
       rss_url: https://www.44bits.io/ko/feed/all
       blog_type: creator
-
 
     - name: microservices.io
       url: https://microservices.io/
