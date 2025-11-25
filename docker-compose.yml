@@ -69,6 +69,27 @@ services:
         reservations:
           memory: 512M
 
+  retryworker:
+    build:
+      context: .
+      dockerfile: Dockerfile.retryworker
+    container_name: techletter_retry_worker
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-retry
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
 networks:
   tech-letter_default:
     external: true

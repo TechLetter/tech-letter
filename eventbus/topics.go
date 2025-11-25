@@ -6,3 +6,7 @@ package eventbus
 var (
 	TopicPostEvents = NewTopic("tech-letter.post.events")
 )
+
+var AllTopics = []Topic{
+	TopicPostEvents,
+}
