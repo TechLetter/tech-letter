@@ -8,9 +8,9 @@ import (
 	"sync"
 	"syscall"
 
-	eventHandlers "tech-letter/cmd/processor/handlers"
+	"tech-letter/cmd/processor/event/dispatcher"
+	"tech-letter/cmd/processor/event/handler"
 	"tech-letter/cmd/processor/quota"
-	eventServices "tech-letter/cmd/processor/services"
 	"tech-letter/config"
 	"tech-letter/db"
 	"tech-letter/eventbus"
@@ -45,9 +45,9 @@ func main() {
 	defer bus.Close()
 
 	// 서비스 초기화
-	eventService := eventServices.NewEventService(bus)
+	eventDispatcher := dispatcher.NewEventDispatcher(bus)
 	quotaLimiter := quota.NewSummaryQuotaLimiterFromConfig(config.GetConfig())
-	handlers := eventHandlers.NewEventHandlers(eventService, quotaLimiter)
+	eventHandler := handler.NewEventHandlers(eventDispatcher, quotaLimiter)
 
 	// 재주입기 시작 (지연 토픽 -> 기본 토픽)
 	groupID := eventbus.GetGroupID()
@@ -68,19 +68,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				return handlers.HandlePostCreated(ctx, &v)
-			case events.PostThumbnailParseRequested:
-				v, err := eventbus.DecodeJSON[events.PostThumbnailParseRequestedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostThumbnailParseRequested(ctx, &v)
-			case events.PostContentParsed:
-				v, err := eventbus.DecodeJSON[events.PostContentParsedEvent](ev)
-				if err != nil {
-					return err
-				}
-				return handlers.HandlePostContentParsed(ctx, &v)
+				return eventHandler.HandlePostCreated(ctx, &v)
 			default:
 				// 알 수 없는 타입 또는 다른 서비스용 이벤트는 무시 (커밋)
 				return nil

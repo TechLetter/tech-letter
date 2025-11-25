@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"tech-letter/config"
 	"time"
 
 	"github.com/go-shiori/go-readability"
@@ -46,8 +45,6 @@ func ParseTopImageFromHTML(htmlStr string, pageURL string) (string, error) {
 	if imgURL := findTopImageFromImg(doc, baseURL, 300, 300); imgURL != "" {
 		return imgURL, nil
 	}
-
-	config.Logger.Infof("there is no top image (rendered html: %d chars)", len(htmlStr))
 
 	return "", nil
 }
