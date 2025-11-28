@@ -15,6 +15,7 @@ type AppConfig struct {
 	API       APIConfig       `yaml:"api"`
 	Processor ProcessorConfig `yaml:"processor"`
 	Aggregate AggregateConfig `yaml:"aggregate"`
+	Kafka     KafkaConfig     `yaml:"kafka"`
 }
 
 // APIConfig 는 API 애플리케이션 설정을 담는다.
@@ -65,6 +66,13 @@ type BlogSource struct {
 type LLMConfig struct {
 	Provider  string `yaml:"provider"`
 	ModelName string `yaml:"model_name"`
+}
+
+// KafkaConfig 는 Kafka 관련 전역 설정을 담는다.
+type KafkaConfig struct {
+	// MessageMaxBytes 는 프로듀서에서 허용할 최대 메시지 크기(바이트)이다.
+	// 0 이하면 라이브러리 기본값을 사용한다.
+	MessageMaxBytes int `yaml:"message_max_bytes"`
 }
 
 var config *AppConfig
