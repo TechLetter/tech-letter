@@ -1,0 +1,28 @@
+[project]
+name = "techletter-summary-worker"
+version = "0.1.0"
+description = "Summary worker service for Tech-Letter (Python implementation)."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "techletter-common",
+  "httpx",
+  "trafilatura",
+  "beautifulsoup4",
+  "Pillow",
+  "playwright",
+  "pytest",
+]
+
+[project.scripts]
+summary-worker = "app.main:main"
+
+[tool.pytest.ini_options]
+testpaths = [
+  "tests",
+]
+python_files = [
+  "test_*.py",
+]
+pythonpath = [
+  "..",
+]

@@ -20,11 +20,17 @@ type KafkaEventBus struct {
 
 // NewKafkaEventBus는 Kafka Producer를 초기화합니다.
 func NewKafkaEventBus(brokers string) (*KafkaEventBus, error) {
-	p, err := kafka.NewProducer(&kafka.ConfigMap{
+	appCfg := config.GetConfig()
+	producerCfg := &kafka.ConfigMap{
 		"bootstrap.servers": brokers,
 		"acks":              "all",
 		"retries":           5, // Producer는 일시적인 오류 발생 시 최대 5회 재시도합니다.
-	})
+	}
+	if appCfg.Kafka.MessageMaxBytes > 0 {
+		(*producerCfg)["message.max.bytes"] = appCfg.Kafka.MessageMaxBytes
+	}
+
+	p, err := kafka.NewProducer(producerCfg)
 	if err != nil {
 		return nil, fmt.Errorf("kafka Producer 생성 실패: %w", err)
 	}

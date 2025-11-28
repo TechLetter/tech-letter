@@ -1,0 +1,33 @@
+[tool.uv.workspace]
+members = [
+  "common",
+  "summary_worker",
+]
+
+[tool.uv.sources]
+techletter-common = { workspace = true }
+
+[tool.pyright]
+extraPaths = [
+    "common",
+    "summary_worker",
+]
+
+include = [
+    "common",
+    "summary_worker",
+]
+
+[tool.pytest.ini_options]
+
+python_files = [
+  "test_*.py",
+]
+pythonpath = [
+  ".",
+]
+
+log_cli = true 
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
