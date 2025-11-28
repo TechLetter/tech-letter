@@ -1,3 +1,6 @@
+kafka:
+  message_max_bytes: 10485760 # 10MB
+
 api:
   logging:
     level: info
