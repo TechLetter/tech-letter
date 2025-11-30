@@ -20,5 +20,6 @@ jobs:
           SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
         run: |
           cp config-production.yaml ./config.yaml
+          touch .env
           docker-compose down
           docker-compose up -d --build
