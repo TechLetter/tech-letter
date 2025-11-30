@@ -45,30 +45,6 @@ services:
         reservations:
           memory: 256M
 
-  processor:
-    image: tech-letter-processor
-    build:
-      context: .
-      dockerfile: Dockerfile.processor
-    container_name: techletter_processor
-    restart: unless-stopped
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./.env:/app/.env:ro
-    environment:
-      MONGO_URI: ${MONGO_URI}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_GROUP_ID: tech-letter-processor
-    networks:
-      - tech-letter_default
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
   retryworker:
     build:
       context: .
@@ -86,9 +62,36 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G
         reservations:
-          memory: 128M
+          memory: 512M
+
+
+  summary_worker:
+    image: tech-letter-summary-worker
+    build:
+      context: .
+      dockerfile: Dockerfile.summary_worker
+    container_name: techletter_summary_worker
+    restart: unless-stopped
+    env_file:
+        - .env
+    environment:
+      SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
+      SUMMARY_WORKER_LLM_PROVIDER: google
+      SUMMARY_WORKER_LLM_MODEL_NAME: gemini-2.5-flash
+      SUMMARY_WORKER_LLM_TEMPERATURE: 1
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-summary-worker
+      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
 networks:
   tech-letter_default:
