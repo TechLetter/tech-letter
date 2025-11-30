@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# Python summary-worker용 컨테이너
+# - Python 3.11 기반 이미지 사용 (pyproject.toml 의 requires-python >=3.11,<3.12 와 일치)
+# - 로컬 common/summary_worker 패키지를 설치하고, Playwright chromium 브라우저를 설치한다.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 기본 유틸 및 CA 설치 (Playwright 설치에 필요할 수 있음)
+RUN apt-get update \ 
+    && apt-get install -y --no-install-recommends curl ca-certificates \ 
+    && rm -rf /var/lib/apt/lists/*
+
+# 필요 최소한의 파일만 복사 (공통 모듈 + 워커 서비스)
+COPY common ./common
+COPY summary_worker ./summary_worker
+COPY pyproject.toml ./pyproject.toml
+COPY uv.lock ./uv.lock
+
+# Python 패키지 설치
+# - techletter-common (common)
+# - techletter-summary-worker (summary_worker)
+# 이후 Playwright 브라우저(Chromium)를 설치한다.
+RUN pip install --no-cache-dir ./common ./summary_worker \ 
+    && python -m playwright install --with-deps chromium
+
+ENV TZ=Asia/Seoul \
+    PYTHONUNBUFFERED=1
+
+# summary_worker 메인 루프 실행
+CMD ["python", "-m", "summary_worker.app.main"]
