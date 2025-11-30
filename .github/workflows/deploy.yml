@@ -17,7 +17,7 @@ jobs:
       - name: Stop existing application and Run new version
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
         run: |
           cp config-production.yaml ./config.yaml
           docker-compose down
