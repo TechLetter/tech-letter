@@ -4,6 +4,10 @@ kafka:
 api:
   logging:
     level: info
+
+retry_worker:
+  logging:
+    level: info
     
 content_service:
   aggregate:

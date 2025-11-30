@@ -5,6 +5,10 @@ api:
   logging:
     level: info
 
+retry_worker:
+  logging:
+    level: info
+
 content_service:
   aggregate:
     blog_fetch_batch_size: 10
