@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 from common.llm.factory import ChatModelConfig, LlmProvider
 
@@ -9,6 +10,16 @@ SUMMARY_WORKER_LLM_PROVIDER = "SUMMARY_WORKER_LLM_PROVIDER"
 SUMMARY_WORKER_LLM_MODEL_NAME = "SUMMARY_WORKER_LLM_MODEL_NAME"
 SUMMARY_WORKER_LLM_API_KEY = "SUMMARY_WORKER_LLM_API_KEY"
 SUMMARY_WORKER_LLM_TEMPERATURE = "SUMMARY_WORKER_LLM_TEMPERATURE"
+
+
+@dataclass(slots=True)
+class AppConfig:
+    """summary-worker 전체 설정 루트.
+
+    - 현재는 LLM 설정만 포함하지만, 추후 YAML 기반 설정 등이 추가될 수 있다.
+    """
+
+    llm: ChatModelConfig
 
 
 def load_chat_model_config() -> ChatModelConfig:
@@ -32,3 +43,10 @@ def load_chat_model_config() -> ChatModelConfig:
         temperature=temperature,
         api_key=api_key,
     )
+
+
+def load_config() -> AppConfig:
+    """summary-worker 설정을 로드하여 AppConfig 로 반환한다."""
+
+    llm_config = load_chat_model_config()
+    return AppConfig(llm=llm_config)

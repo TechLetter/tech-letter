@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+# Python content-service용 컨테이너
+# - Python 3.11 기반 이미지 사용 (content_service/pyproject.toml 의 requires-python 과 일치)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 기본 유틸 및 CA/TZ 설정
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# 공통 모듈과 content-service 패키지 복사
+COPY common ./common
+COPY content_service ./content_service
+COPY pyproject.toml ./pyproject.toml
+COPY uv.lock ./uv.lock
+
+# Python 패키지 설치
+# - techletter-common (common)
+# - techletter-content-service (content_service)
+RUN pip install --no-cache-dir ./common ./content_service
+
+ENV TZ=Asia/Seoul \
+    PYTHONUNBUFFERED=1
+
+# 애플리케이션 소스 디렉토리로 이동
+WORKDIR /app/content_service
+
+EXPOSE 8001
+
+# FastAPI 기반 content-service 실행
+CMD ["python", "-m", "app.main"]

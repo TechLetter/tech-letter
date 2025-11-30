@@ -5,22 +5,15 @@ api:
   logging:
     level: info
 
-processor:
+retry_worker:
   logging:
     level: info
-  llm:
-    provider: google
-    model_name: gemini-2.5-flash
-  summary_quota:
-    requests_per_minute: 10
-    requests_per_day: 250
 
-aggregate:
-  logging:
-    level: info
-  blog_fetch_batch_size: 10
-  blogs:
-    - name: Example Blog
-      url: https://example.com
-      rss_url: https://example.com/feed
-      blog_type: company
+content_service:
+  aggregate:
+    blog_fetch_batch_size: 10
+    blogs:
+      - name: Example Blog
+        url: https://example.com
+        rss_url: https://example.com/feed
+        blog_type: company
