@@ -23,19 +23,24 @@ services:
         reservations:
           memory: 128M
 
-  aggregate:
+  content_service:
     build:
       context: .
-      dockerfile: Dockerfile.aggregate
-    container_name: techletter_aggregate
+      dockerfile: Dockerfile.content_service
+    container_name: techletter_content_service
     restart: unless-stopped
+    ports:
+      - "8001:8001"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./.env:/app/.env:ro
+    env_file:
+        - .env
     environment:
       MONGO_URI: ${MONGO_URI}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_GROUP_ID: tech-letter-aggregate
+      KAFKA_GROUP_ID: tech-letter-content-service
+      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+      CONTENT_SERVICE_PORT: 8001
     networks:
       - tech-letter_default
     deploy:
@@ -65,7 +70,6 @@ services:
           memory: 1G
         reservations:
           memory: 512M
-
 
   summary_worker:
     image: tech-letter-summary-worker

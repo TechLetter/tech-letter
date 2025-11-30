@@ -2,6 +2,7 @@
 members = [
   "common",
   "summary_worker",
+  "content_service",
 ]
 
 [tool.uv.sources]
@@ -11,11 +12,13 @@ techletter-common = { workspace = true }
 extraPaths = [
     "common",
     "summary_worker",
+    "content_service",
 ]
 
 include = [
     "common",
     "summary_worker",
+    "content_service",
 ]
 
 [tool.pytest.ini_options]
@@ -25,6 +28,10 @@ python_files = [
 ]
 pythonpath = [
   ".",
+]
+
+filterwarnings = [
+  "ignore::DeprecationWarning:feedparser.util",
 ]
 
 log_cli = true 
