@@ -53,10 +53,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./.env:/app/.env:ro
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-retry
+      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
     networks:
       - tech-letter_default
     deploy:
