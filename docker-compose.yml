@@ -86,9 +86,33 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G
         reservations:
-          memory: 128M
+          memory: 512M
+
+
+  summary_worker:
+    image: tech-letter-summary-worker
+    build:
+      context: .
+      dockerfile: Dockerfile.summary_worker
+    container_name: techletter_summary_worker
+    restart: unless-stopped
+    # LLM, Kafka, 기타 설정은 .env에서 주입
+    env_file:
+        - .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-summary-worker
+      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
 networks:
   tech-letter_default:
