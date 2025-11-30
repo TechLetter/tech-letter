@@ -8,6 +8,7 @@ from typing import Callable
 from confluent_kafka import Consumer, KafkaError, Producer
 
 from .core import Event, MaxRetryExceededError, Topic, RetryDelays
+from .config import get_message_max_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,13 @@ class KafkaEventBus:
     """
 
     def __init__(self, brokers: str) -> None:
-        self._producer = Producer({"bootstrap.servers": brokers})
+        producer_conf: dict[str, object] = {"bootstrap.servers": brokers}
+
+        message_max_bytes = get_message_max_bytes()
+        if message_max_bytes is not None:
+            producer_conf["message.max.bytes"] = message_max_bytes
+
+        self._producer = Producer(producer_conf)
         self._brokers = brokers
 
     def close(self) -> None:
