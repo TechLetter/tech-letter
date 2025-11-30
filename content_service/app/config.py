@@ -1,30 +1,27 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, Field
 
 
 DEFAULT_CONFIG_FILE_NAME = "config.yaml"
 
 
-@dataclass(slots=True)
-class BlogSourceConfig:
+class BlogSourceConfig(BaseModel):
     name: str
     url: str
     rss_url: str
-    blog_type: str = "company"
+    blog_type: str = Field(default="company", alias="blog_type")
 
 
-@dataclass(slots=True)
-class AggregateConfig:
-    blog_fetch_batch_size: int
-    blogs: list[BlogSourceConfig]
+class AggregateConfig(BaseModel):
+    blog_fetch_batch_size: int = Field(default=10)
+    blogs: list[BlogSourceConfig] = Field(default_factory=list)
 
 
-@dataclass(slots=True)
-class AppConfig:
+class AppConfig(BaseModel):
     """content-service 전체 설정 루트.
 
     - 현재는 aggregate 섹션만 사용하지만, 추후 api/logging 등의 서브 설정을 추가할 수 있다.
@@ -51,45 +48,22 @@ def _find_config_path() -> Path:
     )
 
 
-def load_aggregate_config() -> AggregateConfig:
+def load_config() -> AppConfig:
+    """content-service 설정을 로드하여 AppConfig 로 반환한다."""
+
     path = _find_config_path()
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
-    aggregate = data.get("aggregate") or {}
-    raw_batch_size = aggregate.get("blog_fetch_batch_size", 10)
-    try:
-        batch_size = int(raw_batch_size)
-    except (TypeError, ValueError) as exc:  # noqa: TRY003
+    content_service = data.get("content_service")
+    if not isinstance(content_service, dict):
         raise RuntimeError(
-            f"invalid aggregate.blog_fetch_batch_size in {path}: {raw_batch_size!r}",
-        ) from exc
-
-    blogs_raw = aggregate.get("blogs") or []
-    blogs: list[BlogSourceConfig] = []
-    for item in blogs_raw:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name", "")).strip()
-        url = str(item.get("url", "")).strip()
-        rss_url = str(item.get("rss_url", "")).strip()
-        blog_type = str(item.get("blog_type") or "company").strip() or "company"
-        if not rss_url:
-            continue
-        blogs.append(
-            BlogSourceConfig(
-                name=name,
-                url=url,
-                rss_url=rss_url,
-                blog_type=blog_type,
-            ),
+            f"config.yaml must contain 'content_service' mapping; got: {type(content_service).__name__}",
         )
 
-    return AggregateConfig(blog_fetch_batch_size=batch_size, blogs=blogs)
-
-
-def load_config() -> AppConfig:
-    """content-service 설정을 로드하여 AppConfig 로 반환한다."""
-
-    aggregate = load_aggregate_config()
-    return AppConfig(aggregate=aggregate)
+    try:
+        return AppConfig.model_validate(content_service)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"failed to validate content_service config at {path}: {exc}",
+        ) from exc
