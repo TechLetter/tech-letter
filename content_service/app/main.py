@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,16 +9,33 @@ from fastapi import FastAPI
 from app.api.v1.posts import router as posts_router
 from app.api.v1.blogs import router as blogs_router
 from app.scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
+from app.event_handlers.post_events_consumer import run_post_summary_consumer
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
-    """애플리케이션 생명주기 동안 RSS 스케줄러를 관리한다."""
+    """애플리케이션 생명주기 동안 백그라운드 작업을 관리한다.
+
+    - RSS 스케줄러 스레드
+    - PostSummarized 이벤트를 소비하는 Kafka 컨슈머 스레드
+    """
 
     start_rss_scheduler()
+
+    summary_stop_flag = [False]
+    summary_thread = threading.Thread(
+        target=run_post_summary_consumer,
+        args=(summary_stop_flag,),
+        name="post-summary-consumer",
+        daemon=True,
+    )
+    summary_thread.start()
+
     try:
         yield
     finally:
+        summary_stop_flag[0] = True
+        summary_thread.join(timeout=10.0)
         stop_rss_scheduler()
 
 

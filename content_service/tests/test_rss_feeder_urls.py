@@ -22,6 +22,7 @@ TEST_RSS_URLS = [
     "https://www.44bits.io/ko/feed/all",
     "https://microservices.io/feed.xml",
     "https://www.uber.com/en-US/blog/engineering/rss/",
+    "https://insight.infograb.net/blog/rss.xml",
 ]
 
 

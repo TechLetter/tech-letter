@@ -23,6 +23,14 @@ class PostRepositoryInterface(Protocol):
     def insert(self, post: Post) -> str:  # pragma: no cover - Protocol
         ...
 
+    def find_by_id(self, id_value: str) -> Post | None:  # pragma: no cover - Protocol
+        ...
+
+    def update_fields(
+        self, id_value: str, updates: dict
+    ) -> None:  # pragma: no cover - Protocol
+        ...
+
 
 class BlogRepositoryInterface(Protocol):
     """BlogRepository가 따라야 할 최소한의 계약."""
