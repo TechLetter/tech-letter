@@ -20,7 +20,7 @@
   - RSS 수집 및 신규 포스트 MongoDB 저장
   - 신규 포스트에 대해 `PostCreated` 이벤트 발행
   - `PostSummarized` 이벤트를 구독해 요약/렌더링/썸네일 결과를 DB에 반영
-- **Processor 서버** (`cmd/processor/main.go`):
+- **Summary Worker (Python)** (`summary_worker/app/main.py`):
   - `PostCreated` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
   - 결과를 담은 `PostSummarized` 이벤트 발행 (DB에는 직접 쓰지 않음)
 - **Retry Worker** (`cmd/retryworker/main.go`):
@@ -37,16 +37,16 @@ flowchart LR
 
     subgraph Services
         Agg[Aggregate]
-        Proc[Processor]
+        SW[Summary Worker (Python)]
         RW[Retry Worker]
     end
 
     Agg --> EB
-    Proc --> EB
+    SW --> EB
     RW --> EB
 
     Agg --> DB[(MongoDB)]
-    Proc --> LLM[Gemini API]
+    SW --> LLM[Gemini API]
 ```
 
 ### 이벤트 플로우
@@ -55,7 +55,7 @@ flowchart LR
    RSS 피드에서 새 포스트 발견 → MongoDB에 새 포스트 저장  
    `status.ai_summarized=false` 로 초기화 후 `PostCreated` 이벤트 발행 (`tech-letter.post.events` 토픽)
 
-2. **요약 + 썸네일 파이프라인 (Processor)**
+2. **요약 + 썸네일 파이프라인 (Summary Worker)**
 
    - `PostCreated` 이벤트를 구독
    - HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → Gemini 요약 수행
@@ -78,23 +78,23 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant Agg as Aggregate
-    participant Proc as Processor
+    participant SW as Summary Worker (Python)
     participant RW as RetryWorker
     participant EB as EventBus/Kafka
     participant DB as MongoDB
 
     Agg->>DB: Insert new Post (status.ai_summarized=false)
     Agg->>EB: PostCreated (tech-letter.post.events)
-    EB->>Proc: Deliver PostCreated
-    Proc->>Proc: RenderHTML + ParseText + ParseThumbnail + Summarize
-    Proc->>EB: PostSummarized (tech-letter.post.events)
+    EB->>SW: Deliver PostCreated
+    SW->>SW: RenderHTML + ParseText + ParseThumbnail + Summarize
+    SW->>EB: PostSummarized (tech-letter.post.events)
     EB->>Agg: Deliver PostSummarized
     Agg->>DB: Update aisummary + rendered_html + thumbnail_url + status.ai_summarized=true
 
-    alt Handler error (Processor or Aggregate)
+    alt Handler error (Summary Worker or Aggregate)
         EB->>EB: Publish to retry topic (tech-letter.post.events.retry.N)
         RW->>EB: After delay, re-publish to base topic
-        EB->>Proc: or Agg: Redeliver event
+        EB->>SW: or Agg: Redeliver event
     end
 ```
 

@@ -18,11 +18,11 @@ CHROME_PATH_ENV = "CHROME_PATH"
 def _get_chrome_launch_kwargs() -> dict:
     """Go renderer.RenderHTML와 유사하게 Chrome 실행 옵션을 구성한다.
 
-    - CHROME_PATH 환경변수가 설정되어 있으면 해당 바이너리를 사용한다.
+    - CHROME_PATH 환경변수가 설정되어 있고 경로가 존재하면 해당 바이너리를 사용한다.
     - 그렇지 않으면 Playwright 기본 chromium 바이너리를 사용한다.
     """
 
-    chrome_path = os.getenv(CHROME_PATH_ENV) or "/usr/bin/chromium-browser"
+    chrome_path = os.getenv(CHROME_PATH_ENV)
     kwargs: dict = {
         "headless": True,
         "args": [
@@ -38,8 +38,8 @@ def _get_chrome_launch_kwargs() -> dict:
         ],
     }
 
-    # Docker/Linux 환경에서는 /usr/bin/chromium-browser 경로가 존재하는 경우가 많지만,
-    # 로컬(macOS 등)에서는 없을 수 있으므로 실제 존재 여부를 확인한다.
+    # CHROME_PATH 로 지정된 경로가 실제로 존재하는지 확인한다.
+    # 로컬(macOS 등)에서는 없을 수 있으므로 존재하는 경우에만 executable_path 로 사용한다.
     if chrome_path and Path(chrome_path).exists():
         kwargs["executable_path"] = chrome_path
 
