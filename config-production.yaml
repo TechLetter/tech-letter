@@ -97,3 +97,8 @@ content_service:
         url: https://www.uber.com/en-US/blog/engineering/
         rss_url: https://www.uber.com/en-US/blog/engineering/rss/
         blog_type: company
+
+      - name: 인포그랩
+        url: https://insight.infograb.net/blog
+        rss_url: https://insight.infograb.net/blog/rss.xml
+        blog_type: company
