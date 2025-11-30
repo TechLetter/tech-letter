@@ -14,7 +14,7 @@ import (
 func main() {
 	config.InitApp()
 	cfg := config.GetConfig()
-	config.InitLogger(cfg.Processor.Logging)
+	config.InitLogger(cfg.RetryWorker.Logging)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
