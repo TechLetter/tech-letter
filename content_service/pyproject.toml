@@ -9,6 +9,7 @@ dependencies = [
   "uvicorn[standard]",
   "httpx",
   "feedparser",
+  "PyYAML",
 ]
 
 [project.scripts]

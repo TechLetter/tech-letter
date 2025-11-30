@@ -1967,6 +1967,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "feedparser" },
     { name = "httpx" },
+    { name = "pyyaml" },
     { name = "techletter-common" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1976,6 +1977,7 @@ requires-dist = [
     { name = "fastapi" },
     { name = "feedparser" },
     { name = "httpx" },
+    { name = "pyyaml" },
     { name = "techletter-common", editable = "common" },
     { name = "uvicorn", extras = ["standard"] },
 ]
