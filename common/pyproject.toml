@@ -10,4 +10,6 @@ dependencies = [
   "langchain-community",
   "chromadb",
   "confluent-kafka==2.5.0",
+  "pymongo",
+  "pydantic>=2,<3",
 ]
