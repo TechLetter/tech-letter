@@ -106,6 +106,6 @@ aggregate:
       blog_type: creator
 
     - name: Uber
-      url: https://www.uber.com/en-US/blog/engineering
-      rss_url: https://www.uber.com/en-US/blog/engineering/rss
+      url: https://www.uber.com/en-US/blog/engineering/
+      rss_url: https://www.uber.com/en-US/blog/engineering/rss/
       blog_type: company

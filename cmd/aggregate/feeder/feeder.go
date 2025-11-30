@@ -26,23 +26,39 @@ const FEEDER_TIMEOUT = 30 * time.Second
 const rssUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 
 func FetchRssFeeds(rssUrl string, limit int) ([]RssFeedItem, error) {
+	// 1. 리다이렉트 정책을 포함한 클라이언트 설정
 	httpClient := &http.Client{
 		Timeout: FEEDER_TIMEOUT,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
+		// 리다이렉트 시 헤더 유지를 위해 필요할 수 있음 (Go 기본 동작은 헤더가 초기화될 수 있음)
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			// 리다이렉트 시 이전 요청의 User-Agent를 유지
+			req.Header.Set("User-Agent", rssUserAgent)
+			return nil
+		},
 	}
 
+	// 2. 파서 생성 (fp.Client 설정은 여기서 불필요하므로 제거)
 	fp := gofeed.NewParser()
-	fp.Client = httpClient
 
 	req, err := http.NewRequest(http.MethodGet, rssUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RSS request: %w", err)
 	}
+
+	// 3. 헤더 보강: WAF 우회를 위해 더 많은 브라우저 헤더 추가
 	req.Header.Set("User-Agent", rssUserAgent)
-	req.Header.Set("Accept", "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9,ko-KR,ko;q=0.8")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://www.google.com/") // 리퍼러 추가
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("Connection", "keep-alive")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -50,15 +66,20 @@ func FetchRssFeeds(rssUrl string, limit int) ([]RssFeedItem, error) {
 	}
 	defer resp.Body.Close()
 
+	// 4. 에러 디버깅을 위한 상세 처리
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch RSS feed: status code %d", resp.StatusCode)
+		// 본문 내용을 조금 읽어서 로그에 찍어보면 원인 파악에 도움이 됨
+		bodySample, _ := io.ReadAll(io.LimitReader(resp.Body, 500))
+		return nil, fmt.Errorf("failed to fetch RSS feed: status code %d, url: %s, body: %s", resp.StatusCode, rssUrl, string(bodySample))
 	}
 
+	// 5. 제어 문자 제거 (기존 로직 유지)
 	cleanedReader, err := cleanControlCharacters(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
+	// 6. 파싱
 	feed, err := fp.Parse(cleanedReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse RSS feed: %w", err)
