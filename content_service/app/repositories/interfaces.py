@@ -17,6 +17,12 @@ class PostRepositoryInterface(Protocol):
     ) -> tuple[list[Post], int]:  # pragma: no cover - Protocol
         ...
 
+    def is_exist_by_link(self, link: str) -> bool:  # pragma: no cover - Protocol
+        ...
+
+    def insert(self, post: Post) -> str:  # pragma: no cover - Protocol
+        ...
+
 
 class BlogRepositoryInterface(Protocol):
     """BlogRepository가 따라야 할 최소한의 계약."""
@@ -24,4 +30,12 @@ class BlogRepositoryInterface(Protocol):
     def list(
         self, flt: ListBlogsFilter
     ) -> tuple[list[Blog], int]:  # pragma: no cover - Protocol
+        ...
+
+    def upsert_by_rss_url(self, blog: Blog) -> str:  # pragma: no cover - Protocol
+        ...
+
+    def get_by_rss_url(
+        self, rss_url: str
+    ) -> Blog | None:  # pragma: no cover - Protocol
         ...
