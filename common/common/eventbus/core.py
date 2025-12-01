@@ -6,11 +6,11 @@ from typing import Any
 
 # Go eventbus.RetryDelays와 동일한 재시도 횟수/순서를 유지한다.
 RetryDelays: list[float] = [
-    10.0,
-    30.0,
-    60.0,
-    300.0,
-    600.0,
+    60.0,  # 1 * time.Minute,
+    300.0,  # 5 * time.Minute,
+    600.0,  # 10 * time.Minute,
+    1800.0,  # 30 * time.Minute,
+    3600.0,  # 1 * time.Hour,
 ]
 
 
