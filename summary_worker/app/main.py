@@ -13,6 +13,7 @@ from common.llm.factory import create_chat_model
 
 from .config import load_config
 from .services.pipeline_service import handle_post_created_event
+from common.common.logger import setup_logger
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: Any) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    setup_logger(name="summary-worker")
     logger.info("summary-worker (python) starting up")
 
     brokers = get_brokers()

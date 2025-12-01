@@ -24,7 +24,10 @@ RSS_SCHEDULER_INTERVAL_SECONDS = 30.0 * 60.0
 
 
 def _run_scheduler_loop(stop_event: threading.Event) -> None:
-    logger.info("RSS scheduler thread started")
+    logger.info(
+        "RSS scheduler thread started (interval=%.0f seconds)",
+        RSS_SCHEDULER_INTERVAL_SECONDS,
+    )
 
     db = get_database()
     blog_repo = BlogRepository(db)
@@ -42,12 +45,25 @@ def _run_scheduler_loop(stop_event: threading.Event) -> None:
 
     try:
         interval = RSS_SCHEDULER_INTERVAL_SECONDS
-        cfg = load_config().aggregate
-        service.run_feed_collection(cfg)
 
-        while not stop_event.wait(interval):
+        # 최초 실행
+        logger.info("RSS feed collection starting (initial run)")
+        try:
             cfg = load_config().aggregate
             service.run_feed_collection(cfg)
+            logger.info("RSS feed collection completed (initial run)")
+        except Exception:  # noqa: BLE001
+            logger.exception("RSS feed collection failed (initial run)")
+
+        # 주기적 실행
+        while not stop_event.wait(interval):
+            logger.info("RSS feed collection starting (scheduled run)")
+            try:
+                cfg = load_config().aggregate
+                service.run_feed_collection(cfg)
+                logger.info("RSS feed collection completed (scheduled run)")
+            except Exception:  # noqa: BLE001
+                logger.exception("RSS feed collection failed (scheduled run)")
     finally:
         bus.close()
         logger.info("RSS scheduler thread stopped")
