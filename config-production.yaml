@@ -102,3 +102,8 @@ content_service:
         url: https://insight.infograb.net/blog
         rss_url: https://insight.infograb.net/blog/rss.xml
         blog_type: company
+
+      - name: 인프랩
+        url: https://tech.inflab.com
+        rss_url: https://tech.inflab.com/rss.xml
+        blog_type: company
