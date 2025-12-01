@@ -12,6 +12,7 @@ _STRONG_BLOCK_KEYWORDS = {
     "access denied",
     "security check",
     "cloudflare",
+    "enable javascript and cookies to continue",
 }
 
 _UNKNOWN_CONTENT_PATTERNS = {
