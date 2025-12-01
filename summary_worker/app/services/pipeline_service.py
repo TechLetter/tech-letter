@@ -13,6 +13,7 @@ from common.events.post import EventType, PostCreatedEvent, PostSummarizedEvent
 from ..parser import extract_plain_text, extract_thumbnail
 from ..renderer import render_html
 from ..summarizer import summarize_post
+from ..validator import validate_plain_text
 
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,19 @@ def handle_post_created_event(
         )
         raise
 
-    # 3. 썸네일 URL 추출
+    # 3. 본문 텍스트 검증
+    try:
+        validate_plain_text(plain_text)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "failed at validate_plain_text for PostCreatedEvent id=%s post_id=%s link=%s",
+            created.id,
+            created.post_id,
+            created.link,
+        )
+        raise
+
+    # 4. 썸네일 URL 추출
     try:
         thumbnail_url = extract_thumbnail(rendered_html, created.link)
     except Exception:  # noqa: BLE001
@@ -76,7 +89,7 @@ def handle_post_created_event(
         )
         raise
 
-    # 4. AI 요약
+    # 5. AI 요약
     try:
         summary_result = summarize_post(chat_model=chat_model, plain_text=plain_text)
     except Exception:  # noqa: BLE001
@@ -88,7 +101,7 @@ def handle_post_created_event(
         )
         raise
 
-    # 5. PostSummarized 이벤트 구성 및 publish
+    # 6. PostSummarized 이벤트 구성 및 publish
     now = datetime.now(timezone.utc).isoformat()
     summarized_event = PostSummarizedEvent(
         id=created.id,
