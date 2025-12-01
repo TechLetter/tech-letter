@@ -10,6 +10,7 @@ from app.api.v1.posts import router as posts_router
 from app.api.v1.blogs import router as blogs_router
 from app.scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
 from app.event_handlers.post_events_consumer import run_post_summary_consumer
+from common.common.logger import setup_logger
 
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
 
 
 def create_app() -> FastAPI:
+    setup_logger(name="content-service")
     app = FastAPI(
         title="TechLetter Content Service",
         version="0.1.0",

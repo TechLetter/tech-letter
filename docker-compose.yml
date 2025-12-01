@@ -42,6 +42,7 @@ services:
       KAFKA_GROUP_ID: tech-letter-content-service
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
       CONTENT_SERVICE_PORT: 8001
+      LOG_LEVEL: INFO
     networks:
       - tech-letter_default
     deploy:
@@ -89,6 +90,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+      LOG_LEVEL: INFO
     networks:
       - tech-letter_default
     deploy:

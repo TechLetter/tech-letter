@@ -27,7 +27,14 @@ def _handle_event(evt: Event, *, service: PostSummaryApplyService) -> None:
     event_type = str(payload.get("type", ""))
     if event_type != EventType.POST_SUMMARIZED:
         # 다른 타입의 이벤트는 이 핸들러의 책임이 아니므로 무시한다.
+        logger.debug(
+            "ignoring non-PostSummarized event: type=%s id=%s", event_type, evt.id
+        )
         return
+
+    logger.info(
+        "received PostSummarizedEvent id=%s post_id=%s", evt.id, payload.get("post_id")
+    )
 
     try:
         summarized = PostSummarizedEvent.from_dict(payload)
@@ -48,6 +55,7 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
     - stop_flag[0] 이 True 가 되면 안전하게 루프를 종료한다.
     - FastAPI lifespan 스레드나 단독 프로세스(main) 양쪽에서 재사용 가능하다.
     """
+    logger.info("post-summary-consumer starting up")
 
     db = get_database()
     post_repo = PostRepository(db)
@@ -59,6 +67,9 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
     bus = KafkaEventBus(brokers)
 
     try:
+        logger.info(
+            "subscribing to topic=%s group_id=%s", TOPIC_POST_EVENTS.base, group_id
+        )
         bus.subscribe(
             group_id=group_id,
             topic=TOPIC_POST_EVENTS,
@@ -67,6 +78,7 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
         )
     finally:
         bus.close()
+        logger.info("post-summary-consumer stopped")
 
 
 def main() -> None:
