@@ -47,8 +47,12 @@ class AggregateService:
             logger.warning("no blogs configured under aggregate.blogs")
             return
 
+        total_blogs = len(config.blogs)
+        logger.info("starting feed collection for %d blogs", total_blogs)
+
         # 1차: 블로그 메타데이터 upsert
-        for blog_src in config.blogs:
+        for idx, blog_src in enumerate(config.blogs, 1):
+            logger.debug("upserting blog %d/%d: %s", idx, total_blogs, blog_src.name)
             blog_doc = self._to_blog_model(blog_src)
             try:
                 self._blog_repository.upsert_by_rss_url(blog_doc)
@@ -56,13 +60,27 @@ class AggregateService:
                 logger.error("failed to upsert blog %s: %s", blog_src.name, exc)
 
         # 2차: 각 블로그의 RSS 피드를 읽어 새 포스트 수집
-        for blog_src in config.blogs:
+        total_new_posts = 0
+        for idx, blog_src in enumerate(config.blogs, 1):
+            logger.info(
+                "collecting posts from blog %d/%d: %s", idx, total_blogs, blog_src.name
+            )
             try:
-                self._collect_posts_from_blog(blog_src, config.blog_fetch_batch_size)
+                new_posts = self._collect_posts_from_blog(
+                    blog_src, config.blog_fetch_batch_size
+                )
+                total_new_posts += new_posts
+                logger.info("collected %d new posts from %s", new_posts, blog_src.name)
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "failed to collect posts from blog %s: %s", blog_src.name, exc
                 )
+
+        logger.info(
+            "feed collection completed: %d new posts from %d blogs",
+            total_new_posts,
+            total_blogs,
+        )
 
     def _to_blog_model(self, src: BlogSourceConfig) -> Blog:
         now = datetime.now(timezone.utc)
@@ -78,7 +96,8 @@ class AggregateService:
 
     def _collect_posts_from_blog(
         self, blog_src: BlogSourceConfig, batch_size: int
-    ) -> None:
+    ) -> int:
+        """블로그에서 포스트를 수집하고 신규 포스트 개수를 반환한다."""
         blog = self._blog_repository.get_by_rss_url(blog_src.rss_url)
         if blog is None:
             logger.error(
@@ -86,10 +105,12 @@ class AggregateService:
                 blog_src.name,
                 blog_src.rss_url,
             )
-            return
+            return 0
 
         items = fetch_rss_feeds(blog_src.rss_url, limit=batch_size)
+        logger.debug("fetched %d RSS items from %s", len(items), blog_src.name)
 
+        new_post_count = 0
         for item in items:
             if not item.link:
                 continue
@@ -112,6 +133,10 @@ class AggregateService:
 
             try:
                 inserted_id = self._post_repository.insert(post)
+                new_post_count += 1
+                logger.debug(
+                    "inserted new post: title=%s link=%s", item.title, item.link
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "failed to insert post (blog=%s, title=%s): %s",
@@ -132,6 +157,8 @@ class AggregateService:
                     post.title,
                     exc,
                 )
+
+        return new_post_count
 
     def _build_post_model(self, blog: Blog, item: RssFeedItem) -> Post:
         now = datetime.now(timezone.utc)
