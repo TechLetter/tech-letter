@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import signal
-from typing import Any
+
+from langchain_core.language_models.chat_models import BaseChatModel
 
 from common.eventbus.config import get_brokers, get_group_id
 from common.eventbus.core import Event
@@ -19,7 +20,7 @@ from common.logger import setup_logger
 logger = logging.getLogger(__name__)
 
 
-def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: Any) -> None:
+def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: BaseChatModel) -> None:
     payload = evt.payload
     if not isinstance(payload, dict):
         logger.error("unexpected payload type for event %s: %r", evt.id, type(payload))
