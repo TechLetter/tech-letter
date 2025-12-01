@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any
+
+from langchain_core.language_models.chat_models import BaseChatModel
 
 from common.eventbus.helpers import new_json_event
 from common.eventbus.kafka import KafkaEventBus
@@ -23,7 +24,7 @@ def handle_post_created_event(
     created: PostCreatedEvent,
     *,
     bus: KafkaEventBus,
-    chat_model: Any,
+    chat_model: BaseChatModel,
 ) -> None:
     """PostCreatedEvent 에 대한 전체 파이프라인을 처리한다.
 
@@ -116,7 +117,8 @@ def handle_post_created_event(
         categories=summary_result.categories,
         tags=summary_result.tags,
         summary=summary_result.summary,
-        model_name=getattr(chat_model, "model_name", "unknown"),
+        model_name=getattr(chat_model, "model_name", None)
+        or getattr(chat_model, "model", "unknown"),
     )
 
     try:
@@ -132,11 +134,12 @@ def handle_post_created_event(
         raise
 
     logger.info(
-        "successfully processed PostCreatedEvent id=%s post_id=%s link=%s summary_len=%d categories=%s tags=%s",
+        "successfully processed PostCreatedEvent id=%s post_id=%s link=%s summary_len=%d categories=%s tags=%s model_name=%s",
         created.id,
         created.post_id,
         created.link,
         len(summary_result.summary),
         summary_result.categories,
         summary_result.tags,
+        summarized_event.model_name,
     )
