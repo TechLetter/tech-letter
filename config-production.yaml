@@ -107,3 +107,8 @@ content_service:
         url: https://tech.inflab.com
         rss_url: https://tech.inflab.com/rss.xml
         blog_type: company
+
+      - name: 야놀자
+        url: https://medium.com/yanoljacloud-tech
+        rss_url: https://medium.com/feed/yanoljacloud-tech
+        blog_type: company
