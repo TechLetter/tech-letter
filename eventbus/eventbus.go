@@ -10,11 +10,11 @@ import (
 
 // RetryDelays는 재시도 횟수(1-based)별로 사용할 고정된 지연 시간 목록입니다.
 var RetryDelays = []time.Duration{
-	10 * time.Second, // 1차 재시도 (시도 1)
-	30 * time.Second, // 2차 재시도 (시도 2)
-	1 * time.Minute,  // 3차 재시도 (시도 3)
-	5 * time.Minute,  // 4차 재시도 (시도 4)
-	10 * time.Minute, // 5차 재시도 (시도 5)
+	1 * time.Minute,
+	5 * time.Minute,
+	10 * time.Minute,
+	30 * time.Minute,
+	1 * time.Hour,
 }
 
 // Topic은 토픽의 기본 이름, 재시도 토픽, DLQ 토픽 이름을 관리합니다.

@@ -13,6 +13,7 @@ _STRONG_BLOCK_KEYWORDS = {
     "security check",
     "cloudflare",
     "enable javascript and cookies to continue",
+    "apologies, but something went wrong on our end",  # medium
 }
 
 _UNKNOWN_CONTENT_PATTERNS = {
@@ -20,6 +21,8 @@ _UNKNOWN_CONTENT_PATTERNS = {
     "redirecting",
     "loading...",
     "checking your browser",
+    "refresh the page",
+    "enable javascript",
 }
 
 
@@ -41,7 +44,7 @@ def validate_plain_text(text: str) -> None:
     if len(text_lower) < 50:
         raise ContentValidationError("content_too_short")
 
-    if len(text_lower) < 100:
+    if len(text_lower) < 200:
         for keyword in _STRONG_BLOCK_KEYWORDS:
             if keyword in text_lower:
                 raise ContentValidationError(f"strong_block:{keyword}")
@@ -50,7 +53,7 @@ def validate_plain_text(text: str) -> None:
             if keyword in text_lower:
                 raise ContentValidationError(f"unknown_content:{keyword}")
 
-    if len(text_lower) < 200:
+    if len(text_lower) < 300:
         for keyword in _SOFT_BLOCK_KEYWORDS:
             if keyword in text_lower:
                 raise ContentValidationError(f"soft_block:{keyword}")
