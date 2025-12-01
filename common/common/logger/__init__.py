@@ -1,9 +1,6 @@
 import logging
 import os
 import sys
-from typing import Any
-
-# Go의 InitLogger/NewLogger와 유사한 설정을 제공하는 로깅 설정 모듈
 
 
 def setup_logger(name: str = "tech-letter", level: str | None = None) -> logging.Logger:
