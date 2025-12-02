@@ -7,10 +7,9 @@ from playwright.sync_api import ViewportSize, sync_playwright
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 30.0
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 CHROME_PATH_ENV = "CHROME_PATH"
-MAX_RENDER_ATTEMPTS = 100
+MAX_RENDER_ATTEMPTS = 20
 
 RETRY_MARKERS = [
     "apologies, but something went wrong on our end.",
@@ -74,7 +73,7 @@ def _retry_url(url: str, attempt: int) -> str:
     return f"{url}{'&' if '?' in url else '?'}{suffix}"
 
 
-def render_html(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> str:
+def render_html(url: str) -> str:
     launch_kwargs = _using_external_chrome()
     last_html = ""
 
@@ -96,9 +95,11 @@ def render_html(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> str:
                     page = context.new_page()
 
                     page.goto(
-                        target_url, wait_until="load", timeout=int(timeout * 1000)
+                        target_url,
+                        wait_until="load",
+                        timeout=30_000,
                     )
-                    page.wait_for_selector("body", timeout=int(timeout * 1000))
+                    page.wait_for_selector("body", timeout=30_000)
                     page.wait_for_timeout(500)
 
                     html = page.content()
