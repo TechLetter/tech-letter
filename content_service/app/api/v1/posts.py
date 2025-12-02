@@ -66,6 +66,22 @@ def list_posts(
 
 
 @router.get(
+    "/{post_id}",
+    response_model=PostResponse,
+    summary="단일 포스트 조회",
+    description="post_id로 포스트를 조회한다.",
+)
+def get_post(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> PostResponse:
+    post = service.get_post(post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="post not found")
+    return PostResponse.from_domain(post)
+
+
+@router.get(
     "/{post_id}/plain-text",
     response_model=PostPlainTextResponse,
     summary="포스트 plain_text 조회",
@@ -103,3 +119,18 @@ def get_post_html(
         raise HTTPException(status_code=404, detail="post not found")
 
     return PostHtmlResponse(rendered_html=result)
+
+
+@router.post(
+    "/{post_id}/view",
+    summary="포스트 조회수 증가",
+    description="특정 포스트의 view_count 를 1 증가시킨다.",
+)
+def increment_post_view(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> dict[str, str]:
+    ok = service.increment_view_count(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="post not found")
+    return {"message": "view count incremented"}

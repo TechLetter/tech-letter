@@ -36,6 +36,11 @@ class PostRepositoryInterface(Protocol):
     ) -> str | None:  # pragma: no cover - Protocol
         ...
 
+    def increment_view_count(
+        self, id_value: str
+    ) -> bool:  # pragma: no cover - Protocol
+        ...
+
     def update_fields(
         self, id_value: str, updates: dict
     ) -> None:  # pragma: no cover - Protocol

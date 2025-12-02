@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 
 	"tech-letter/cmd/api/router"
 	"tech-letter/config"
-	"tech-letter/db"
 	_ "tech-letter/docs" // swag will generate this package
 
 	"github.com/rs/cors"
@@ -22,10 +20,6 @@ func main() {
 	config.InitApp()
 	cfg := config.GetConfig()
 	config.InitLogger(cfg.API.Logging)
-
-	if err := db.Init(context.Background()); err != nil {
-		log.Fatal(err)
-	}
 
 	r := router.New()
 

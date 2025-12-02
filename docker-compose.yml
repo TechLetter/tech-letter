@@ -11,9 +11,11 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - ./.env:/app/.env:ro
     environment:
-      MONGO_URI: ${MONGO_URI}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-api
+      CONTENT_SERVICE_BASE_URL: http://content_service:8001
+    depends_on:
+      - content_service
     networks:
       - tech-letter_default
     deploy:

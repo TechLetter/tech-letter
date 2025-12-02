@@ -1,84 +1,93 @@
 package services
 
 import (
-    "context"
+	"context"
+	"errors"
 
-    "go.mongodb.org/mongo-driver/bson/primitive"
-    "tech-letter/cmd/api/dto"
-    "tech-letter/repositories"
+	"tech-letter/cmd/api/contentclient"
+	"tech-letter/cmd/api/dto"
 )
 
-// PostService encapsulates business logic for posts and DTO mapping
+// PostService encapsulates business logic for posts and DTO mapping.
+//
+// - client: Python content-service HTTP API를 호출해 목록/단건/조회수 증가를 수행한다.
 type PostService struct {
-    repo *repositories.PostRepository
+	client *contentclient.Client
 }
 
 // GetByID loads a post by its ObjectID hex and returns a DTO
 func (s *PostService) GetByID(ctx context.Context, hexID string) (*dto.PostDTO, error) {
-    id, err := primitive.ObjectIDFromHex(hexID)
-    if err != nil {
-        return nil, err
-    }
-    p, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return nil, err
-    }
-    d := dto.NewPostDTO(*p)
-    return &d, nil
+	p, err := s.client.GetPost(ctx, hexID)
+	if err != nil {
+		return nil, err
+	}
+	d := mapPostFromContentService(p)
+	return &d, nil
 }
 
-func NewPostService(repo *repositories.PostRepository) *PostService {
-    return &PostService{repo: repo}
+func NewPostService(client *contentclient.Client) *PostService {
+	return &PostService{client: client}
 }
 
 type ListPostsInput struct {
-    Page       int
-    PageSize   int
-    Categories []string
-    Tags       []string
-    BlogID     string // hex string; optional
-    BlogName   string // optional; case-insensitive exact match
+	Page       int
+	PageSize   int
+	Categories []string
+	Tags       []string
+	BlogID     string // hex string; optional
+	BlogName   string // optional; case-insensitive exact match
 }
 
 func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Pagination[dto.PostDTO], error) {
-    var blogIDPtr *primitive.ObjectID
-    if in.BlogID != "" {
-        if oid, err := primitive.ObjectIDFromHex(in.BlogID); err == nil {
-            blogIDPtr = &oid
-        } else {
-            // invalid blog_id input -> return empty page with total 0
-            return dto.Pagination[dto.PostDTO]{Data: []dto.PostDTO{}, Page: in.Page, PageSize: in.PageSize, Total: 0}, nil
-        }
-    }
-
-    items, total, err := s.repo.List(ctx, repositories.ListPostsOptions{
-        Page:       in.Page,
-        PageSize:   in.PageSize,
-        Categories: in.Categories,
-        Tags:       in.Tags,
-        BlogID:     blogIDPtr,
-        BlogName:   in.BlogName,
-    })
-    if err != nil {
-        return dto.Pagination[dto.PostDTO]{}, err
-    }
-    out := make([]dto.PostDTO, 0, len(items))
-    for _, p := range items {
-        out = append(out, dto.NewPostDTO(p))
-    }
-    return dto.Pagination[dto.PostDTO]{
-        Data:     out,
-        Page:     in.Page,
-        PageSize: in.PageSize,
-        Total:    total,
-    }, nil
+	// blog_id 형식 검증은 content-service에서 수행되므로 여기서는 그대로 전달한다.
+	resp, err := s.client.ListPosts(ctx, contentclient.ListPostsParams{
+		Page:       in.Page,
+		PageSize:   in.PageSize,
+		Categories: in.Categories,
+		Tags:       in.Tags,
+		BlogID:     in.BlogID,
+		BlogName:   in.BlogName,
+	})
+	if err != nil {
+		return dto.Pagination[dto.PostDTO]{}, err
+	}
+	out := make([]dto.PostDTO, 0, len(resp.Items))
+	for _, p := range resp.Items {
+		out = append(out, mapPostFromContentService(p))
+	}
+	return dto.Pagination[dto.PostDTO]{
+		Data:     out,
+		Page:     in.Page,
+		PageSize: in.PageSize,
+		Total:    int64(resp.Total),
+	}, nil
 }
 
 // IncrementViewCount increments the view_count of a post by its ObjectID hex
 func (s *PostService) IncrementViewCount(ctx context.Context, hexID string) error {
-    id, err := primitive.ObjectIDFromHex(hexID)
-    if err != nil {
-        return err
-    }
-    return s.repo.IncrementViewCount(ctx, id)
+	// hexID는 content-service에서 유효성 검사를 수행하므로 여기서는 그대로 전달한다.
+	if err := s.client.IncrementPostView(ctx, hexID); err != nil {
+		if errors.Is(err, contentclient.ErrNotFound) {
+			return err
+		}
+		return err
+	}
+	return nil
+}
+
+// mapPostFromContentService converts content-service PostItem into public PostDTO.
+func mapPostFromContentService(p contentclient.PostItem) dto.PostDTO {
+	return dto.PostDTO{
+		ID:           p.ID,
+		BlogID:       p.BlogID,
+		BlogName:     p.BlogName,
+		Title:        p.Title,
+		Link:         p.Link,
+		PublishedAt:  p.PublishedAt,
+		ThumbnailURL: p.ThumbnailURL,
+		ViewCount:    int64(p.ViewCount),
+		Categories:   p.AISummary.Categories,
+		Tags:         p.AISummary.Tags,
+		Summary:      p.AISummary.Summary,
+	}
 }

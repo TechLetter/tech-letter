@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.health import router as health_router
 from app.api.v1.posts import router as posts_router
 from app.api.v1.blogs import router as blogs_router
 from app.scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.include_router(health_router, tags=["health"])
     app.include_router(posts_router, prefix="/api/v1/posts", tags=["posts"])
     app.include_router(blogs_router, prefix="/api/v1/blogs", tags=["blogs"])
 

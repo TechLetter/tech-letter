@@ -3,18 +3,16 @@ package router
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	"tech-letter/cmd/api/contentclient"
 	"tech-letter/cmd/api/handlers"
 	"tech-letter/cmd/api/services"
-	"tech-letter/db"
 	_ "tech-letter/docs"
-	"tech-letter/repositories"
-
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func New() *gin.Engine {
@@ -22,9 +20,11 @@ func New() *gin.Engine {
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
-		// Try ping MongoDB
-		if err := db.Database().RunCommand(context.Background(), bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "mongo": "down", "error": err.Error()})
+		client := contentclient.New()
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+		if err := client.Health(ctx); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "content_service": "down", "error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -36,14 +36,13 @@ func New() *gin.Engine {
 	// v1 routes
 	api := r.Group("/api/v1")
 	{
-		postsRepo := repositories.NewPostRepository(db.Database())
-		postsSvc := services.NewPostService(postsRepo)
+		contentClient := contentclient.New()
+		postsSvc := services.NewPostService(contentClient)
 		api.GET("/posts", handlers.ListPostsHandler(postsSvc))
 		api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
 		api.POST("/posts/:id/view", handlers.IncrementPostViewCountHandler(postsSvc))
 
-		blogsRepo := repositories.NewBlogRepository(db.Database())
-		blogsSvc := services.NewBlogService(blogsRepo)
+		blogsSvc := services.NewBlogService(contentClient)
 		api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))
 	}
 
