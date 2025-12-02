@@ -155,11 +155,12 @@ class PostRepository(PostRepositoryInterface):
             return ""
         return str(value)
 
-    def increment_view_count(self, id_value: str) -> None:
-        self._col.update_one(
+    def increment_view_count(self, id_value: str) -> bool:
+        result = self._col.update_one(
             {"_id": ObjectId(id_value)},
             {"$inc": {"view_count": 1}, "$set": {"updated_at": datetime.utcnow()}},
         )
+        return result.matched_count > 0
 
     def update_fields(self, id_value: str, updates: dict) -> None:
         set_doc = {"updated_at": datetime.utcnow()}
