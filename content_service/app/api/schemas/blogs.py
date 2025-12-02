@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel
 
 from common.models.blog import Blog
+from common.types.datetime import UtcDateTime
 
 
 class BlogResponse(BaseModel):
     """블로그 응답 DTO."""
 
     id: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
     name: str
     url: str
     rss_url: str

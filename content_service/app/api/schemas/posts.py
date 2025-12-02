@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel
 
 from common.models.post import AISummary, Post, StatusFlags
+from common.types.datetime import UtcDateTime
 
 
 class PostResponse(BaseModel):
@@ -14,15 +13,15 @@ class PostResponse(BaseModel):
     """
 
     id: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
     status: StatusFlags
     view_count: int
     blog_id: str
     blog_name: str
     title: str
     link: str
-    published_at: datetime
+    published_at: UtcDateTime
     thumbnail_url: str
     aisummary: AISummary
 
