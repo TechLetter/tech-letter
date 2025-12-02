@@ -36,17 +36,20 @@ type ListPostsInput struct {
 	Tags       []string
 	BlogID     string // hex string; optional
 	BlogName   string // optional; case-insensitive exact match
+	// Status Filters
+	StatusAISummarized *bool
 }
 
 func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Pagination[dto.PostDTO], error) {
 	// blog_id 형식 검증은 content-service에서 수행되므로 여기서는 그대로 전달한다.
 	resp, err := s.client.ListPosts(ctx, contentclient.ListPostsParams{
-		Page:       in.Page,
-		PageSize:   in.PageSize,
-		Categories: in.Categories,
-		Tags:       in.Tags,
-		BlogID:     in.BlogID,
-		BlogName:   in.BlogName,
+		Page:               in.Page,
+		PageSize:           in.PageSize,
+		Categories:         in.Categories,
+		Tags:               in.Tags,
+		BlogID:             in.BlogID,
+		BlogName:           in.BlogName,
+		StatusAISummarized: in.StatusAISummarized,
 	})
 	if err != nil {
 		return dto.Pagination[dto.PostDTO]{}, err

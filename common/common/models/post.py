@@ -1,12 +1,7 @@
-from __future__ import annotations
-
-from typing import Any
-
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from ..types.datetime import UtcDateTime
 from ..types.objectid import ObjectIdStr
-from .utils import normalize_id_fields_to_str
 
 
 class StatusFlags(BaseModel):
@@ -55,3 +50,7 @@ class ListPostsFilter(BaseModel):
     tags: list[str] = Field(default_factory=list)
     blog_id: str | None = None
     blog_name: str | None = None
+
+    # Status Filters
+    # 추후 document_embedded 등 다른 status 플래그가 추가될 수 있음
+    status_ai_summarized: bool | None = None
