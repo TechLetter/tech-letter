@@ -21,6 +21,7 @@ import (
 // @Param        tags          query  []string  false  "Tags (OR match)"
 // @Param        blog_id       query  string  false  "Blog ID"
 // @Param        blog_name     query  string  false  "Blog name"
+// @Param        status_ai_summarized  query  bool  false  "AI 요약 완료 여부"
 // @Produce      json
 // @Success      200  {object}  dto.PaginationPostDTO
 // @Router       /posts [get]
@@ -35,6 +36,12 @@ func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
 		in.Tags = c.QueryArray("tags")
 		in.BlogID = c.Query("blog_id")
 		in.BlogName = c.Query("blog_name")
+		// status filters
+		if statusStr := c.Query("status_ai_summarized"); statusStr != "" {
+			if val, err := strconv.ParseBool(statusStr); err == nil {
+				in.StatusAISummarized = &val
+			}
+		}
 
 		page, err := svc.List(c.Request.Context(), in)
 		if err != nil {
