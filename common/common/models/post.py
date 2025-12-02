@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from .utils import normalize_id_fields_to_str
+from .utils import UtcDateTime, normalize_id_fields_to_str
 
 
 class StatusFlags(BaseModel):
@@ -27,7 +26,7 @@ class AISummary(BaseModel):
     tags: list[str] = Field(default_factory=list)
     summary: str = ""
     model_name: str = Field(default="", alias="model_name")
-    generated_at: datetime = Field(alias="generated_at")
+    generated_at: UtcDateTime = Field(alias="generated_at")
 
 
 class Post(BaseModel):
@@ -38,15 +37,15 @@ class Post(BaseModel):
     """
 
     id: str | None = Field(default=None, alias="id")
-    created_at: datetime = Field(alias="created_at")
-    updated_at: datetime = Field(alias="updated_at")
+    created_at: UtcDateTime = Field(alias="created_at")
+    updated_at: UtcDateTime = Field(alias="updated_at")
     status: StatusFlags = Field(default_factory=StatusFlags)
     view_count: int = Field(default=0, alias="view_count")
     blog_id: str = Field(alias="blog_id")
     blog_name: str = Field(alias="blog_name")
     title: str
     link: str
-    published_at: datetime = Field(alias="published_at")
+    published_at: UtcDateTime = Field(alias="published_at")
     thumbnail_url: str = Field(default="", alias="thumbnail_url")
     rendered_html: str = Field(default="", alias="rendered_html")
     aisummary: AISummary
