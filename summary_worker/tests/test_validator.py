@@ -27,7 +27,7 @@ def test_validate_plain_text_too_short():
 
 
 def test_validate_plain_text_strong_block():
-    """Strong block 키워드가 포함되고 길이가 100자 미만인 경우 에러."""
+    """Strong block 키워드 에러."""
     keywords = [
         "verify you are human",
         "bot check",
@@ -36,28 +36,43 @@ def test_validate_plain_text_strong_block():
         "cloudflare",
     ]
     for kw in keywords:
-        # 50자 이상 100자 미만으로 맞춤
         text = f"Please {kw} to continue...".ljust(60, ".")
-        assert 50 <= len(text) < 100
 
         with pytest.raises(ContentValidationError, match=f"strong_block:{kw}"):
             validate_plain_text(text)
 
 
+def test_validate_plain_text_strong_block_always_for_cloudflare_like_pages():
+
+    text = (
+        "medium.com\nVerifying you are human. This may take a few seconds. "
+        "medium.com needs to review the security of your connection before proceeding. "
+        "Please unblock challenges.cloudflare.com to proceed. Verification successful "
+        "Waiting for medium.com to respond..."
+    )
+
+    assert len(text) < 1000
+    with pytest.raises(
+        ContentValidationError,
+        match="strong_block:verify you are human|strong_block:cloudflare|strong_block:challenges.cloudflare.com",
+    ):
+        validate_plain_text(text)
+
+
 def test_validate_plain_text_unknown_content():
-    """Unknown content 패턴이 포함되고 길이가 100자 미만인 경우 에러."""
+    """Unknown content 패턴이 포함되고 길이가 1000자 미만인 경우 에러."""
     keywords = ["just a moment", "redirecting", "loading...", "checking your browser"]
     for kw in keywords:
         # 50자 이상 100자 미만으로 맞춤
         text = f"Please wait, {kw}".ljust(60, ".")
-        assert 50 <= len(text) < 100
+        assert len(text) < 1000
 
         with pytest.raises(ContentValidationError, match=f"unknown_content:{kw}"):
             validate_plain_text(text)
 
 
 def test_validate_plain_text_soft_block():
-    """Soft block 키워드가 포함되고 길이가 200자 미만인 경우 에러."""
+    """Soft block 키워드가 포함되고 길이가 500자 미만인 경우 에러."""
     keywords = [
         "not found",
         "forbidden",
@@ -66,16 +81,16 @@ def test_validate_plain_text_soft_block():
         "gateway timeout",
     ]
     for kw in keywords:
-        # 50자 이상 200자 미만으로 맞춤
+        # 50자 이상 500자 미만으로 맞춤
         text = f"Error occurred: {kw}".ljust(60, ".")
-        assert 50 <= len(text) < 200
+        assert len(text) < 500
 
         with pytest.raises(ContentValidationError, match=f"soft_block:{kw}"):
             validate_plain_text(text)
 
 
 def test_validate_plain_text_soft_block_ignored_if_long():
-    """Soft block 키워드가 있어도 텍스트가 200자 이상이면 통과해야 한다."""
+    """Soft block 키워드가 있어도 텍스트가 500자 이상이면 통과해야 한다."""
     # 200자 이상의 텍스트 생성
     long_text = "This is a long blog post about handling HTTP errors. " * 10
     long_text += (
@@ -83,6 +98,6 @@ def test_validate_plain_text_soft_block_ignored_if_long():
     )
     long_text += "Here is how to handle it properly in your code. " * 10
 
-    assert len(long_text) > 200
+    assert len(long_text) >= 500
     # 에러가 발생하지 않아야 함
     validate_plain_text(long_text)
