@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Iterable
 
 from bson import ObjectId
@@ -70,15 +71,13 @@ class PostRepository(PostRepositoryInterface):
 
         filter_doc: dict = {}
 
-        def _to_regex_in(values: Iterable[str]) -> list[dict]:
-            arr: list[dict] = []
+        def _to_regex_in(values: Iterable[str]) -> list[re.Pattern]:
+            arr: list[re.Pattern] = []
             for v in values:
                 v = v.strip()
                 if not v:
                     continue
-                # Go 구현과 마찬가지로 대소문자 무시 anchored regex 를 사용한다.
-                pattern = f"^{v}$"
-                arr.append({"$regex": pattern, "$options": "i"})
+                arr.append(re.compile(f"^{v}$", re.IGNORECASE))
             return arr
 
         cats_regex = _to_regex_in(flt.categories)
