@@ -98,6 +98,9 @@ class PostRepository(PostRepositoryInterface):
         if flt.blog_name:
             filter_doc["blog_name"] = {"$regex": f"^{flt.blog_name}$", "$options": "i"}
 
+        if flt.status_ai_summarized is not None:
+            filter_doc["status.ai_summarized"] = flt.status_ai_summarized
+
         page = flt.page if flt.page > 0 else 1
         page_size = flt.page_size
         if page_size <= 0 or page_size > 100:

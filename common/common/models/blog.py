@@ -1,12 +1,7 @@
-from __future__ import annotations
-
-from typing import Any
-
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from ..types.datetime import UtcDateTime
 from ..types.objectid import ObjectIdStr
-from .utils import normalize_id_fields_to_str
 
 
 class Blog(BaseModel):

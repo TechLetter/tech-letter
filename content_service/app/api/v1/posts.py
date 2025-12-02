@@ -50,6 +50,10 @@ def list_posts(
         default=None,
         description="특정 블로그 이름으로 필터링 (정확 일치, 대소문자 무시)",
     ),
+    status_ai_summarized: Optional[bool] = Query(
+        default=None,
+        description="AI 요약 완료 여부 필터링",
+    ),
     service: PostsService = Depends(get_posts_service),
 ) -> ListPostsResponse:
     flt = ListPostsFilter(
@@ -59,6 +63,7 @@ def list_posts(
         tags=tags,
         blog_id=blog_id,
         blog_name=blog_name,
+        status_ai_summarized=status_ai_summarized,
     )
     items, total = service.list_posts(flt)
     dto_items = [PostResponse.from_domain(post) for post in items]
