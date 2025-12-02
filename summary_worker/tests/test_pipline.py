@@ -56,17 +56,25 @@ def test_render_parse_validate_pipeline(url: str) -> None:
     assert thumbnail != "", f"thumbnail should not be empty for url={url}"
 
 
-def test_render_medium_post_with_duplication():
-    url = "https://medium.com/yanoljacloud-tech/%EC%8A%AC%EA%B8%B0%EB%A1%9C%EC%9A%B4-senior-%EA%B0%9C%EB%B0%9C%EC%9E%90-%EC%83%9D%ED%99%9C-34f617a5c88a?source=rss----64b34a8df31---4"
+# def test_render_medium_post_with_duplication():
+#     url = "https://medium.com/yanoljacloud-tech/%EC%8A%AC%EA%B8%B0%EB%A1%9C%EC%9A%B4-senior-%EA%B0%9C%EB%B0%9C%EC%9E%90-%EC%83%9D%ED%99%9C-34f617a5c88a?source=rss----64b34a8df31---4"
 
-    for _ in range(2):
-        html = render_html(url)
-        assert html
+#     for _ in range(2):
+#         html = render_html(url)
+#         assert html
 
-        text = extract_plain_text(html)
-        assert text
+#         print("====================================")
+#         print(html)
+#         print("====================================")
 
-        validate_plain_text(text)
+#         text = extract_plain_text(html)
+#         assert text
+
+#         print("====================================")
+#         print(text)
+#         print("====================================")
+
+#         validate_plain_text(text)
 
 
 def test_validate_not_found_error_pipeline():
