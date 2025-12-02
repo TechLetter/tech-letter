@@ -8,7 +8,7 @@ from typing import Callable
 from confluent_kafka import Consumer, KafkaError, Producer
 
 from .core import Event, MaxRetryExceededError, Topic, RetryDelays
-from .config import get_message_max_bytes
+from .config import get_max_poll_interval_ms, get_message_max_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +58,18 @@ class KafkaEventBus:
         poll_timeout: float = 0.1,
         stop_flag: list[bool] | None = None,
     ) -> None:
-        consumer = Consumer(
-            {
-                "bootstrap.servers": self._brokers,
-                "group.id": group_id,
-                "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
-            }
-        )
+        consumer_conf: dict[str, object] = {
+            "bootstrap.servers": self._brokers,
+            "group.id": group_id,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+        }
+
+        max_poll_interval_ms = get_max_poll_interval_ms()
+        if max_poll_interval_ms is not None:
+            consumer_conf["max.poll.interval.ms"] = max_poll_interval_ms
+
+        consumer = Consumer(consumer_conf)
         consumer.subscribe([topic.base])
 
         try:
