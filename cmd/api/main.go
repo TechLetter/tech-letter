@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"tech-letter/cmd/api/router"
-	"tech-letter/config"
+	"tech-letter/cmd/internal/logger"
 	_ "tech-letter/docs" // swag will generate this package
 
 	"github.com/rs/cors"
@@ -17,9 +17,8 @@ import (
 // @BasePath        /api/v1
 
 func main() {
-	config.InitApp()
-	cfg := config.GetConfig()
-	config.InitLogger(cfg.API.Logging)
+	// API 서버 로그 레벨은 환경변수 LOG_LEVEL 로 제어한다.
+	logger.InitFromEnv("LOG_LEVEL")
 
 	r := router.New()
 
