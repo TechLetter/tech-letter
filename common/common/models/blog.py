@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from .utils import normalize_id_fields_to_str
+from .utils import UtcDateTime, normalize_id_fields_to_str
 
 
 class Blog(BaseModel):
@@ -15,8 +14,8 @@ class Blog(BaseModel):
     """
 
     id: str | None = Field(default=None, alias="id")
-    created_at: datetime = Field(alias="created_at")
-    updated_at: datetime = Field(alias="updated_at")
+    created_at: UtcDateTime = Field(alias="created_at")
+    updated_at: UtcDateTime = Field(alias="updated_at")
     name: str
     url: str
     rss_url: str = Field(alias="rss_url")
