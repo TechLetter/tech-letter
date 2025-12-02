@@ -48,6 +48,7 @@ class PostSummarizedEvent:
     post_id: str
     link: str
     rendered_html: str
+    plain_text: str
     thumbnail_url: str
     categories: list[str]
     tags: list[str]
@@ -65,6 +66,7 @@ class PostSummarizedEvent:
             post_id=str(data["post_id"]),
             link=str(data["link"]),
             rendered_html=str(data["rendered_html"]),
+            plain_text=str(data.get("plain_text", "")),
             thumbnail_url=str(data.get("thumbnail_url", "")),
             categories=list(data.get("categories", [])),
             tags=list(data.get("tags", [])),
