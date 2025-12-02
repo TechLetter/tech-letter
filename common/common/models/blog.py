@@ -4,7 +4,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from .utils import UtcDateTime, normalize_id_fields_to_str
+from ..types.datetime import UtcDateTime
+from ..types.objectid import ObjectIdStr
+from .utils import normalize_id_fields_to_str
 
 
 class Blog(BaseModel):
@@ -13,18 +15,13 @@ class Blog(BaseModel):
     Go `models.Blog` 와 동일한 구조를 유지한다.
     """
 
-    id: str | None = Field(default=None, alias="id")
+    id: ObjectIdStr | None = Field(default=None, alias="id")
     created_at: UtcDateTime = Field(alias="created_at")
     updated_at: UtcDateTime = Field(alias="updated_at")
     name: str
     url: str
     rss_url: str = Field(alias="rss_url")
     blog_type: str = Field(alias="blog_type")
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_object_ids(cls, data: Any) -> Any:
-        return normalize_id_fields_to_str(data, fields=["id"])
 
 
 class ListBlogsFilter(BaseModel):
