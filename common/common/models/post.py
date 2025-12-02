@@ -4,7 +4,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from .utils import UtcDateTime, normalize_id_fields_to_str
+from ..types.datetime import UtcDateTime
+from ..types.objectid import ObjectIdStr
+from .utils import normalize_id_fields_to_str
 
 
 class StatusFlags(BaseModel):
@@ -36,12 +38,12 @@ class Post(BaseModel):
     - MongoDB `_id` 는 id(str) 로 노출하며, 저장소 레이어에서 ObjectId 로 변환한다.
     """
 
-    id: str | None = Field(default=None, alias="id")
+    id: ObjectIdStr | None = Field(default=None, alias="id")
     created_at: UtcDateTime = Field(alias="created_at")
     updated_at: UtcDateTime = Field(alias="updated_at")
     status: StatusFlags = Field(default_factory=StatusFlags)
     view_count: int = Field(default=0, alias="view_count")
-    blog_id: str = Field(alias="blog_id")
+    blog_id: ObjectIdStr = Field(alias="blog_id")
     blog_name: str = Field(alias="blog_name")
     title: str
     link: str
@@ -49,11 +51,6 @@ class Post(BaseModel):
     thumbnail_url: str = Field(default="", alias="thumbnail_url")
     rendered_html: str = Field(default="", alias="rendered_html")
     aisummary: AISummary
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_object_ids(cls, data: Any) -> Any:
-        return normalize_id_fields_to_str(data, fields=["id", "blog_id"])
 
 
 class ListPostsFilter(BaseModel):

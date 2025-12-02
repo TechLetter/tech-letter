@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
-from typing import Any, Annotated
-
-from pydantic.functional_serializers import PlainSerializer
+from typing import Any
 
 
 def normalize_id_fields_to_str(data: Any, *, fields: list[str]) -> Any:
@@ -24,21 +21,3 @@ def normalize_id_fields_to_str(data: Any, *, fields: list[str]) -> Any:
         return data
 
     return result
-
-
-def serialize_datetime_to_utc_iso8601(value: datetime) -> str:
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    else:
-        value = value.astimezone(timezone.utc)
-    return value.isoformat()
-
-
-UtcDateTime = Annotated[
-    datetime,
-    PlainSerializer(
-        serialize_datetime_to_utc_iso8601,
-        return_type=str,
-        when_used="json",
-    ),
-]
