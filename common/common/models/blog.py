@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .utils import normalize_id_fields_to_str
 
 
 class Blog(BaseModel):
@@ -18,6 +21,11 @@ class Blog(BaseModel):
     url: str
     rss_url: str = Field(alias="rss_url")
     blog_type: str = Field(alias="blog_type")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_object_ids(cls, data: Any) -> Any:
+        return normalize_id_fields_to_str(data, fields=["id"])
 
 
 class ListBlogsFilter(BaseModel):

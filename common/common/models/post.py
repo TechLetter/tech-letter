@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .utils import normalize_id_fields_to_str
 
 
 class StatusFlags(BaseModel):
@@ -47,6 +50,11 @@ class Post(BaseModel):
     thumbnail_url: str = Field(default="", alias="thumbnail_url")
     rendered_html: str = Field(default="", alias="rendered_html")
     aisummary: AISummary
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_object_ids(cls, data: Any) -> Any:
+        return normalize_id_fields_to_str(data, fields=["id", "blog_id"])
 
 
 class ListPostsFilter(BaseModel):
