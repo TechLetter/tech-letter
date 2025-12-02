@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.schemas.posts import ListPostsResponse, PostResponse
+from app.api.schemas.posts import (
+    ListPostsResponse,
+    PostHtmlResponse,
+    PostPlainTextResponse,
+    PostResponse,
+)
 from app.services.posts_service import PostsService, get_posts_service
 from common.models.post import ListPostsFilter
 
@@ -58,3 +63,74 @@ def list_posts(
     items, total = service.list_posts(flt)
     dto_items = [PostResponse.from_domain(post) for post in items]
     return ListPostsResponse(total=total, items=dto_items)
+
+
+@router.get(
+    "/{post_id}",
+    response_model=PostResponse,
+    summary="단일 포스트 조회",
+    description="post_id로 포스트를 조회한다.",
+)
+def get_post(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> PostResponse:
+    post = service.get_post(post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="post not found")
+    return PostResponse.from_domain(post)
+
+
+@router.get(
+    "/{post_id}/plain-text",
+    response_model=PostPlainTextResponse,
+    summary="포스트 plain_text 조회",
+    description=(
+        "특정 포스트의 plain_text 를 별도로 조회한다. "
+        "리스트/기본 조회에서는 plain_text 를 포함하지 않는다."
+    ),
+)
+def get_post_plain_text(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> PostPlainTextResponse:
+    result = service.get_plain_text(post_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="post not found")
+
+    return PostPlainTextResponse(plain_text=result)
+
+
+@router.get(
+    "/{post_id}/html",
+    response_model=PostHtmlResponse,
+    summary="포스트 rendered_html 조회",
+    description=(
+        "특정 포스트의 rendered_html 을 별도로 조회한다. "
+        "리스트/기본 조회에서는 rendered_html 을 포함하지 않는다."
+    ),
+)
+def get_post_html(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> PostHtmlResponse:
+    result = service.get_rendered_html(post_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="post not found")
+
+    return PostHtmlResponse(rendered_html=result)
+
+
+@router.post(
+    "/{post_id}/view",
+    summary="포스트 조회수 증가",
+    description="특정 포스트의 view_count 를 1 증가시킨다.",
+)
+def increment_post_view(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> dict[str, str]:
+    ok = service.increment_view_count(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="post not found")
+    return {"message": "view count incremented"}

@@ -11,6 +11,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         tzdata \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 공통 모듈과 content-service 패키지 복사

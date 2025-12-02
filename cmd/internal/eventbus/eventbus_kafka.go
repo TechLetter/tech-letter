@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 
-	"tech-letter/config"
+	"tech-letter/cmd/internal/logger"
 )
 
 // KafkaEventBus는 confluent-kafka-go 라이브러리를 사용한 EventBus 구현체입니다.
@@ -20,14 +22,13 @@ type KafkaEventBus struct {
 
 // NewKafkaEventBus는 Kafka Producer를 초기화합니다.
 func NewKafkaEventBus(brokers string) (*KafkaEventBus, error) {
-	appCfg := config.GetConfig()
 	producerCfg := &kafka.ConfigMap{
 		"bootstrap.servers": brokers,
 		"acks":              "all",
 		"retries":           5, // Producer는 일시적인 오류 발생 시 최대 5회 재시도합니다.
 	}
-	if appCfg.Kafka.MessageMaxBytes > 0 {
-		(*producerCfg)["message.max.bytes"] = appCfg.Kafka.MessageMaxBytes
+	if maxBytes := getKafkaMessageMaxBytesFromEnv(); maxBytes > 0 {
+		(*producerCfg)["message.max.bytes"] = maxBytes
 	}
 
 	p, err := kafka.NewProducer(producerCfg)
@@ -41,10 +42,10 @@ func NewKafkaEventBus(brokers string) (*KafkaEventBus, error) {
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
-					config.Logger.Errorf("메시지 전달 실패 %v: %v", ev.TopicPartition, ev.TopicPartition.Error)
+					logger.Log.Errorf("메시지 전달 실패 %v: %v", ev.TopicPartition, ev.TopicPartition.Error)
 				}
 			case kafka.Error:
-				config.Logger.Errorf("Kafka 오류: %v", ev)
+				logger.Log.Errorf("Kafka 오류: %v", ev)
 			}
 		}
 	}()
@@ -60,10 +61,10 @@ func (k *KafkaEventBus) Close() {
 	if k.Producer != nil {
 		// 5초 동안 남은 메시지를 모두 플러시합니다.
 		if remaining := k.Producer.Flush(5000); remaining > 0 {
-			config.Logger.Warnf("플러시 후에도 %d개의 메시지가 남아 있습니다.\n", remaining)
+			logger.Log.Warnf("플러시 후에도 %d개의 메시지가 남아 있습니다.", remaining)
 		}
 		k.Producer.Close()
-		config.Logger.Info("Kafka Producer 종료.")
+		logger.Log.Info("Kafka Producer 종료.")
 	}
 }
 
@@ -103,13 +104,18 @@ func (k *KafkaEventBus) Publish(ctx context.Context, topic string, event Event) 
 
 // Subscribe는 기본 토픽을 구독하고 메인 비즈니스 핸들러를 실행합니다.
 func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Topic, handler EventHandler) error {
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
+	consumerCfg := &kafka.ConfigMap{
 		"bootstrap.servers":             k.Brokers,
 		"group.id":                      groupID, // 메인 컨슈머 그룹 ID
 		"auto.offset.reset":             "earliest",
 		"enable.auto.commit":            false, // 재시도 로직을 위해 수동 커밋 사용
 		"partition.assignment.strategy": "range",
-	})
+	}
+	if maxPoll := getKafkaMaxPollIntervalMsFromEnv(); maxPoll > 0 {
+		(*consumerCfg)["max.poll.interval.ms"] = maxPoll
+	}
+
+	c, err := kafka.NewConsumer(consumerCfg)
 	if err != nil {
 		return fmt.Errorf("kafka Consumer 생성 실패: %w", err)
 	}
@@ -120,12 +126,12 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 		return fmt.Errorf("토픽 구독 실패 %v: %w", topicsToSubscribe, err)
 	}
 
-	config.Logger.Infof("메인 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(topicsToSubscribe, ", "))
+	logger.Log.Infof("메인 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(topicsToSubscribe, ", "))
 
 	for {
 		select {
 		case <-ctx.Done():
-			config.Logger.Info("메인 컨슈머 종료 중.")
+			logger.Log.Info("메인 컨슈머 종료 중.")
 			return ctx.Err()
 		default:
 			msg, err := c.ReadMessage(100 * time.Millisecond)
@@ -138,7 +144,7 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 
 			var evt Event
 			if err := json.Unmarshal(msg.Value, &evt); err != nil {
-				config.Logger.Errorf("토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.\n", *msg.TopicPartition.Topic, err)
+				logger.Log.Errorf("토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.", *msg.TopicPartition.Topic, err)
 				c.CommitMessage(msg)
 				continue
 			}
@@ -150,9 +156,9 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 
 			// 1. 핸들러 실행 (비즈니스 로직)
 			if evt.Retry > 0 {
-				config.Logger.Infof("이벤트 %s 처리 시작 (재시도 %d/%d) - 토픽: %s", evt.ID, evt.Retry, evt.MaxRetry, *msg.TopicPartition.Topic)
+				logger.Log.Infof("이벤트 %s 처리 시작 (재시도 %d/%d) - 토픽: %s", evt.ID, evt.Retry, evt.MaxRetry, *msg.TopicPartition.Topic)
 			} else {
-				config.Logger.Debugf("이벤트 %s 처리 시작 - 토픽: %s", evt.ID, *msg.TopicPartition.Topic)
+				logger.Log.Debugf("이벤트 %s 처리 시작 - 토픽: %s", evt.ID, *msg.TopicPartition.Topic)
 			}
 			err = handler(ctx, evt)
 
@@ -164,23 +170,23 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 
 				if getTopicErr == ErrMaxRetryExceeded {
 					// 2-1. 최대 재시도 횟수 초과 -> DLQ 발행
-					config.Logger.Errorf("이벤트 %s의 최대 재시도 횟수 초과. DLQ %s로 전송. 최종 오류: %s\n", evt.ID, topic.DLQ(), err.Error())
+					logger.Log.Errorf("이벤트 %s의 최대 재시도 횟수 초과. DLQ %s로 전송. 최종 오류: %s", evt.ID, topic.DLQ(), err.Error())
 					publishErr := k.Publish(ctx, topic.DLQ(), evt)
 					if publishErr != nil {
-						config.Logger.Errorf("DLQ %s 발행 실패: %v. 오프셋 커밋 안함.\n", topic.DLQ(), publishErr)
+						logger.Log.Errorf("DLQ %s 발행 실패: %v. 오프셋 커밋 안함.\n", topic.DLQ(), publishErr)
 						continue // 발행 실패 시 메시지 재처리 시도
 					}
 				} else if getTopicErr != nil {
-					config.Logger.Errorf("재시도 토픽 결정 중 예상치 못한 오류 발생: %v. 오프셋 커밋 안함.\n", getTopicErr)
+					logger.Log.Errorf("재시도 토픽 결정 중 예상치 못한 오류 발생: %v. 오프셋 커밋 안함.", getTopicErr)
 					continue
 				} else {
 					// 2-2. 재시도 예약 (지연 토픽으로 발행)
 					evt.Retry = nextRetryCount
-					config.Logger.Warnf("이벤트 %s 처리 실패. 재시도 %d/%d를 토픽 %s에 예약.",
+					logger.Log.Warnf("이벤트 %s 처리 실패. 재시도 %d/%d를 토픽 %s에 예약.",
 						evt.ID, evt.Retry, evt.MaxRetry, nextRetryTopic)
 					publishErr := k.Publish(ctx, nextRetryTopic, evt)
 					if publishErr != nil {
-						config.Logger.Errorf("재시도 이벤트 토픽 %s 발행 실패: %v. 오프셋 커밋 안함.", nextRetryTopic, publishErr)
+						logger.Log.Errorf("재시도 이벤트 토픽 %s 발행 실패: %v. 오프셋 커밋 안함.", nextRetryTopic, publishErr)
 						continue
 					}
 				}
@@ -188,7 +194,7 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 
 			// 3. 성공 또는 재시도/DLQ 발행 성공 시 오프셋 커밋
 			if _, err := c.CommitMessage(msg); err != nil {
-				config.Logger.Errorf("오프셋 커밋 오류: %v", err)
+				logger.Log.Errorf("오프셋 커밋 오류: %v", err)
 			}
 		}
 	}
@@ -196,13 +202,18 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, groupID string, topic Top
 
 // StartRetryReinjector는 모든 재시도 토픽을 구독하고 메시지를 기본 토픽으로 재발행(re-publish)합니다.
 func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string, topic Topic) error {
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
+	consumerCfg := &kafka.ConfigMap{
 		"bootstrap.servers":             k.Brokers,
 		"group.id":                      groupID, // 전용 재주입 그룹 ID
 		"auto.offset.reset":             "earliest",
 		"enable.auto.commit":            false,
 		"partition.assignment.strategy": "range",
-	})
+	}
+	if maxPoll := getKafkaMaxPollIntervalMsFromEnv(); maxPoll > 0 {
+		(*consumerCfg)["max.poll.interval.ms"] = maxPoll
+	}
+
+	c, err := kafka.NewConsumer(consumerCfg)
 	if err != nil {
 		return fmt.Errorf("kafka 재시도 재주입기 생성 실패: %w", err)
 	}
@@ -213,12 +224,12 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 		return fmt.Errorf("재시도 토픽 구독 실패 %v: %w", retryTopics, err)
 	}
 
-	config.Logger.Infof("재시도 재주입 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(retryTopics, ", "))
+	logger.Log.Infof("재시도 재주입 컨슈머 (%s) 시작됨. 구독 토픽: %s", groupID, strings.Join(retryTopics, ", "))
 
 	for {
 		select {
 		case <-ctx.Done():
-			config.Logger.Info("재시도 재주입 컨슈머 종료 중.")
+			logger.Log.Info("재시도 재주입 컨슈머 종료 중.")
 			return ctx.Err()
 		default:
 			msg, err := c.ReadMessage(100 * time.Millisecond)
@@ -231,7 +242,7 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 						return fmt.Errorf("재시도 재주입 컨슈머 치명적 오류: %w", err)
 					}
 				}
-				config.Logger.Errorf("재시도 재주입 컨슈머 ReadMessage 오류: %v", err)
+				logger.Log.Errorf("재시도 재주입 컨슈머 ReadMessage 오류: %v", err)
 				time.Sleep(500 * time.Millisecond)
 				continue
 			}
@@ -240,7 +251,7 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 			topicName := *msg.TopicPartition.Topic
 			delayDur, ok := ParseRetryDelayFromTopicName(topicName)
 			if !ok {
-				config.Logger.Errorf("재시도 토픽 이름 파싱 실패: %s. 메시지를 건너뛰고 커밋합니다.", topicName)
+				logger.Log.Errorf("재시도 토픽 이름 파싱 실패: %s. 메시지를 건너뛰고 커밋합니다.", topicName)
 				c.CommitMessage(msg)
 				continue
 			}
@@ -262,31 +273,74 @@ func (k *KafkaEventBus) StartRetryReinjector(ctx context.Context, groupID string
 					Partition: msg.TopicPartition.Partition,
 					Offset:    msg.TopicPartition.Offset,
 				}, 1000); err != nil {
-					config.Logger.Errorf("재시도 재주입 컨슈머 seek 오류: %v", err)
+					logger.Log.Errorf("재시도 재주입 컨슈머 seek 오류: %v", err)
 				}
 				continue
 			}
 
 			var evt Event
 			if err := json.Unmarshal(msg.Value, &evt); err != nil {
-				config.Logger.Errorf("재시도 토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.\n", *msg.TopicPartition.Topic, err)
+				logger.Log.Errorf("재시도 토픽 %s의 이벤트 페이로드 오류: %v. 메시지를 건너뛰고 커밋합니다.\n", *msg.TopicPartition.Topic, err)
 				c.CommitMessage(msg)
 				continue
 			}
 
 			// 1. 메시지를 메인 토픽으로 재주입
-			config.Logger.Infof("이벤트 %s를 %s에서 %s로 재주입. (재시도: %d)",
+			logger.Log.Infof("이벤트 %s를 %s에서 %s로 재주입. (재시도: %d)",
 				evt.ID, *msg.TopicPartition.Topic, topic.Base(), evt.Retry)
 
 			if err := k.Publish(ctx, topic.Base(), evt); err != nil {
-				config.Logger.Errorf("이벤트 %s 재주입 실패: %v. 오프셋 커밋 안함.\n", evt.ID, err)
+				logger.Log.Errorf("이벤트 %s 재주입 실패: %v. 오프셋 커밋 안함.\n", evt.ID, err)
 				continue // 재발행 실패 시 메시지 재처리 시도
 			}
 
 			// 2. 재발행 성공했으므로, 지연 토픽의 오프셋 커밋
 			if _, err := c.CommitMessage(msg); err != nil {
-				config.Logger.Errorf("재주입 후 커밋 오류: %v\n", err)
+				logger.Log.Errorf("재주입 후 커밋 오류: %v\n", err)
 			}
 		}
 	}
+}
+
+func getKafkaMessageMaxBytesFromEnv() int {
+	maxBytesStr := os.Getenv("KAFKA_MESSAGE_MAX_BYTES")
+	if maxBytesStr == "" {
+		return 0
+	}
+
+	maxBytes, err := strconv.Atoi(maxBytesStr)
+	if err != nil {
+		logger.Log.Warnf("KAFKA_MESSAGE_MAX_BYTES 환경변수 파싱 실패: %v. 기본값 사용.", err)
+		return 0
+	}
+
+	if maxBytes < 1 {
+		logger.Log.Warnf("KAFKA_MESSAGE_MAX_BYTES 환경변수 값이 너무 작습니다. 최소값 1 사용.")
+		return 1
+	}
+
+	return maxBytes
+}
+
+// getKafkaMaxPollIntervalMsFromEnv 는 KAFKA_MAX_POLL_INTERVAL_MS 환경변수에서
+// max.poll.interval.ms 값을 읽어온다. 비어 있거나 0 이하, 파싱 실패 시 0 을 반환하여
+// 라이브러리 기본값을 사용하게 한다.
+func getKafkaMaxPollIntervalMsFromEnv() int {
+	raw := strings.TrimSpace(os.Getenv("KAFKA_MAX_POLL_INTERVAL_MS"))
+	if raw == "" {
+		return 0
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		logger.Log.Warnf("KAFKA_MAX_POLL_INTERVAL_MS 환경변수 파싱 실패: %v. 기본값 사용.", err)
+		return 0
+	}
+
+	if value <= 0 {
+		logger.Log.Warnf("KAFKA_MAX_POLL_INTERVAL_MS 환경변수 값이 0 이하입니다. 기본값 사용.")
+		return 0
+	}
+
+	return value
 }
