@@ -24,7 +24,6 @@ class PostResponse(BaseModel):
     link: str
     published_at: datetime
     thumbnail_url: str
-    rendered_html: str
     aisummary: AISummary
 
     @classmethod
@@ -37,3 +36,15 @@ class PostResponse(BaseModel):
 class ListPostsResponse(BaseModel):
     total: int
     items: list[PostResponse]
+
+
+class PostPlainTextResponse(BaseModel):
+    """포스트 plain_text 전용 DTO."""
+
+    plain_text: str
+
+
+class PostHtmlResponse(BaseModel):
+    """포스트 rendered_html 전용 DTO."""
+
+    rendered_html: str
