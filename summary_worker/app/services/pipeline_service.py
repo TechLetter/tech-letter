@@ -113,6 +113,7 @@ def handle_post_created_event(
         post_id=created.post_id,
         link=created.link,
         rendered_html=rendered_html,
+        plain_text=plain_text,
         thumbnail_url=thumbnail_url,
         categories=summary_result.categories,
         tags=summary_result.tags,

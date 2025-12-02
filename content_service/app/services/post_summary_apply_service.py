@@ -60,6 +60,7 @@ class PostSummaryApplyService:
 
         updates = {
             "rendered_html": event.rendered_html,
+            "plain_text": event.plain_text,
             "thumbnail_url": event.thumbnail_url,
             "aisummary": summary.model_dump(by_alias=True),
             "status": status.model_dump(by_alias=True),
