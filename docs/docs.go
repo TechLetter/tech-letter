@@ -103,6 +103,12 @@ const docTemplate = `{
                         "description": "Blog name",
                         "name": "blog_name",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "AI 요약 완료 여부",
+                        "name": "status_ai_summarized",
+                        "in": "query"
                     }
                 ],
                 "responses": {

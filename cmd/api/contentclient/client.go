@@ -49,6 +49,8 @@ type ListPostsParams struct {
 	Tags       []string
 	BlogID     string
 	BlogName   string
+	// Status Filters (추후 DocumentEmbedded 등 추가 가능)
+	StatusAISummarized *bool
 }
 
 type ListPostsResponse struct {
@@ -98,6 +100,9 @@ func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPos
 	}
 	if params.BlogName != "" {
 		q.Set("blog_name", params.BlogName)
+	}
+	if params.StatusAISummarized != nil {
+		q.Set("status_ai_summarized", strconv.FormatBool(*params.StatusAISummarized))
 	}
 	u.RawQuery = q.Encode()
 
