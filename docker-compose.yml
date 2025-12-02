@@ -8,12 +8,15 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
       - ./.env:/app/.env:ro
     environment:
-      MONGO_URI: ${MONGO_URI}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-api
+      CONTENT_SERVICE_BASE_URL: http://content_service:8001
+      LOG_LEVEL: INFO
+    depends_on:
+      content_service:
+        condition: service_healthy
     networks:
       - tech-letter_default
     deploy:
@@ -44,6 +47,12 @@ services:
       KAFKA_MAX_POLL_INTERVAL_MS: 900000 # 15분
       CONTENT_SERVICE_PORT: 8001
       LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - tech-letter_default
     deploy:
@@ -59,12 +68,12 @@ services:
       dockerfile: Dockerfile.retryworker
     container_name: techletter_retry_worker
     restart: unless-stopped
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-retry
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+      KAFKA_MAX_POLL_INTERVAL_MS: 3200000 # 60분
+      LOG_LEVEL: INFO
     networks:
       - tech-letter_default
     deploy:
@@ -91,7 +100,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
-      KAFKA_MAX_POLL_INTERVAL_MS: 1800000 # 30분
+      KAFKA_MAX_POLL_INTERVAL_MS: 3200000 # 60분
       LOG_LEVEL: INFO
     networks:
       - tech-letter_default

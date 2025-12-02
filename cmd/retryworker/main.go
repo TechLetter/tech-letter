@@ -7,14 +7,13 @@ import (
 	"strings"
 	"syscall"
 
-	"tech-letter/config"
-	"tech-letter/eventbus"
+	"tech-letter/cmd/internal/eventbus"
+	"tech-letter/cmd/internal/logger"
 )
 
 func main() {
-	config.InitApp()
-	cfg := config.GetConfig()
-	config.InitLogger(cfg.RetryWorker.Logging)
+	// Retry worker 로그 레벨은 환경변수 LOG_LEVEL 로 제어한다.
+	logger.InitFromEnv("LOG_LEVEL")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -22,20 +21,20 @@ func main() {
 	brokers := eventbus.GetBrokers()
 	for _, t := range eventbus.AllTopics {
 		if err := eventbus.EnsureTopics(brokers, t, 3); err != nil {
-			config.Logger.Errorf("failed to ensure eventbus topics for %s: %v", t.Base(), err)
+			logger.Log.Errorf("failed to ensure eventbus topics for %s: %v", t.Base(), err)
 		}
 	}
 
 	bus, err := eventbus.NewKafkaEventBus(brokers)
 	if err != nil {
-		config.Logger.Errorf("failed to create event bus: %v", err)
+		logger.Log.Errorf("failed to create event bus: %v", err)
 		os.Exit(1)
 	}
 	defer bus.Close()
 
 	groupID := eventbus.GetGroupID() + "-retry-worker"
 
-	config.Logger.Info("starting retry worker service with eventbus...")
+	logger.Log.Info("starting retry worker service with eventbus...")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -45,15 +44,15 @@ func main() {
 		go func() {
 			topicGroupID := groupID + "-" + strings.ReplaceAll(topic.Base(), ".", "-")
 			if err := bus.StartRetryReinjector(ctx, topicGroupID, topic); err != nil && err != context.Canceled {
-				config.Logger.Errorf("eventbus retry reinjector error for %s: %v", topic.Base(), err)
+				logger.Log.Errorf("eventbus retry reinjector error for %s: %v", topic.Base(), err)
 			}
 		}()
 	}
 
 	<-sigChan
-	config.Logger.Info("received shutdown signal, shutting down retry worker service...")
+	logger.Log.Info("received shutdown signal, shutting down retry worker service...")
 
 	cancel()
 
-	config.Logger.Info("retry worker service stopped")
+	logger.Log.Info("retry worker service stopped")
 }

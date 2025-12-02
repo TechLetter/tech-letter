@@ -110,6 +110,7 @@ class PostRepository(PostRepositoryInterface):
 
         cursor = self._col.find(
             filter_doc,
+            {"rendered_html": 0, "plain_text": 0},
             sort=[("published_at", -1), ("_id", -1)],
             skip=skip,
             limit=page_size,
@@ -122,16 +123,44 @@ class PostRepository(PostRepositoryInterface):
         return items, total
 
     def find_by_id(self, id_value: str) -> Post | None:
-        doc = self._col.find_one({"_id": ObjectId(id_value)})
+        doc = self._col.find_one(
+            {"_id": ObjectId(id_value)},
+            {"rendered_html": 0, "plain_text": 0},
+        )
         if not doc:
             return None
         return self._from_document(doc)
 
-    def increment_view_count(self, id_value: str) -> None:
-        self._col.update_one(
+    def get_plain_text(self, id_value: str) -> str | None:
+        doc = self._col.find_one(
+            {"_id": ObjectId(id_value)},
+            {"plain_text": 1},
+        )
+        if not doc:
+            return None
+        value = doc.get("plain_text")
+        if value is None:
+            return ""
+        return str(value)
+
+    def get_rendered_html(self, id_value: str) -> str | None:
+        doc = self._col.find_one(
+            {"_id": ObjectId(id_value)},
+            {"rendered_html": 1},
+        )
+        if not doc:
+            return None
+        value = doc.get("rendered_html")
+        if value is None:
+            return ""
+        return str(value)
+
+    def increment_view_count(self, id_value: str) -> bool:
+        result = self._col.update_one(
             {"_id": ObjectId(id_value)},
             {"$inc": {"view_count": 1}, "$set": {"updated_at": datetime.utcnow()}},
         )
+        return result.matched_count > 0
 
     def update_fields(self, id_value: str, updates: dict) -> None:
         set_doc = {"updated_at": datetime.utcnow()}

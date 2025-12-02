@@ -1,9 +1,6 @@
 package dto
 
-import (
-	"tech-letter/models"
-	"time"
-)
+import "time"
 
 // PostDTO exposes the minimal fields needed for API consumers
 // Fields are flattened from models.Post and models.AISummary
@@ -21,21 +18,4 @@ type PostDTO struct {
 	Categories   []string  `json:"categories"`
 	Tags         []string  `json:"tags"`
 	Summary      string    `json:"summary"`
-}
-
-// NewPostDTO constructs PostDTO from models.Post
-func NewPostDTO(p models.Post) PostDTO {
-	return PostDTO{
-		ID:           p.ID.Hex(),
-		BlogID:       p.BlogID.Hex(),
-		BlogName:     p.BlogName,
-		Title:        p.Title,
-		Link:         p.Link,
-		PublishedAt:  p.PublishedAt,
-		ThumbnailURL: p.ThumbnailURL,
-		ViewCount:    p.ViewCount,
-		Categories:   p.AISummary.Categories,
-		Tags:         p.AISummary.Tags,
-		Summary:      p.AISummary.Summary,
-	}
 }
