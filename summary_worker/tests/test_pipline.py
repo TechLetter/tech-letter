@@ -56,6 +56,19 @@ def test_render_parse_validate_pipeline(url: str) -> None:
     assert thumbnail != "", f"thumbnail should not be empty for url={url}"
 
 
+def test_render_medium_post_with_duplication():
+    url = "https://medium.com/yanoljacloud-tech/%EC%8A%AC%EA%B8%B0%EB%A1%9C%EC%9A%B4-senior-%EA%B0%9C%EB%B0%9C%EC%9E%90-%EC%83%9D%ED%99%9C-34f617a5c88a?source=rss----64b34a8df31---4"
+
+    for _ in range(2):
+        html = render_html(url)
+        assert html
+
+        text = extract_plain_text(html)
+        assert text
+
+        validate_plain_text(text)
+
+
 def test_validate_not_found_error_pipeline():
     html = '<!DOCTYPE html><html lang="en"><head>\n  <meta charset="utf-8">\n  <meta http-equiv="X-UA-Compatible" content="IE=edge">\n  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.0 -->\n<title>컬리 기술 블로그</title>\n<meta name="generator" content="Jekyll v3.8.5">\n<meta property="og:title" content="컬리 기술 블로그">\n<meta property="og:locale" content="en_US">\n<meta name="description" content="컬리 기술 블로그">\n<meta property="og:description" content="컬리 기술 블로그">\n<link rel="canonical" href="http://thefarmersfront.github.io/404.html">\n<meta property="og:url" content="http://thefarmersfront.github.io/404.html">\n<meta property="og:site_name" content="컬리 기술 블로그">\n<!-- End Jekyll SEO tag -->\n<link rel="stylesheet" href="/assets/main.css?ver={{ site.version }}"><link type="application/atom+xml" rel="alternate" href="http://thefarmersfront.github.io/feed.xml" title="컬리 기술 블로그"></head>\n<body><header class="site-header" role="banner">\n\n  <div class="wrapper"><a class="site-title" rel="author" href="/">컬리 기술 블로그</a><nav class="site-nav">\n        <input type="checkbox" id="nav-trigger" class="nav-trigger">\n        <label for="nav-trigger">\n          <span class="menu-icon">\n            <svg viewBox="0 0 18 15" width="18px" height="15px">\n              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"></path>\n            </svg>\n          </span>\n        </label>\n\n      </nav></div>\n</header>\n<main class="page-content" aria-label="Content">\n      <div class="wrapper">\n        <style type="text/css" media="screen">\n  .container {\n    margin: 10px auto;\n    max-width: 600px;\n    text-align: center;\n  }\n  h1 {\n    margin: 30px 0;\n    font-size: 4em;\n    line-height: 1;\n    letter-spacing: -1px;\n  }\n</style>\n\n<div class="container">\n  <h1>404</h1>\n\n  <p><strong>Page not found :(</strong></p>\n  <p>이 페이지를 보고 있는 당신께 심심한 위로를 전달합니다.</p>\n</div>\n\n      </div>\n    </main><footer class="site-footer h-card">\n  <data class="u-url" href="/"></data>\n\n  <div class="wrapper">\n\n    <h2 class="footer-heading">컬리 기술 블로그</h2>\n\n    <div class="footer-col-wrapper">\n      <div class="footer-col footer-col-1">\n      </div>\n\n      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>\n      </div>\n\n    </div>\n\n  </div>\n\n</footer>\n\n\n\n</body></html>'
 
