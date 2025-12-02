@@ -26,6 +26,16 @@ class PostRepositoryInterface(Protocol):
     def find_by_id(self, id_value: str) -> Post | None:  # pragma: no cover - Protocol
         ...
 
+    def get_plain_text(
+        self, id_value: str
+    ) -> str | None:  # pragma: no cover - Protocol
+        ...
+
+    def get_rendered_html(
+        self, id_value: str
+    ) -> str | None:  # pragma: no cover - Protocol
+        ...
+
     def update_fields(
         self, id_value: str, updates: dict
     ) -> None:  # pragma: no cover - Protocol
