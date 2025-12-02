@@ -15,14 +15,20 @@
 
 ### 마이크로서비스 구조
 
-- **API 서버** (`cmd/api/main.go`): REST API 제공 (포트 8080)
-- **Aggregate 서버** (`cmd/aggregate/main.go`):
-  - RSS 수집 및 신규 포스트 MongoDB 저장
-  - 신규 포스트에 대해 `PostCreated` 이벤트 발행
-  - `PostSummarized` 이벤트를 구독해 요약/렌더링/썸네일 결과를 DB에 반영
+- **API Gateway** (`cmd/api/main.go`): REST API 제공 (포트 8080)
+  - 클라이언트 요청을 받아 Content Service의 REST API로 프록시
+  - 사용자 인증/인가 처리 (향후 구현 예정)
+  - Swagger 문서 제공
+  
+- **Content Service** (`content_service/app/main.py`): 콘텐츠 관리 서비스 (포트 8001)
+  - MongoDB 직접 접근 및 CRUD 작업 수행
+  - 포스트/블로그 데이터 조회 API 제공
+  - 이벤트 구독 및 발행 (PostCreated, PostSummarized)
+  
 - **Summary Worker (Python)** (`summary_worker/app/main.py`):
   - `PostCreated` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
   - 결과를 담은 `PostSummarized` 이벤트 발행 (DB에는 직접 쓰지 않음)
+  
 - **Retry Worker** (`cmd/retryworker/main.go`):
   - `eventbus` 레이어가 생성한 지연/재시도 토픽(`*.retry.N`)을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
@@ -31,27 +37,52 @@
 #### Architecture Diagram (Component View)
 
 ```mermaid
-flowchart LR
-    Client[User / Frontend] --> API[API Server]
-    API --> EB[EventBus / Kafka]
-
+flowchart TB
+    Client[User / Frontend] -->|HTTP| API[API Gateway :8080]
+    API -->|HTTP| CS[Content Service :8001]
+    
     subgraph Services
-        Agg[Aggregate]
-        SW[Summary Worker (Python)]
+        CS
+        SW[Summary Worker]
         RW[Retry Worker]
     end
+    
+    CS <-->|Subscribe/Publish| EB[EventBus / Kafka]
+    SW <-->|Subscribe/Publish| EB
+    RW <-->|Subscribe/Publish| EB
+    
+    CS -->|CRUD| DB[(MongoDB)]
+    SW -->|Summarize| LLM[Gemini API]
+```
 
-    Agg --> EB
-    SW --> EB
-    RW --> EB
+### 디렉토리 구조
 
-    Agg --> DB[(MongoDB)]
-    SW --> LLM[Gemini API]
+```
+tech-letter/
+├── cmd/
+│   ├── api/              # API Gateway (Go)
+│   ├── retryworker/      # Retry Worker (Go)
+│   └── internal/         # 내부 공통 패키지 (Go)
+├── content_service/      # Content Service (Python FastAPI)
+│   └── app/
+│       ├── api/          # REST API 엔드포인트
+│       ├── services/     # 비즈니스 로직
+│       └── repositories/ # MongoDB 접근 레이어
+├── summary_worker/       # AI 요약 워커 (Python)
+│   └── app/
+│       ├── services/     # 요약 파이프라인 로직
+│       └── main.py       # 이벤트 구독자
+├── common/               # 공통 모델 및 유틸리티
+│   └── common/
+│       ├── models/       # 도메인 모델 (Post, Blog 등)
+│       ├── events/       # 이벤트 정의
+│       └── eventbus/     # EventBus 추상화 레이어
+└── docs/                 # Swagger 문서
 ```
 
 ### 이벤트 플로우
 
-1. **포스트 수집 (Aggregate)**  
+1. **포스트 수집 (Content Service)**  
    RSS 피드에서 새 포스트 발견 → MongoDB에 새 포스트 저장  
    `status.ai_summarized=false` 로 초기화 후 `PostCreated` 이벤트 발행 (`tech-letter.post.events` 토픽)
 
@@ -61,15 +92,15 @@ flowchart LR
    - HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → Gemini 요약 수행
    - 렌더링된 HTML, 썸네일 URL, 요약 결과를 포함한 `PostSummarized` 이벤트 발행 (`tech-letter.post.events`)
 
-3. **결과 DB 반영 (Aggregate)**
+3. **결과 DB 반영 (Content Service)**
 
    - `PostSummarized` 이벤트를 구독
-   - `posts.aisummary`, `posts.thumbnail_url`, `posts.rendered_html` 업데이트
+   - `posts.aisummary`, `posts.thumbnail_url`, `posts.rendered_html`, `posts.plain_text` 업데이트
    - `status.ai_summarized = true` 로 상태 플래그 갱신
 
 4. **실패 시 재시도 (EventBus + Retry Worker)**
 
-   - Processor 또는 Aggregate에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.events.retry.N`)으로 이벤트를 이동
+   - Summary Worker 또는 Content Service에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.events.retry.N`)으로 이벤트를 이동
    - Retry Worker가 지연 시간이 지난 메시지를 다시 기본 토픽(`tech-letter.post.events`)으로 재주입
    - 최대 재시도 횟수를 초과하면 DLQ 토픽(`tech-letter.post.events.dlq`)으로 이동하여 후속 수동 처리
 
@@ -77,24 +108,24 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant Agg as Aggregate
-    participant SW as Summary Worker (Python)
+    participant CS as Content Service
+    participant SW as Summary Worker
     participant RW as RetryWorker
     participant EB as EventBus/Kafka
     participant DB as MongoDB
 
-    Agg->>DB: Insert new Post (status.ai_summarized=false)
-    Agg->>EB: PostCreated (tech-letter.post.events)
+    CS->>DB: Insert new Post (status.ai_summarized=false)
+    CS->>EB: PostCreated (tech-letter.post.events)
     EB->>SW: Deliver PostCreated
     SW->>SW: RenderHTML + ParseText + ParseThumbnail + Summarize
     SW->>EB: PostSummarized (tech-letter.post.events)
-    EB->>Agg: Deliver PostSummarized
-    Agg->>DB: Update aisummary + rendered_html + thumbnail_url + status.ai_summarized=true
+    EB->>CS: Deliver PostSummarized
+    CS->>DB: Update aisummary + rendered_html + thumbnail_url + plain_text + status.ai_summarized=true
 
-    alt Handler error (Summary Worker or Aggregate)
+    alt Handler error (Summary Worker or Content Service)
         EB->>EB: Publish to retry topic (tech-letter.post.events.retry.N)
         RW->>EB: After delay, re-publish to base topic
-        EB->>SW: or Agg: Redeliver event
+        EB->>SW: or CS: Redeliver event
     end
 ```
 
@@ -127,6 +158,7 @@ docker-compose up -d
 
 ## 서비스 포트
 
-- API 서버: 8080
-- Kafka UI: 8081
+- **API Gateway**: 8080 (클라이언트용 REST API)
+- **Content Service**: 8001 (내부 서비스 API)
 - Kafka: 9092
+- Kafka UI: 8081
