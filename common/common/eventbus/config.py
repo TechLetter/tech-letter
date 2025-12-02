@@ -40,3 +40,29 @@ def get_message_max_bytes() -> int | None:
         return None
 
     return value
+
+
+def get_max_poll_interval_ms() -> int | None:
+    """Kafka consumer에서 사용할 max.poll.interval.ms 값을 반환한다.
+
+    - 환경 변수 KAFKA_MAX_POLL_INTERVAL_MS 가 비어있으면 None 을 반환한다.
+    - 0 이하 값은 라이브러리 기본값을 사용하겠다는 의미로 간주하고 None 을 반환한다.
+    - 정수가 아닌 값이 들어오면 명시적인 에러를 발생시켜 조기에 설정 문제를 발견한다.
+    """
+
+    raw_value = os.getenv("KAFKA_MAX_POLL_INTERVAL_MS", "").strip()
+    if not raw_value:
+        return None
+
+    try:
+        value = int(raw_value)
+    except ValueError as exc:  # noqa: TRY003
+        raise RuntimeError(
+            "KAFKA_MAX_POLL_INTERVAL_MS must be an integer value, got: "
+            f"{raw_value!r}",
+        ) from exc
+
+    if value <= 0:
+        return None
+
+    return value

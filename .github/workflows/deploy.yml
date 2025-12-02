@@ -23,3 +23,5 @@ jobs:
           touch .env
           docker-compose down
           docker-compose up -d --build
+          sleep 10
+          docker system prune

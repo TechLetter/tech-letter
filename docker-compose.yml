@@ -41,6 +41,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-content-service
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+      KAFKA_MAX_POLL_INTERVAL_MS: 900000 # 15분
       CONTENT_SERVICE_PORT: 8001
       LOG_LEVEL: INFO
     networks:
@@ -90,6 +91,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
       KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
+      KAFKA_MAX_POLL_INTERVAL_MS: 1800000 # 30분
       LOG_LEVEL: INFO
     networks:
       - tech-letter_default
