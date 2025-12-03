@@ -17,18 +17,18 @@ RUN apt-get update \
 # uv 설치 (빠른 Python 패키지 매니저)
 RUN pip install --no-cache-dir uv
 
-# 의존성 파일만 먼저 복사 (레이어 캐싱 최적화)
+# 의존성 파일 복사
 COPY pyproject.toml uv.lock ./
 COPY common/pyproject.toml ./common/pyproject.toml
 COPY content_service/pyproject.toml ./content_service/pyproject.toml
 
+# 소스 코드 복사 (local 패키지 설치를 위해 필요)
+COPY common ./common
+COPY content_service ./content_service
+
 # 의존성 설치 (BuildKit 캐시 마운트 사용)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system ./common ./content_service
-
-# 소스 코드 복사 (변경이 빈번한 부분을 마지막에)
-COPY common ./common
-COPY content_service ./content_service
 
 ENV TZ=Asia/Seoul \
     PYTHONUNBUFFERED=1
