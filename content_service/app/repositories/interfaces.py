@@ -46,6 +46,24 @@ class PostRepositoryInterface(Protocol):
     ) -> None:  # pragma: no cover - Protocol
         ...
 
+    def get_category_stats(
+        self, blog_id: str | None, tags: list[str]
+    ) -> dict[str, int]:  # pragma: no cover - Protocol
+        """카테고리별 포스트 개수를 반환한다. (대소문자 무시)"""
+        ...
+
+    def get_tag_stats(
+        self, blog_id: str | None, categories: list[str]
+    ) -> dict[str, int]:  # pragma: no cover - Protocol
+        """태그별 포스트 개수를 반환한다. (대소문자 무시)"""
+        ...
+
+    def get_blog_stats(
+        self, categories: list[str], tags: list[str]
+    ) -> list[tuple[str, str, int]]:  # pragma: no cover - Protocol
+        """블로그별 포스트 개수를 반환한다. (blog_id, blog_name, count)"""
+        ...
+
 
 class BlogRepositoryInterface(Protocol):
     """BlogRepository가 따라야 할 최소한의 계약."""
