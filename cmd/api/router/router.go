@@ -44,6 +44,11 @@ func New() *gin.Engine {
 
 		blogsSvc := services.NewBlogService(contentClient)
 		api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))
+
+		filtersSvc := services.NewFilterService(contentClient)
+		api.GET("/filters/categories", handlers.GetCategoryFiltersHandler(filtersSvc))
+		api.GET("/filters/tags", handlers.GetTagFiltersHandler(filtersSvc))
+		api.GET("/filters/blogs", handlers.GetBlogFiltersHandler(filtersSvc))
 	}
 
 	return r

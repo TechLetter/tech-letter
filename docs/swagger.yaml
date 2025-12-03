@@ -9,6 +9,36 @@ definitions:
       url:
         type: string
     type: object
+  dto.BlogFilterDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.BlogFilterItem'
+        type: array
+    type: object
+  dto.BlogFilterItem:
+    properties:
+      count:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  dto.CategoryFilterDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.FilterItem'
+        type: array
+    type: object
+  dto.FilterItem:
+    properties:
+      count:
+        type: integer
+      name:
+        type: string
+    type: object
   dto.PaginationBlogDTO:
     properties:
       data:
@@ -64,6 +94,13 @@ definitions:
       view_count:
         type: integer
     type: object
+  dto.TagFilterDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.FilterItem'
+        type: array
+    type: object
 info:
   contact: {}
   description: API for browsing summarized tech blog posts
@@ -92,6 +129,84 @@ paths:
       summary: List blogs
       tags:
       - blogs
+  /filters/blogs:
+    get:
+      description: Get blog list with post counts for filtering
+      parameters:
+      - collectionFormat: csv
+        description: Categories (OR match)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      - collectionFormat: csv
+        description: Tags (OR match)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.BlogFilterDTO'
+      summary: Get blog filters
+      tags:
+      - filters
+  /filters/categories:
+    get:
+      description: Get category list with post counts for filtering
+      parameters:
+      - description: Blog ID
+        in: query
+        name: blog_id
+        type: string
+      - collectionFormat: csv
+        description: Tags (OR match)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CategoryFilterDTO'
+      summary: Get category filters
+      tags:
+      - filters
+  /filters/tags:
+    get:
+      description: Get tag list with post counts for filtering
+      parameters:
+      - description: Blog ID
+        in: query
+        name: blog_id
+        type: string
+      - collectionFormat: csv
+        description: Categories (OR match)
+        in: query
+        items:
+          type: string
+        name: categories
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TagFilterDTO'
+      summary: Get tag filters
+      tags:
+      - filters
   /posts:
     get:
       description: List summarized posts with filters and pagination
