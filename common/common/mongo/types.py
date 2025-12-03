@@ -54,3 +54,12 @@ class BaseDocument(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     created_at: MongoDateTime
     updated_at: MongoDateTime
+
+    def to_mongo_record(self) -> dict[str, Any]:
+        """MongoDB 저장에 사용할 표준 레코드(dict) 직렬화.
+
+        - by_alias=True 로 id -> _id 등의 Mongo 필드 이름과 일치시킨다.
+        - exclude_none=True 로 _id=None 같은 필드를 제거해 Mongo가 ObjectId 를 생성하도록 한다.
+        """
+
+        return self.model_dump(by_alias=True, exclude_none=True)

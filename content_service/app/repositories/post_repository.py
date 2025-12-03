@@ -29,10 +29,8 @@ class PostRepository(PostRepositoryInterface):
     def _to_document(post: Post) -> dict:
         doc = PostDocument.from_domain(post)
 
-        # by_alias=True 를 사용해 id -> _id 등 Mongo 필드 이름과 일치시킨다.
-        # exclude_none=True 로 _id=None 과 같은 필드는 제거하여 MongoDB 가
-        # 자동으로 ObjectId 를 생성하도록 한다.
-        return doc.model_dump(by_alias=True, exclude_none=True)
+        # BaseDocument.to_mongo_record() 를 통해 Mongo-safe 직렬화를 일관되게 사용한다.
+        return doc.to_mongo_record()
 
     @staticmethod
     def _from_document(doc: dict) -> Post:
@@ -68,7 +66,10 @@ class PostRepository(PostRepositoryInterface):
 
         doc = self._to_document(post)
         result = self._col.insert_one(doc)
-        return str(result.inserted_id)
+        inserted_id = result.inserted_id
+        if inserted_id is None:
+            raise RuntimeError("insert failed: inserted_id is None (possible null _id)")
+        return str(inserted_id)
 
     def find_by_link(self, link: str) -> Post | None:
         doc = self._col.find_one({"link": link})
