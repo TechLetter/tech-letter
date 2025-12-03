@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from typing import Iterable
 
@@ -42,13 +42,12 @@ class PostRepository(PostRepositoryInterface):
             updated_at=document.updated_at,
             status=document.status,
             view_count=document.view_count,
-            blog_id=from_object_id(document.blog_id) or "",
+            blog_id=str(document.blog_id),
             blog_name=document.blog_name,
             title=document.title,
             link=document.link,
             published_at=document.published_at,
             thumbnail_url=document.thumbnail_url,
-            rendered_html=document.rendered_html,
             aisummary=document.aisummary,
         )
 
@@ -62,9 +61,7 @@ class PostRepository(PostRepositoryInterface):
     def insert(self, post: Post) -> str:
         """새 포스트를 삽입하고 생성된 ID 를 반환한다."""
 
-        now = datetime.utcnow()
-        if post.created_at is None:
-            post.created_at = now
+        now = datetime.now(timezone.utc)
         post.updated_at = now
 
         doc = self._to_document(post)
@@ -171,12 +168,26 @@ class PostRepository(PostRepositoryInterface):
     def increment_view_count(self, id_value: str) -> bool:
         result = self._col.update_one(
             {"_id": to_object_id(id_value)},
-            {"$inc": {"view_count": 1}, "$set": {"updated_at": datetime.utcnow()}},
+            {
+                "$inc": {"view_count": 1},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+            },
         )
         return result.matched_count > 0
 
     def update_fields(self, id_value: str, updates: dict) -> None:
-        set_doc = {"updated_at": datetime.utcnow()}
+        allowed_keys = {
+            "rendered_html",
+            "plain_text",
+            "thumbnail_url",
+            "aisummary",
+            "status",
+        }
+        invalid_keys = [key for key in updates.keys() if key not in allowed_keys]
+        if invalid_keys:
+            raise ValueError(f"unsupported update fields: {invalid_keys}")
+
+        set_doc = {"updated_at": datetime.now(timezone.utc)}
         set_doc.update(updates)
         self._col.update_one(
             {"_id": to_object_id(id_value)},
