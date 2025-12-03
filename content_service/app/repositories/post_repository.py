@@ -196,3 +196,128 @@ class PostRepository(PostRepositoryInterface):
             {"_id": to_object_id(id_value)},
             {"$set": set_doc},
         )
+
+    def get_category_stats(
+        self, blog_id: str | None, tags: list[str]
+    ) -> dict[str, int]:
+        """카테고리별 포스트 개수를 반환한다. (대소문자 무시)"""
+        filter_doc: dict = {}
+
+        if blog_id:
+            filter_doc["blog_id"] = to_object_id(blog_id)
+
+        if tags:
+            tags_regex = [
+                re.compile(f"^{tag.strip()}$", re.IGNORECASE)
+                for tag in tags
+                if tag.strip()
+            ]
+            if tags_regex:
+                filter_doc["aisummary.tags"] = {"$in": tags_regex}
+
+        pipeline = [
+            {"$match": filter_doc},
+            {"$unwind": "$aisummary.categories"},
+            {
+                "$group": {
+                    "_id": {"$toLower": "$aisummary.categories"},
+                    "original": {"$first": "$aisummary.categories"},
+                    "count": {"$sum": 1},
+                }
+            },
+        ]
+
+        result = {}
+        for doc in self._col.aggregate(pipeline):
+            result[doc["original"]] = doc["count"]
+
+        return result
+
+    def get_tag_stats(
+        self, blog_id: str | None, categories: list[str]
+    ) -> dict[str, int]:
+        """태그별 포스트 개수를 반환한다. (대소문자 무시)"""
+        filter_doc: dict = {}
+
+        if blog_id:
+            filter_doc["blog_id"] = to_object_id(blog_id)
+
+        if categories:
+            cats_regex = [
+                re.compile(f"^{cat.strip()}$", re.IGNORECASE)
+                for cat in categories
+                if cat.strip()
+            ]
+            if cats_regex:
+                filter_doc["aisummary.categories"] = {"$in": cats_regex}
+
+        pipeline = [
+            {"$match": filter_doc},
+            {"$unwind": "$aisummary.tags"},
+            {
+                "$group": {
+                    "_id": {"$toLower": "$aisummary.tags"},
+                    "original": {"$first": "$aisummary.tags"},
+                    "count": {"$sum": 1},
+                }
+            },
+        ]
+
+        result = {}
+        for doc in self._col.aggregate(pipeline):
+            result[doc["original"]] = doc["count"]
+
+        return result
+
+    def get_blog_stats(
+        self, categories: list[str], tags: list[str]
+    ) -> list[tuple[str, str, int]]:
+        """블로그별 포스트 개수를 반환한다. (blog_id, blog_name, count)"""
+        filter_doc: dict = {}
+
+        cats_regex = []
+        tags_regex = []
+
+        if categories:
+            cats_regex = [
+                re.compile(f"^{cat.strip()}$", re.IGNORECASE)
+                for cat in categories
+                if cat.strip()
+            ]
+
+        if tags:
+            tags_regex = [
+                re.compile(f"^{tag.strip()}$", re.IGNORECASE)
+                for tag in tags
+                if tag.strip()
+            ]
+
+        if cats_regex and tags_regex:
+            filter_doc["$or"] = [
+                {"aisummary.categories": {"$in": cats_regex}},
+                {"aisummary.tags": {"$in": tags_regex}},
+            ]
+        elif cats_regex:
+            filter_doc["aisummary.categories"] = {"$in": cats_regex}
+        elif tags_regex:
+            filter_doc["aisummary.tags"] = {"$in": tags_regex}
+
+        pipeline = [
+            {"$match": filter_doc},
+            {
+                "$group": {
+                    "_id": "$blog_id",
+                    "blog_name": {"$first": "$blog_name"},
+                    "count": {"$sum": 1},
+                }
+            },
+        ]
+
+        result = []
+        for doc in self._col.aggregate(pipeline):
+            blog_id = from_object_id(doc["_id"])
+            blog_name = doc["blog_name"]
+            count = doc["count"]
+            result.append((blog_id, blog_name, count))
+
+        return result

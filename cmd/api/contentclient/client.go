@@ -277,3 +277,152 @@ func (c *Client) Health(ctx context.Context) error {
 	}
 	return nil
 }
+
+// -------------------- Filters --------------------
+
+type FilterParams struct {
+	BlogID     string
+	Categories []string
+	Tags       []string
+}
+
+type FilterItem struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type CategoryFilterResponse struct {
+	Items []FilterItem `json:"items"`
+}
+
+type TagFilterResponse struct {
+	Items []FilterItem `json:"items"`
+}
+
+type BlogFilterItem struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type BlogFilterResponse struct {
+	Items []BlogFilterItem `json:"items"`
+}
+
+// GetCategoryFilters retrieves category filter statistics from content service
+func (c *Client) GetCategoryFilters(ctx context.Context, params FilterParams) (CategoryFilterResponse, error) {
+	u, err := url.Parse(c.baseURL + "/api/v1/filters/categories")
+	if err != nil {
+		return CategoryFilterResponse{}, err
+	}
+
+	q := u.Query()
+	if params.BlogID != "" {
+		q.Set("blog_id", params.BlogID)
+	}
+	for _, tag := range params.Tags {
+		q.Add("tags", tag)
+	}
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return CategoryFilterResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return CategoryFilterResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return CategoryFilterResponse{}, fmt.Errorf("content-service GetCategoryFilters: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out CategoryFilterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return CategoryFilterResponse{}, err
+	}
+	return out, nil
+}
+
+// GetTagFilters retrieves tag filter statistics from content service
+func (c *Client) GetTagFilters(ctx context.Context, params FilterParams) (TagFilterResponse, error) {
+	u, err := url.Parse(c.baseURL + "/api/v1/filters/tags")
+	if err != nil {
+		return TagFilterResponse{}, err
+	}
+
+	q := u.Query()
+	if params.BlogID != "" {
+		q.Set("blog_id", params.BlogID)
+	}
+	for _, cat := range params.Categories {
+		q.Add("categories", cat)
+	}
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return TagFilterResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return TagFilterResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return TagFilterResponse{}, fmt.Errorf("content-service GetTagFilters: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out TagFilterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return TagFilterResponse{}, err
+	}
+	return out, nil
+}
+
+// GetBlogFilters retrieves blog filter statistics from content service
+func (c *Client) GetBlogFilters(ctx context.Context, params FilterParams) (BlogFilterResponse, error) {
+	u, err := url.Parse(c.baseURL + "/api/v1/filters/blogs")
+	if err != nil {
+		return BlogFilterResponse{}, err
+	}
+
+	q := u.Query()
+	for _, cat := range params.Categories {
+		q.Add("categories", cat)
+	}
+	for _, tag := range params.Tags {
+		q.Add("tags", tag)
+	}
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return BlogFilterResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return BlogFilterResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return BlogFilterResponse{}, fmt.Errorf("content-service GetBlogFilters: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out BlogFilterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return BlogFilterResponse{}, err
+	}
+	return out, nil
+}
+
