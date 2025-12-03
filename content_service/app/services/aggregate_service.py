@@ -186,7 +186,6 @@ class AggregateService:
             link=item.link,
             published_at=published_at,
             thumbnail_url="",
-            rendered_html="",
             aisummary=empty_summary,
         )
 

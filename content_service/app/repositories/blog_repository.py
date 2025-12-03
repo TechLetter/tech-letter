@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pymongo.database import Database
 
@@ -23,9 +23,7 @@ class BlogRepository(BlogRepositoryInterface):
         self._col = database["blogs"]
 
     def upsert_by_rss_url(self, blog: Blog) -> str:
-        now = datetime.utcnow()
-        if blog.created_at is None:
-            blog.created_at = now
+        now = datetime.now(timezone.utc)
         blog.updated_at = now
 
         # 도메인 -> Document 변환을 통해 Mongo 스키마를 일관되게 유지한다.
