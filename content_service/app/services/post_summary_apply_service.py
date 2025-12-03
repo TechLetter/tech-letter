@@ -51,17 +51,17 @@ class PostSummaryApplyService:
         summary = AISummary(
             categories=event.categories,
             tags=event.tags,
-            summary=event.summary,
-            model_name=event.model_name,
+            summary=event.summary or "",
+            model_name=event.model_name or "",
             generated_at=generated_at,
         )
 
         status = StatusFlags(ai_summarized=True)
 
         updates = {
-            "rendered_html": event.rendered_html,
-            "plain_text": event.plain_text,
-            "thumbnail_url": event.thumbnail_url,
+            "rendered_html": event.rendered_html or "",
+            "plain_text": event.plain_text or "",
+            "thumbnail_url": event.thumbnail_url or "",
             "aisummary": summary.model_dump(by_alias=True),
             "status": status.model_dump(by_alias=True),
         }

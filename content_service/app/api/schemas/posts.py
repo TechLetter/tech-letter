@@ -22,7 +22,7 @@ class PostResponse(BaseModel):
     title: str
     link: str
     published_at: UtcDateTime
-    thumbnail_url: str
+    thumbnail_url: str | None = None
     aisummary: AISummary
 
     @classmethod
@@ -40,10 +40,10 @@ class ListPostsResponse(BaseModel):
 class PostPlainTextResponse(BaseModel):
     """포스트 plain_text 전용 DTO."""
 
-    plain_text: str
+    plain_text: str | None = None
 
 
 class PostHtmlResponse(BaseModel):
     """포스트 rendered_html 전용 DTO."""
 
-    rendered_html: str
+    rendered_html: str | None = None
