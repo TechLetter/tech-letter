@@ -115,3 +115,72 @@ func ListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
 		c.JSON(http.StatusOK, resp)
 	}
 }
+
+// GetCategoryFiltersHandler godoc
+// @Summary      Get category filters
+// @Description  Get category list with post counts for filtering
+// @Tags         filters
+// @Param        blog_id  query  string    false  "Blog ID"
+// @Param        tags     query  []string  false  "Tags (OR match)"
+// @Produce      json
+// @Success      200  {object}  dto.CategoryFilterDTO
+// @Router       /filters/categories [get]
+func GetCategoryFiltersHandler(svc *services.FilterService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		blogID := c.Query("blog_id")
+		tags := c.QueryArray("tags")
+
+		resp, err := svc.GetCategoryFilters(c.Request.Context(), blogID, tags)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// GetTagFiltersHandler godoc
+// @Summary      Get tag filters
+// @Description  Get tag list with post counts for filtering
+// @Tags         filters
+// @Param        blog_id     query  string    false  "Blog ID"
+// @Param        categories  query  []string  false  "Categories (OR match)"
+// @Produce      json
+// @Success      200  {object}  dto.TagFilterDTO
+// @Router       /filters/tags [get]
+func GetTagFiltersHandler(svc *services.FilterService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		blogID := c.Query("blog_id")
+		categories := c.QueryArray("categories")
+
+		resp, err := svc.GetTagFilters(c.Request.Context(), blogID, categories)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// GetBlogFiltersHandler godoc
+// @Summary      Get blog filters
+// @Description  Get blog list with post counts for filtering
+// @Tags         filters
+// @Param        categories  query  []string  false  "Categories (OR match)"
+// @Param        tags        query  []string  false  "Tags (OR match)"
+// @Produce      json
+// @Success      200  {object}  dto.BlogFilterDTO
+// @Router       /filters/blogs [get]
+func GetBlogFiltersHandler(svc *services.FilterService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		categories := c.QueryArray("categories")
+		tags := c.QueryArray("tags")
+
+		resp, err := svc.GetBlogFilters(c.Request.Context(), categories, tags)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
