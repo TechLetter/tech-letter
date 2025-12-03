@@ -28,9 +28,8 @@ class BlogRepository(BlogRepositoryInterface):
 
         # 도메인 -> Document 변환을 통해 Mongo 스키마를 일관되게 유지한다.
         doc = BlogDocument.from_domain(blog)
-        # exclude_none=True 로 _id=None 과 같은 필드는 제거하여 Mongo 측에
-        # 중간 payload 로라도 `_id: null` 이 남지 않도록 한다.
-        payload = doc.model_dump(by_alias=True, exclude_none=True)
+        # BaseDocument.to_mongo_record() 를 통해 Mongo-safe 직렬화를 일관되게 사용한다.
+        payload = doc.to_mongo_record()
 
         filter_doc = {"rss_url": payload["rss_url"]}
         update_doc = {
