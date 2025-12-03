@@ -1,18 +1,14 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
 
-from ..types.datetime import UtcDateTime
-from ..types.objectid import ObjectIdStr
+from pydantic import BaseModel, Field
 
 
 class Blog(BaseModel):
-    """기술 블로그 소스 도메인 모델.
+    """기술 블로그 소스 도메인 모델"""
 
-    Go `models.Blog` 와 동일한 구조를 유지한다.
-    """
-
-    id: ObjectIdStr | None = Field(default=None, alias="id")
-    created_at: UtcDateTime = Field(alias="created_at")
-    updated_at: UtcDateTime = Field(alias="updated_at")
+    id: str | None = Field(default=None, alias="id")
+    created_at: datetime = Field(alias="created_at")
+    updated_at: datetime = Field(alias="updated_at")
     name: str
     url: str
     rss_url: str = Field(alias="rss_url")
@@ -20,10 +16,7 @@ class Blog(BaseModel):
 
 
 class ListBlogsFilter(BaseModel):
-    """블로그 리스트 조회 옵션.
-
-    현재는 페이지네이션 정보만 필요하며, Go `ListBlogsOptions` 와 동일하다.
-    """
+    """블로그 리스트 조회 옵션"""
 
     page: int = 1
     page_size: int = 20

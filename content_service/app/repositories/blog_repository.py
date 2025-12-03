@@ -4,8 +4,10 @@ from datetime import datetime
 
 from pymongo.database import Database
 
+from app.repositories.documents.blog_document import BlogDocument
 from app.repositories.interfaces import BlogRepositoryInterface
 from common.models.blog import Blog, ListBlogsFilter
+from common.mongo.types import from_object_id
 
 
 class BlogRepository(BlogRepositoryInterface):
@@ -26,20 +28,23 @@ class BlogRepository(BlogRepositoryInterface):
             blog.created_at = now
         blog.updated_at = now
 
-        filter_doc = {"rss_url": blog.rss_url}
+        # 도메인 -> Document 변환을 통해 Mongo 스키마를 일관되게 유지한다.
+        doc = BlogDocument.from_domain(blog)
+        payload = doc.model_dump(by_alias=True)
+
+        filter_doc = {"rss_url": payload["rss_url"]}
         update_doc = {
-            "$setOnInsert": {"created_at": blog.created_at},
+            "$setOnInsert": {"created_at": payload["created_at"]},
             "$set": {
-                "updated_at": blog.updated_at,
-                "name": blog.name,
-                "url": blog.url,
-                "rss_url": blog.rss_url,
-                "blog_type": blog.blog_type,
+                "updated_at": payload["updated_at"],
+                "name": payload["name"],
+                "url": payload["url"],
+                "rss_url": payload["rss_url"],
+                "blog_type": payload["blog_type"],
             },
         }
 
         result = self._col.update_one(filter_doc, update_doc, upsert=True)
-        # upsert 된 문서의 ID 가 있으면 반환하고, 없으면 기존 문서의 ID 를 다시 조회한다.
         if result.upserted_id is not None:
             return str(result.upserted_id)
 
@@ -51,14 +56,20 @@ class BlogRepository(BlogRepositoryInterface):
         return str(existing["_id"])
 
     def get_by_rss_url(self, rss_url: str) -> Blog | None:
-        doc = self._col.find_one({"rss_url": rss_url})
-        if not doc:
+        raw = self._col.find_one({"rss_url": rss_url})
+        if not raw:
             return None
-        data = dict(doc)
-        _id = data.pop("_id", None)
-        if _id is not None:
-            data["id"] = str(_id)
-        return Blog.model_validate(data)
+
+        doc = BlogDocument.model_validate(raw)
+        return Blog(
+            id=from_object_id(doc.id),
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+            name=doc.name,
+            url=doc.url,
+            rss_url=doc.rss_url,
+            blog_type=doc.blog_type,
+        )
 
     def list(self, flt: ListBlogsFilter) -> tuple[list[Blog], int]:
         page = flt.page if flt.page > 0 else 1
@@ -79,11 +90,18 @@ class BlogRepository(BlogRepositoryInterface):
         )
 
         items: list[Blog] = []
-        for doc in cursor:
-            data = dict(doc)
-            _id = data.pop("_id", None)
-            if _id is not None:
-                data["id"] = str(_id)
-            items.append(Blog.model_validate(data))
+        for raw in cursor:
+            doc = BlogDocument.model_validate(raw)
+            items.append(
+                Blog(
+                    id=from_object_id(doc.id),
+                    created_at=doc.created_at,
+                    updated_at=doc.updated_at,
+                    name=doc.name,
+                    url=doc.url,
+                    rss_url=doc.rss_url,
+                    blog_type=doc.blog_type,
+                )
+            )
 
         return items, total

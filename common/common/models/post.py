@@ -1,7 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
 
-from ..types.datetime import UtcDateTime
-from ..types.objectid import ObjectIdStr
+from pydantic import BaseModel, Field
 
 
 class StatusFlags(BaseModel):
@@ -17,25 +16,22 @@ class AISummary(BaseModel):
     tags: list[str] = Field(default_factory=list)
     summary: str = ""
     model_name: str = Field(default="", alias="model_name")
-    generated_at: UtcDateTime = Field(alias="generated_at")
+    generated_at: datetime = Field(alias="generated_at")
 
 
 class Post(BaseModel):
-    """
-    게시글 도메인 모델 (API/이벤트/저장소에서 공통 사용).
-    MongoDB `_id` 는 id(str) 로 노출하며, 저장소 레이어에서 ObjectId 로 변환한다.
-    """
+    """게시글 도메인 모델 (API/이벤트/저장소에서 공통 사용)"""
 
-    id: ObjectIdStr | None = Field(default=None, alias="id")
-    created_at: UtcDateTime = Field(alias="created_at")
-    updated_at: UtcDateTime = Field(alias="updated_at")
+    id: str | None = Field(default=None, alias="id")
+    created_at: datetime = Field(alias="created_at")
+    updated_at: datetime = Field(alias="updated_at")
     status: StatusFlags = Field(default_factory=StatusFlags)
     view_count: int = Field(default=0, alias="view_count")
-    blog_id: ObjectIdStr = Field(alias="blog_id")
+    blog_id: str = Field(alias="blog_id")
     blog_name: str = Field(alias="blog_name")
     title: str
     link: str
-    published_at: UtcDateTime = Field(alias="published_at")
+    published_at: datetime = Field(alias="published_at")
     thumbnail_url: str = Field(default="", alias="thumbnail_url")
     rendered_html: str = Field(default="", alias="rendered_html")
     aisummary: AISummary

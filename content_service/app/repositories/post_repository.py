@@ -4,11 +4,12 @@ from datetime import datetime
 import re
 from typing import Iterable
 
-from bson import ObjectId
 from pymongo.database import Database
 
+from app.repositories.documents.post_document import PostDocument
 from app.repositories.interfaces import PostRepositoryInterface
 from common.models.post import ListPostsFilter, Post
+from common.mongo.types import from_object_id, to_object_id
 
 
 class PostRepository(PostRepositoryInterface):
@@ -26,20 +27,30 @@ class PostRepository(PostRepositoryInterface):
     # --- helpers -----------------------------------------------------------------
     @staticmethod
     def _to_document(post: Post) -> dict:
-        data = post.model_dump(by_alias=True)
-        doc = dict(data)
-        id_value = doc.pop("id", None)
-        if id_value:
-            doc["_id"] = ObjectId(id_value)
-        return doc
+        doc = PostDocument.from_domain(post)
+
+        # by_alias=True 를 사용해 id -> _id 등 Mongo 필드 이름과 일치시킨다.
+        return doc.model_dump(by_alias=True)
 
     @staticmethod
     def _from_document(doc: dict) -> Post:
-        data = dict(doc)
-        _id = data.pop("_id", None)
-        if _id is not None:
-            data["id"] = str(_id)
-        return Post.model_validate(data)
+        document = PostDocument.model_validate(doc)
+
+        return Post(
+            id=from_object_id(document.id),
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            status=document.status,
+            view_count=document.view_count,
+            blog_id=from_object_id(document.blog_id) or "",
+            blog_name=document.blog_name,
+            title=document.title,
+            link=document.link,
+            published_at=document.published_at,
+            thumbnail_url=document.thumbnail_url,
+            rendered_html=document.rendered_html,
+            aisummary=document.aisummary,
+        )
 
     # --- commands ----------------------------------------------------------------
     def is_exist_by_link(self, link: str) -> bool:
@@ -94,7 +105,7 @@ class PostRepository(PostRepositoryInterface):
             filter_doc["aisummary.tags"] = {"$in": tags_regex}
 
         if flt.blog_id:
-            filter_doc["blog_id"] = ObjectId(flt.blog_id)
+            filter_doc["blog_id"] = to_object_id(flt.blog_id)
         if flt.blog_name:
             filter_doc["blog_name"] = {"$regex": f"^{flt.blog_name}$", "$options": "i"}
 
@@ -126,7 +137,7 @@ class PostRepository(PostRepositoryInterface):
 
     def find_by_id(self, id_value: str) -> Post | None:
         doc = self._col.find_one(
-            {"_id": ObjectId(id_value)},
+            {"_id": to_object_id(id_value)},
             {"rendered_html": 0, "plain_text": 0},
         )
         if not doc:
@@ -135,7 +146,7 @@ class PostRepository(PostRepositoryInterface):
 
     def get_plain_text(self, id_value: str) -> str | None:
         doc = self._col.find_one(
-            {"_id": ObjectId(id_value)},
+            {"_id": to_object_id(id_value)},
             {"plain_text": 1},
         )
         if not doc:
@@ -147,7 +158,7 @@ class PostRepository(PostRepositoryInterface):
 
     def get_rendered_html(self, id_value: str) -> str | None:
         doc = self._col.find_one(
-            {"_id": ObjectId(id_value)},
+            {"_id": to_object_id(id_value)},
             {"rendered_html": 1},
         )
         if not doc:
@@ -159,7 +170,7 @@ class PostRepository(PostRepositoryInterface):
 
     def increment_view_count(self, id_value: str) -> bool:
         result = self._col.update_one(
-            {"_id": ObjectId(id_value)},
+            {"_id": to_object_id(id_value)},
             {"$inc": {"view_count": 1}, "$set": {"updated_at": datetime.utcnow()}},
         )
         return result.matched_count > 0
@@ -168,6 +179,6 @@ class PostRepository(PostRepositoryInterface):
         set_doc = {"updated_at": datetime.utcnow()}
         set_doc.update(updates)
         self._col.update_one(
-            {"_id": ObjectId(id_value)},
+            {"_id": to_object_id(id_value)},
             {"$set": set_doc},
         )
