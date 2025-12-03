@@ -47,13 +47,13 @@ class PostSummarizedEvent:
     version: str
     post_id: str
     link: str
-    rendered_html: str
-    plain_text: str
-    thumbnail_url: str
     categories: list[str]
     tags: list[str]
     summary: str
     model_name: str
+    rendered_html: str
+    plain_text: str
+    thumbnail_url: str
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
@@ -66,8 +66,8 @@ class PostSummarizedEvent:
             post_id=str(data["post_id"]),
             link=str(data["link"]),
             rendered_html=str(data["rendered_html"]),
-            plain_text=str(data.get("plain_text", "")),
-            thumbnail_url=str(data.get("thumbnail_url", "")),
+            plain_text=str(data["plain_text"]),
+            thumbnail_url=str(data["thumbnail_url"]),
             categories=list(data.get("categories", [])),
             tags=list(data.get("tags", [])),
             summary=str(data["summary"]),

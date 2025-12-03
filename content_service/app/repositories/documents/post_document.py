@@ -16,8 +16,9 @@ class PostDocument(BaseDocument):
     title: str
     link: str
     published_at: datetime
-    thumbnail_url: str
-    rendered_html: str
+    thumbnail_url: str | None = None
+    rendered_html: str | None = None
+    plain_text: str | None = None
     aisummary: AISummary
 
     @classmethod

@@ -14,8 +14,8 @@ class AISummary(BaseModel):
 
     categories: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
-    summary: str = ""
-    model_name: str = Field(default="", alias="model_name")
+    summary: str | None = None
+    model_name: str | None = Field(default=None, alias="model_name")
     generated_at: datetime = Field(alias="generated_at")
 
 
@@ -32,8 +32,7 @@ class Post(BaseModel):
     title: str
     link: str
     published_at: datetime = Field(alias="published_at")
-    thumbnail_url: str = Field(default="", alias="thumbnail_url")
-    rendered_html: str = Field(default="", alias="rendered_html")
+    thumbnail_url: str | None = Field(default=None, alias="thumbnail_url")
     aisummary: AISummary
 
 
