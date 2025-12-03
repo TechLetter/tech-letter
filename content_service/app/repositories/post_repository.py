@@ -30,7 +30,9 @@ class PostRepository(PostRepositoryInterface):
         doc = PostDocument.from_domain(post)
 
         # by_alias=True 를 사용해 id -> _id 등 Mongo 필드 이름과 일치시킨다.
-        return doc.model_dump(by_alias=True)
+        # exclude_none=True 로 _id=None 과 같은 필드는 제거하여 MongoDB 가
+        # 자동으로 ObjectId 를 생성하도록 한다.
+        return doc.model_dump(by_alias=True, exclude_none=True)
 
     @staticmethod
     def _from_document(doc: dict) -> Post:
