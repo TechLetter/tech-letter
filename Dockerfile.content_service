@@ -14,16 +14,21 @@ RUN apt-get update \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 공통 모듈과 content-service 패키지 복사
+# uv 설치 (빠른 Python 패키지 매니저)
+RUN pip install --no-cache-dir uv
+
+# 의존성 파일만 먼저 복사 (레이어 캐싱 최적화)
+COPY pyproject.toml uv.lock ./
+COPY common/pyproject.toml ./common/pyproject.toml
+COPY content_service/pyproject.toml ./content_service/pyproject.toml
+
+# 의존성 설치 (BuildKit 캐시 마운트 사용)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system ./common ./content_service
+
+# 소스 코드 복사 (변경이 빈번한 부분을 마지막에)
 COPY common ./common
 COPY content_service ./content_service
-COPY pyproject.toml ./pyproject.toml
-COPY uv.lock ./uv.lock
-
-# Python 패키지 설치
-# - techletter-common (common)
-# - techletter-content-service (content_service)
-RUN pip install --no-cache-dir ./common ./content_service
 
 ENV TZ=Asia/Seoul \
     PYTHONUNBUFFERED=1

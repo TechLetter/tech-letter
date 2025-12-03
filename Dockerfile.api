@@ -1,18 +1,26 @@
 # syntax=docker/dockerfile:1
 
 # --- Build stage ---
-FROM golang:1.25.1 AS build
+FROM --platform=$BUILDPLATFORM golang:1.25.1 AS build
+
+ARG TARGETARCH
+ARG TARGETOS
+ARG BUILDPLATFORM
+
 WORKDIR /app
 
-# 모듈 캐싱
+# 모듈 캐싱 (BuildKit 캐시 마운트)
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
 
-# buildx에서 전달하는 TARGETARCH (amd64/arm64)에 맞춰 빌드
-ARG TARGETARCH
-RUN CGO_ENABLED=1 GOOS=linux go build -o /app/api ./cmd/api
+# Cross-compilation 지원
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -o /app/api ./cmd/api
 
 # --- Runtime stage ---
 FROM alpine:3.20
