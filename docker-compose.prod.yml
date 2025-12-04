@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   api:
     build:
@@ -5,8 +7,6 @@ services:
       dockerfile: Dockerfile.api
     container_name: techletter_api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     volumes:
       - ./.env:/app/.env:ro
     environment:
@@ -19,6 +19,13 @@ services:
         condition: service_healthy
     networks:
       - tech-letter_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api-tech-letter.duckdns.org`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.tls.certresolver=duckdns"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
     deploy:
       resources:
         limits:
@@ -32,19 +39,17 @@ services:
       dockerfile: Dockerfile.content_service
     container_name: techletter_content_service
     restart: unless-stopped
-    ports:
-      - "8001:8001"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     env_file:
-        - .env
+      - .env
     environment:
       MONGO_URI: ${MONGO_URI}
       MONGO_DB_NAME: techletter
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-content-service
-      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
-      KAFKA_MAX_POLL_INTERVAL_MS: 900000 # 15분
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_MAX_POLL_INTERVAL_MS: 900000
       CONTENT_SERVICE_PORT: 8001
       LOG_LEVEL: INFO
     healthcheck:
@@ -71,8 +76,8 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-retry
-      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
-      KAFKA_MAX_POLL_INTERVAL_MS: 3200000 # 60분
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_MAX_POLL_INTERVAL_MS: 3200000
       LOG_LEVEL: INFO
     networks:
       - tech-letter_default
@@ -84,14 +89,13 @@ services:
           memory: 512M
 
   summary_worker:
-    image: tech-letter-summary-worker
     build:
       context: .
       dockerfile: Dockerfile.summary_worker
     container_name: techletter_summary_worker
     restart: unless-stopped
     env_file:
-        - .env
+      - .env
     environment:
       SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
       SUMMARY_WORKER_LLM_PROVIDER: google
@@ -99,8 +103,8 @@ services:
       SUMMARY_WORKER_LLM_TEMPERATURE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
-      KAFKA_MESSAGE_MAX_BYTES: 10485760 # 10MB
-      KAFKA_MAX_POLL_INTERVAL_MS: 3200000 # 60분
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_MAX_POLL_INTERVAL_MS: 3200000
       LOG_LEVEL: INFO
     networks:
       - tech-letter_default
