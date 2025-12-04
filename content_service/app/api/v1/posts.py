@@ -4,13 +4,14 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.schemas.posts import (
+from ...services.posts_service import PostsService, get_posts_service
+
+from ..schemas.posts import (
     ListPostsResponse,
     PostHtmlResponse,
     PostPlainTextResponse,
     PostResponse,
 )
-from app.services.posts_service import PostsService, get_posts_service
 from common.models.post import ListPostsFilter
 
 

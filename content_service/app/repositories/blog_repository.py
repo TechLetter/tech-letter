@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 
 from pymongo.database import Database
 
-from app.repositories.documents.blog_document import BlogDocument
-from app.repositories.interfaces import BlogRepositoryInterface
+from .documents.blog_document import BlogDocument
+from .interfaces import BlogRepositoryInterface
 from common.models.blog import Blog, ListBlogsFilter
 from common.mongo.types import from_object_id
 

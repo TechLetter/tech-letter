@@ -6,8 +6,8 @@ from typing import Iterable
 
 from pymongo.database import Database
 
-from app.repositories.documents.post_document import PostDocument
-from app.repositories.interfaces import PostRepositoryInterface
+from .documents.post_document import PostDocument
+from .interfaces import PostRepositoryInterface
 from common.models.post import ListPostsFilter, Post
 from common.mongo.types import from_object_id, to_object_id
 
