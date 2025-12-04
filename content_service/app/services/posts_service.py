@@ -5,8 +5,8 @@ from pymongo.database import Database
 
 from common.mongo.client import get_database
 from common.models.post import ListPostsFilter, Post
-from app.repositories.interfaces import PostRepositoryInterface
-from app.repositories.post_repository import PostRepository
+from ..repositories.interfaces import PostRepositoryInterface
+from ..repositories.post_repository import PostRepository
 
 
 class PostsService:

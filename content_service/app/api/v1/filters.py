@@ -4,14 +4,14 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.schemas.filters import (
+from ..schemas.filters import (
     BlogFilterItem,
     BlogFilterResponse,
     CategoryFilterResponse,
     FilterItem,
     TagFilterResponse,
 )
-from app.services.filters_service import FiltersService, get_filters_service
+from ...services.filters_service import FiltersService, get_filters_service
 
 
 router = APIRouter()

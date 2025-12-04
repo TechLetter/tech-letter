@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import Depends
 from pymongo.database import Database
 
-from app.repositories.interfaces import PostRepositoryInterface
-from app.repositories.post_repository import PostRepository
+from ..repositories.interfaces import PostRepositoryInterface
+from ..repositories.post_repository import PostRepository
 from common.mongo.client import get_database
 
 
@@ -13,6 +13,16 @@ class FiltersService:
 
     def __init__(self, repo: PostRepositoryInterface) -> None:
         self._repo = repo
+
+    def _sort_name_count_pairs(
+        self, items: list[tuple[str, int]]
+    ) -> list[tuple[str, int]]:
+        return sorted(items, key=lambda item: (-item[1], item[0].lower()))
+
+    def _sort_blog_items(
+        self, items: list[tuple[str, str, int]]
+    ) -> list[tuple[str, str, int]]:
+        return sorted(items, key=lambda item: (-item[2], item[1].lower()))
 
     def get_category_filters(
         self, blog_id: str | None, tags: list[str]
@@ -25,7 +35,8 @@ class FiltersService:
         # 검색 조건이 없을 때
         if not blog_id and not tags:
             stats = self._repo.get_category_stats(None, [])
-            return [(name, count) for name, count in stats.items()]
+            items = [(name, count) for name, count in stats.items()]
+            return self._sort_name_count_pairs(items)
 
         # 검색 조건이 있을 때: 전체 카테고리 목록 조회
         all_categories = self._repo.get_category_stats(None, [])
@@ -38,7 +49,7 @@ class FiltersService:
             count = filtered_stats.get(cat_name, 0)
             result.append((cat_name, count))
 
-        return result
+        return self._sort_name_count_pairs(result)
 
     def get_tag_filters(
         self, blog_id: str | None, categories: list[str]
@@ -46,7 +57,8 @@ class FiltersService:
         """태그 필터 목록을 조회한다."""
         if not blog_id and not categories:
             stats = self._repo.get_tag_stats(None, [])
-            return [(name, count) for name, count in stats.items()]
+            items = [(name, count) for name, count in stats.items()]
+            return self._sort_name_count_pairs(items)
 
         all_tags = self._repo.get_tag_stats(None, [])
         filtered_stats = self._repo.get_tag_stats(blog_id, categories)
@@ -56,14 +68,15 @@ class FiltersService:
             count = filtered_stats.get(tag_name, 0)
             result.append((tag_name, count))
 
-        return result
+        return self._sort_name_count_pairs(result)
 
     def get_blog_filters(
         self, categories: list[str], tags: list[str]
     ) -> list[tuple[str, str, int]]:
         """블로그 필터 목록을 조회한다. (blog_id, blog_name, count)"""
         if not categories and not tags:
-            return self._repo.get_blog_stats([], [])
+            blogs = self._repo.get_blog_stats([], [])
+            return self._sort_blog_items(blogs)
 
         # 전체 블로그 목록 조회
         all_blogs = self._repo.get_blog_stats([], [])
@@ -79,7 +92,7 @@ class FiltersService:
             count = filtered_dict.get(blog_id, 0)
             result.append((blog_id, blog_name, count))
 
-        return result
+        return self._sort_blog_items(result)
 
 
 def get_filters_service(

@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.health import router as health_router
-from app.api.v1 import api_router
-from app.scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
-from app.event_handlers.post_events_consumer import run_post_summary_consumer
+from .api.health import router as health_router
+from .api.v1 import api_router
+from .scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
+from .event_handlers.post_events_consumer import run_post_summary_consumer
 from common.logger import setup_logger
 
 
