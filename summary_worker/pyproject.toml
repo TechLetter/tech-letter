@@ -9,7 +9,7 @@ dependencies = [
   "trafilatura",
   "beautifulsoup4",
   "Pillow",
-  "playwright",
+  "playwright == 1.49.1",
   "pytest",
 ]
 
