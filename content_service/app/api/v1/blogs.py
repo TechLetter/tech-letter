@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.schemas.blogs import BlogResponse, ListBlogsResponse
-from app.services.blogs_service import BlogsService, get_blogs_service
+from ..schemas.blogs import BlogResponse, ListBlogsResponse
+from ...services.blogs_service import BlogsService, get_blogs_service
 from common.models.blog import ListBlogsFilter
 
 
