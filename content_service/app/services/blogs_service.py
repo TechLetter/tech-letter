@@ -5,8 +5,8 @@ from pymongo.database import Database
 
 from common.mongo.client import get_database
 from common.models.blog import Blog, ListBlogsFilter
-from app.repositories.blog_repository import BlogRepository
-from app.repositories.interfaces import BlogRepositoryInterface
+from ..repositories.blog_repository import BlogRepository
+from ..repositories.interfaces import BlogRepositoryInterface
 
 
 class BlogsService:
