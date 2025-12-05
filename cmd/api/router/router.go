@@ -11,14 +11,12 @@ import (
 
 	"tech-letter/cmd/api/contentclient"
 	"tech-letter/cmd/api/handlers"
-	"tech-letter/cmd/api/middleware"
 	"tech-letter/cmd/api/services"
 	_ "tech-letter/docs"
 )
 
 func New() *gin.Engine {
 	r := gin.Default()
-	r.Use(middleware.RequestLoggingMiddleware())
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
