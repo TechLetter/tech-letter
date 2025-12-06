@@ -1,6 +1,7 @@
 package contentclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -25,6 +26,42 @@ import (
 
 type Client struct {
 	base *httpclient.BaseClient
+}
+
+// GetPostsBatch는 POST /api/v1/posts/batch 엔드포인트를 호출해
+// 주어진 ID 목록에 해당하는 포스트들을 한 번에 조회한다.
+func (c *Client) GetPostsBatch(ctx context.Context, ids []string) (ListPostsResponse, error) {
+	body := struct {
+		IDs []string `json:"ids"`
+	}{IDs: ids}
+
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return ListPostsResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/posts/batch", nil, bytes.NewReader(buf))
+	if err != nil {
+		return ListPostsResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return ListPostsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return ListPostsResponse{}, fmt.Errorf("content-service GetPostsBatch: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out ListPostsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return ListPostsResponse{}, err
+	}
+	return out, nil
 }
 
 var ErrNotFound = errors.New("resource not found")
