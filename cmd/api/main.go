@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"tech-letter/cmd/api/router"
 	"tech-letter/cmd/internal/logger"
@@ -22,12 +24,29 @@ func main() {
 
 	r := router.New()
 
-	handler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+	// 프론트 스펙: Authorization 헤더 기반, 쿠키/withCredentials 사용 안 함.
+	// CORS_ALLOWED_ORIGINS 환경변수로 허용 Origin 을 제어한다.
+	allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	var allowedOrigins []string
+	if allowedOriginsEnv == "" {
+		// 기본값: 개발 편의를 위해 전체 허용 (단, 쿠키는 사용하지 않음)
+		allowedOrigins = []string{"*"}
+	} else {
+		for _, o := range strings.Split(allowedOriginsEnv, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+
+	corsOpts := cors.Options{
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
-	}).Handler(r)
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: false,
+	}
+
+	handler := cors.New(corsOpts).Handler(r)
 
 	if err := http.ListenAndServe(":8080", handler); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)

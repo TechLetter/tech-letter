@@ -3,6 +3,7 @@ members = [
   "common",
   "summary_worker",
   "content_service",
+  "user_service",
 ]
 
 [tool.uv.sources]
@@ -13,12 +14,14 @@ extraPaths = [
     "common",
     "summary_worker",
     "content_service",
+    "user_service",
 ]
 
 include = [
     "common",
     "summary_worker",
     "content_service",
+    "user_service",
 ]
 
 [tool.pytest.ini_options]

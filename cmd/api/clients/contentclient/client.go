@@ -12,6 +12,8 @@ import (
 	"path"
 	"strconv"
 	"time"
+
+	"tech-letter/cmd/api/httpclient"
 )
 
 // Client는 Python content-service HTTP API를 호출하는 얇은 클라이언트다.
@@ -22,8 +24,7 @@ import (
 // baseURL 예: http://content_service:8001
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
+	base *httpclient.BaseClient
 }
 
 var ErrNotFound = errors.New("resource not found")
@@ -35,8 +36,7 @@ func New() *Client {
 	}
 
 	return &Client{
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		baseURL:    base,
+		base: httpclient.NewBaseClient(base),
 	}
 }
 
@@ -77,12 +77,7 @@ type AISummary struct {
 }
 
 func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPostsResponse, error) {
-	u, err := url.Parse(c.baseURL + "/api/v1/posts")
-	if err != nil {
-		return ListPostsResponse{}, err
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	if params.Page > 0 {
 		q.Set("page", strconv.Itoa(params.Page))
 	}
@@ -104,14 +99,12 @@ func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPos
 	if params.StatusAISummarized != nil {
 		q.Set("status_ai_summarized", strconv.FormatBool(*params.StatusAISummarized))
 	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/posts", q, nil)
 	if err != nil {
 		return ListPostsResponse{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return ListPostsResponse{}, err
 	}
@@ -133,18 +126,13 @@ func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPos
 // 존재하지 않으면 ErrNotFound 를 반환한다.
 func (c *Client) GetPost(ctx context.Context, id string) (PostItem, error) {
 	// /api/v1/posts/{id}
-	u, err := url.Parse(c.baseURL)
-	if err != nil {
-		return PostItem{}, err
-	}
-	u.Path = path.Join(u.Path, "/api/v1/posts/", id)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	relPath := path.Join("/api/v1/posts", id)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, relPath, nil, nil)
 	if err != nil {
 		return PostItem{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return PostItem{}, err
 	}
@@ -184,26 +172,19 @@ type BlogItem struct {
 }
 
 func (c *Client) ListBlogs(ctx context.Context, params ListBlogsParams) (ListBlogsResponse, error) {
-	u, err := url.Parse(c.baseURL + "/api/v1/blogs")
-	if err != nil {
-		return ListBlogsResponse{}, err
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	if params.Page > 0 {
 		q.Set("page", strconv.Itoa(params.Page))
 	}
 	if params.PageSize > 0 {
 		q.Set("page_size", strconv.Itoa(params.PageSize))
 	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/blogs", q, nil)
 	if err != nil {
 		return ListBlogsResponse{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return ListBlogsResponse{}, err
 	}
@@ -224,18 +205,13 @@ func (c *Client) ListBlogs(ctx context.Context, params ListBlogsParams) (ListBlo
 // IncrementPostView는 /api/v1/posts/{id}/view 를 호출해 조회수를 1 증가시킨다.
 // 존재하지 않으면 ErrNotFound 를 반환한다.
 func (c *Client) IncrementPostView(ctx context.Context, id string) error {
-	u, err := url.Parse(c.baseURL)
-	if err != nil {
-		return err
-	}
-	u.Path = path.Join(u.Path, "/api/v1/posts/", id, "view")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
+	relPath := path.Join("/api/v1/posts", id, "view")
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return err
 	}
@@ -254,18 +230,12 @@ func (c *Client) IncrementPostView(ctx context.Context, id string) error {
 
 // Health 는 content-service 의 /health 엔드포인트를 호출해 상태를 확인한다.
 func (c *Client) Health(ctx context.Context) error {
-	u, err := url.Parse(c.baseURL)
-	if err != nil {
-		return err
-	}
-	u.Path = path.Join(u.Path, "/health")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/health", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return err
 	}
@@ -311,26 +281,19 @@ type BlogFilterResponse struct {
 
 // GetCategoryFilters retrieves category filter statistics from content service
 func (c *Client) GetCategoryFilters(ctx context.Context, params FilterParams) (CategoryFilterResponse, error) {
-	u, err := url.Parse(c.baseURL + "/api/v1/filters/categories")
-	if err != nil {
-		return CategoryFilterResponse{}, err
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	if params.BlogID != "" {
 		q.Set("blog_id", params.BlogID)
 	}
 	for _, tag := range params.Tags {
 		q.Add("tags", tag)
 	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/filters/categories", q, nil)
 	if err != nil {
 		return CategoryFilterResponse{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return CategoryFilterResponse{}, err
 	}
@@ -350,26 +313,19 @@ func (c *Client) GetCategoryFilters(ctx context.Context, params FilterParams) (C
 
 // GetTagFilters retrieves tag filter statistics from content service
 func (c *Client) GetTagFilters(ctx context.Context, params FilterParams) (TagFilterResponse, error) {
-	u, err := url.Parse(c.baseURL + "/api/v1/filters/tags")
-	if err != nil {
-		return TagFilterResponse{}, err
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	if params.BlogID != "" {
 		q.Set("blog_id", params.BlogID)
 	}
 	for _, cat := range params.Categories {
 		q.Add("categories", cat)
 	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/filters/tags", q, nil)
 	if err != nil {
 		return TagFilterResponse{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return TagFilterResponse{}, err
 	}
@@ -389,26 +345,19 @@ func (c *Client) GetTagFilters(ctx context.Context, params FilterParams) (TagFil
 
 // GetBlogFilters retrieves blog filter statistics from content service
 func (c *Client) GetBlogFilters(ctx context.Context, params FilterParams) (BlogFilterResponse, error) {
-	u, err := url.Parse(c.baseURL + "/api/v1/filters/blogs")
-	if err != nil {
-		return BlogFilterResponse{}, err
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	for _, cat := range params.Categories {
 		q.Add("categories", cat)
 	}
 	for _, tag := range params.Tags {
 		q.Add("tags", tag)
 	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/filters/blogs", q, nil)
 	if err != nil {
 		return BlogFilterResponse{}, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.base.Do(req)
 	if err != nil {
 		return BlogFilterResponse{}, err
 	}
@@ -425,4 +374,3 @@ func (c *Client) GetBlogFilters(ctx context.Context, params FilterParams) (BlogF
 	}
 	return out, nil
 }
-

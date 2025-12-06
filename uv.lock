@@ -7,6 +7,7 @@ members = [
     "techletter-common",
     "techletter-content-service",
     "techletter-summary-worker",
+    "techletter-user-service",
 ]
 
 [[package]]
@@ -2002,6 +2003,23 @@ requires-dist = [
     { name = "pytest" },
     { name = "techletter-common", editable = "common" },
     { name = "trafilatura" },
+]
+
+[[package]]
+name = "techletter-user-service"
+version = "0.1.0"
+source = { virtual = "user_service" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "techletter-common" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi" },
+    { name = "techletter-common", editable = "common" },
+    { name = "uvicorn", extras = ["standard"] },
 ]
 
 [[package]]
