@@ -32,7 +32,7 @@ services:
       - tech-letter_default
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api-tech-letter.duckdns.org`)"
+      - "traefik.http.routers.api.rule=Host(`tech-letter.duckdns.org`) && PathPrefix(`/api`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=duckdns"
