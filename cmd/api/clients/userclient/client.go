@@ -68,6 +68,22 @@ type UserProfileResponse struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// -------------------- Login Session DTOs --------------------
+
+type LoginSessionCreateRequest struct {
+	SessionID string    `json:"session_id"`
+	JWTToken  string    `json:"jwt_token"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type LoginSessionCreateResponse struct {
+	SessionID string `json:"session_id"`
+}
+
+type LoginSessionDeleteResponse struct {
+	JWTToken string `json:"jwt_token"`
+}
+
 // -------------------- Bookmark DTOs --------------------
 
 type BookmarkCreateRequest struct {
@@ -128,6 +144,70 @@ func (c *Client) UpsertUser(ctx context.Context, req UpsertRequest) (UpsertRespo
 		return UpsertResponse{}, err
 	}
 	return out, nil
+}
+
+// CreateLoginSession는 POST /api/v1/login-sessions 를 호출해
+// Gateway에서 생성한 session_id, jwt_token, expires_at 을 저장한다.
+func (c *Client) CreateLoginSession(ctx context.Context, sessionID string, jwtToken string, expiresAt time.Time) error {
+	bodyBytes, err := json.Marshal(LoginSessionCreateRequest{
+		SessionID: sessionID,
+		JWTToken:  jwtToken,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/login-sessions", nil, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("user-service CreateLoginSession: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out LoginSessionCreateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return err
+	}
+	_ = out // 현재는 세션 ID를 호출 측에서 이미 알고 있으므로 응답 값은 검증 용도로만 사용한다.
+	return nil
+}
+
+// ExchangeLoginSession는 DELETE /api/v1/login-sessions/{session_id} 를 호출해
+// 세션을 삭제하고, 저장되어 있던 JWT 토큰을 반환한다. 세션이 없거나 만료된 경우 에러를 반환한다.
+func (c *Client) ExchangeLoginSession(ctx context.Context, sessionID string) (string, error) {
+	relPath := path.Join("/api/v1/login-sessions", sessionID)
+	req, err := c.base.NewRequest(ctx, http.MethodDelete, relPath, nil, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return "", fmt.Errorf("user-service DeleteLoginSession: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out LoginSessionDeleteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	return out.JWTToken, nil
 }
 
 func (c *Client) GetUserProfile(ctx context.Context, userCode string) (UserProfileResponse, error) {

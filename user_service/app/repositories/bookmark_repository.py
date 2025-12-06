@@ -21,7 +21,12 @@ class BookmarkRepository(BookmarkRepositoryInterface):
     def create(self, user_code: str, post_id: str) -> Bookmark:
         now = datetime.now(timezone.utc)
         doc = BookmarkDocument.from_domain(
-            Bookmark(user_code=user_code, post_id=post_id, created_at=now)
+            Bookmark(
+                user_code=user_code,
+                post_id=post_id,
+                created_at=now,
+                updated_at=now,
+            )
         )
         payload = doc.to_mongo_record()
         result = self._col.update_one(

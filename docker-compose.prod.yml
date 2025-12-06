@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile.api
     container_name: techletter_api
     restart: unless-stopped
-    volumes:
-      - ./.env:/app/.env:ro
+    env_file:
+      - .env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-api
@@ -22,7 +22,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: tech-letter
       AUTH_LOGIN_SUCCESS_REDIRECT_URL: https://tech-letter.duckdns.org/login/success
-      CORS_ALLOWED_ORIGINS: http://localhost:5173,https://tech-letter.duckdns.org
+      CORS_ALLOWED_ORIGINS: https://tech-letter.duckdns.org
     depends_on:
       content_service:
         condition: service_healthy
@@ -114,6 +114,8 @@ services:
       dockerfile: Dockerfile.retryworker
     container_name: techletter_retry_worker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-retry

@@ -63,3 +63,13 @@ class BaseDocument(BaseModel):
         """
 
         return self.model_dump(by_alias=True, exclude_none=True)
+
+
+def build_document_data_from_domain(domain_model: BaseModel) -> dict[str, Any]:
+    """도메인 Pydantic 모델을 Mongo 도큐먼트 dict 로 변환하는 공통 유틸.
+
+    - 기본은 ``domain_model.model_dump(by_alias=True)`` 결과를 그대로 사용한다.
+    - created_at / updated_at 은 도메인 모델에 모두 존재한다는 전제를 따른다.
+    """
+
+    return domain_model.model_dump(by_alias=True)

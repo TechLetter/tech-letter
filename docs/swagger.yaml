@@ -145,6 +145,11 @@ definitions:
         example: user_1234
         type: string
     type: object
+  handlers.sessionExchangeRequest:
+    properties:
+      session:
+        type: string
+    type: object
 info:
   contact: {}
   description: 요약된 기술 블로그 포스트를 조회하고 사용자 인증/프로필을 관리하는 API입니다.
@@ -177,6 +182,36 @@ paths:
           schema:
             type: string
       summary: Google 로그인 시작
+      tags:
+      - auth
+  /auth/session/exchange:
+    post:
+      consumes:
+      - application/json
+      description: 짧은 TTL을 가진 session ID를 받아, 유저 서비스에 위임해 JWT 액세스 토큰으로 교환합니다.
+      parameters:
+      - description: 세션 교환 요청
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.sessionExchangeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: access_token 포함
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 세션 만료 또는 유효하지 않음
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 로그인 세션을 JWT 액세스 토큰으로 교환
       tags:
       - auth
   /blogs:
