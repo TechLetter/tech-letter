@@ -15,9 +15,20 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-api
       CONTENT_SERVICE_BASE_URL: http://content_service:8001
+      USER_SERVICE_BASE_URL: http://user_service:8002
       LOG_LEVEL: INFO
+      SERVICE_NAME: api-gateway
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URL: http://localhost:8080/api/v1/auth/google/callback
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: tech-letter
+      AUTH_LOGIN_SUCCESS_REDIRECT_URL: http://localhost:5173/login/success
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
     depends_on:
       content_service:
+        condition: service_healthy
+      user_service:
         condition: service_healthy
     networks:
       - tech-letter_default
@@ -49,6 +60,7 @@ services:
       KAFKA_MAX_POLL_INTERVAL_MS: 900000
       CONTENT_SERVICE_PORT: 8001
       LOG_LEVEL: INFO
+      SERVICE_NAME: content-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 10s
@@ -64,6 +76,37 @@ services:
         reservations:
           memory: 256M
 
+  user_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.user_service
+    container_name: techletter_user_service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      MONGO_DB_NAME: techletter
+      USER_SERVICE_PORT: 8002
+      LOG_LEVEL: INFO
+      SERVICE_NAME: user-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
   retryworker:
     build:
       context: .
@@ -76,14 +119,15 @@ services:
       KAFKA_MESSAGE_MAX_BYTES: 10485760
       KAFKA_MAX_POLL_INTERVAL_MS: 3200000
       LOG_LEVEL: INFO
+      SERVICE_NAME: retry-worker
     networks:
       - tech-letter_default
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 256M
         reservations:
-          memory: 512M
+          memory: 128M
 
   summary_worker:
     build:
@@ -103,6 +147,7 @@ services:
       KAFKA_MESSAGE_MAX_BYTES: 10485760
       KAFKA_MAX_POLL_INTERVAL_MS: 3200000
       LOG_LEVEL: INFO
+      SERVICE_NAME: summary-worker
     networks:
       - tech-letter_default
     deploy:

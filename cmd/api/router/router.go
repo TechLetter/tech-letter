@@ -9,14 +9,16 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"tech-letter/cmd/api/contentclient"
+	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/handlers"
+	"tech-letter/cmd/api/middleware"
 	"tech-letter/cmd/api/services"
 	_ "tech-letter/docs"
 )
 
 func New() *gin.Engine {
 	r := gin.Default()
+	r.Use(middleware.RequestTrace())
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
@@ -34,6 +36,11 @@ func New() *gin.Engine {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// v1 routes
+	authSvc, err := services.NewAuthServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
+
 	api := r.Group("/api/v1")
 	{
 		contentClient := contentclient.New()
@@ -49,6 +56,10 @@ func New() *gin.Engine {
 		api.GET("/filters/categories", handlers.GetCategoryFiltersHandler(filtersSvc))
 		api.GET("/filters/tags", handlers.GetTagFiltersHandler(filtersSvc))
 		api.GET("/filters/blogs", handlers.GetBlogFiltersHandler(filtersSvc))
+
+		api.GET("/auth/google/login", handlers.GoogleLoginHandler(authSvc))
+		api.GET("/auth/google/callback", handlers.GoogleCallbackHandler(authSvc))
+		api.GET("/users/profile", handlers.GetUserProfileHandler(authSvc))
 	}
 
 	return r

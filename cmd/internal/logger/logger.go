@@ -21,6 +21,9 @@ type Logger interface {
 	Errorf(format string, args ...any)
 }
 
+// Fields 는 구조화 로그를 위한 공통 필드 타입이다.
+type Fields map[string]any
+
 // Log 는 전역 로거 인스턴스다.
 // InitFromEnv 가 호출되지 않더라도 기본 info 레벨로 동작하도록 초기화한다.
 var Log Logger = NewLogger("info")
@@ -47,8 +50,67 @@ func NewLogger(level string) Logger {
 	}
 
 	h := handler.NewConsoleHandler(levels)
-	h.TextFormatter().EnableColor = true
+	// Python 쪽 로그 포맷과 최대한 유사하게 맞추기 위해,
+	// 기본 필드를 datetime/level/message 로만 제한하고 나머지 정보는
+	// Fields(top-level 키)로만 출력한다.
+	formatter := slog.NewJSONFormatter(func(f *slog.JSONFormatter) {
+		f.Fields = []string{
+			slog.FieldKeyDatetime,
+			slog.FieldKeyLevel,
+			slog.FieldKeyMessage,
+		}
+		f.Aliases = slog.StringMap{
+			slog.FieldKeyDatetime: "datetime",
+			slog.FieldKeyLevel:    "level",
+			slog.FieldKeyMessage:  "message",
+		}
+		// Python JsonFormatter 와 비슷한 ISO8601 형태로 맞춘다.
+		f.TimeFormat = "2006-01-02T15:04:05"
+	})
+	h.SetFormatter(formatter)
 
 	logger := slog.NewWithHandlers(h)
 	return logger
+}
+
+// withServiceName 은 service_name 필드를 SERVICE_NAME 환경변수 기준으로 보강한다.
+func withServiceName(fields Fields) Fields {
+	if fields == nil {
+		fields = Fields{}
+	}
+	if _, ok := fields["service_name"]; !ok {
+		if sn := os.Getenv("SERVICE_NAME"); sn != "" {
+			fields["service_name"] = sn
+		}
+	}
+	return fields
+}
+
+// InfoWithFields 는 request_id, span_id, service_name 등 구조화 필드를 포함한
+// JSON 로그를 출력하기 위한 헬퍼 함수다.
+func InfoWithFields(msg string, fields Fields) {
+	fields = withServiceName(fields)
+	if lg, ok := Log.(*slog.Logger); ok {
+		lg.WithFields(slog.M(fields)).Info(msg)
+		return
+	}
+	Log.Info(msg)
+}
+
+func DebugWithFields(msg string, fields Fields) {
+	fields = withServiceName(fields)
+	if lg, ok := Log.(*slog.Logger); ok {
+		lg.WithFields(slog.M(fields)).Debug(msg)
+		return
+	}
+	Log.Debug(msg)
+}
+
+func ErrorWithFields(msg string, fields Fields) {
+	fields = withServiceName(fields)
+	if lg, ok := Log.(*slog.Logger); ok {
+		lg.WithFields(slog.M(fields)).Error(msg)
+		return
+	}
+	Log.Error(msg)
 }
