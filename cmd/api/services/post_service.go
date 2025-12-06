@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"tech-letter/cmd/api/contentclient"
+	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/dto"
 )
 

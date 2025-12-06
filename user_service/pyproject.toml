@@ -1,0 +1,13 @@
+[project]
+name = "techletter-user-service"
+version = "0.1.0"
+description = "User service for Tech-Letter (Python, FastAPI, MongoDB)."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "techletter-common",
+  "fastapi",
+  "uvicorn[standard]",
+]
+
+[project.scripts]
+user-service = "app.main:main"

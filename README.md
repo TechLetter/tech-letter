@@ -19,16 +19,13 @@
   - 클라이언트 요청을 받아 Content Service의 REST API로 프록시
   - 사용자 인증/인가 처리 (향후 구현 예정)
   - Swagger 문서 제공
-  
 - **Content Service** (`content_service/app/main.py`): 콘텐츠 관리 서비스 (포트 8001)
   - MongoDB 직접 접근 및 CRUD 작업 수행
   - 포스트/블로그 데이터 조회 API 제공
   - 이벤트 구독 및 발행 (PostCreated, PostSummarized)
-  
 - **Summary Worker (Python)** (`summary_worker/app/main.py`):
   - `PostCreated` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
   - 결과를 담은 `PostSummarized` 이벤트 발행 (DB에는 직접 쓰지 않음)
-  
 - **Retry Worker** (`cmd/retryworker/main.go`):
   - `eventbus` 레이어가 생성한 지연/재시도 토픽(`*.retry.N`)을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
@@ -40,17 +37,17 @@
 flowchart TB
     Client[User / Frontend] -->|HTTP| API[API Gateway :8080]
     API -->|HTTP| CS[Content Service :8001]
-    
+
     subgraph Services
         CS
         SW[Summary Worker]
         RW[Retry Worker]
     end
-    
+
     CS <-->|Subscribe/Publish| EB[EventBus / Kafka]
     SW <-->|Subscribe/Publish| EB
     RW <-->|Subscribe/Publish| EB
-    
+
     CS -->|CRUD| DB[(MongoDB)]
     SW -->|Summarize| LLM[Gemini API]
 ```
@@ -128,6 +125,16 @@ sequenceDiagram
         EB->>SW: or CS: Redeliver event
     end
 ```
+
+## 인증 및 프론트엔드 연동
+
+인증/인가 및 프론트 연동 플로우는 별도 문서에 정리되어 있다.
+
+- 상세 스펙: [`docs/auth.md`](docs/auth.md)
+  - Google OAuth 플로우
+  - JWT 스펙 및 User Service 계약
+  - `/api/v1/users/profile` 응답 스키마
+  - CORS 및 환경 변수 설정
 
 ## 개발 가이드
 

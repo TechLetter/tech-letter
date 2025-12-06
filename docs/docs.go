@@ -15,26 +15,66 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/google/callback": {
+            "get": {
+                "description": "state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Google OAuth 콜백 처리",
+                "responses": {
+                    "302": {
+                        "description": "로그인 완료 페이지로 리다이렉트 (성공 시 토큰 포함)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/login": {
+            "get": {
+                "description": "state 값을 생성해 쿠키에 저장한 뒤, Google OAuth 인증 페이지로 리다이렉트합니다. 실패 시에도 프론트의 로그인 완료 페이지로 토큰 없이 이동합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Google 로그인 시작",
+                "responses": {
+                    "302": {
+                        "description": "Google OAuth 로그인 페이지 또는 로그인 완료 페이지로 리다이렉트",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/blogs": {
             "get": {
-                "description": "List blogs with simple pagination",
+                "description": "단순 페이징으로 블로그 목록을 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "blogs"
                 ],
-                "summary": "List blogs",
+                "summary": "블로그 목록 조회",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Page number (1-based)",
+                        "description": "페이지 번호 (1부터 시작)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Page size (\u003c=100)",
+                        "description": "페이지 크기 (최대 100)",
                         "name": "page_size",
                         "in": "query"
                     }
@@ -51,14 +91,14 @@ const docTemplate = `{
         },
         "/filters/blogs": {
             "get": {
-                "description": "Get blog list with post counts for filtering",
+                "description": "포스트 개수와 함께 블로그 필터 목록을 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "filters"
                 ],
-                "summary": "Get blog filters",
+                "summary": "블로그 필터 조회",
                 "parameters": [
                     {
                         "type": "array",
@@ -66,7 +106,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Categories (OR match)",
+                        "description": "카테고리 목록 (OR 조건)",
                         "name": "categories",
                         "in": "query"
                     },
@@ -76,7 +116,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Tags (OR match)",
+                        "description": "태그 목록 (OR 조건)",
                         "name": "tags",
                         "in": "query"
                     }
@@ -93,18 +133,18 @@ const docTemplate = `{
         },
         "/filters/categories": {
             "get": {
-                "description": "Get category list with post counts for filtering",
+                "description": "포스트 개수와 함께 카테고리 필터 목록을 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "filters"
                 ],
-                "summary": "Get category filters",
+                "summary": "카테고리 필터 조회",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Blog ID",
+                        "description": "블로그 ID",
                         "name": "blog_id",
                         "in": "query"
                     },
@@ -114,7 +154,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Tags (OR match)",
+                        "description": "태그 목록 (OR 조건)",
                         "name": "tags",
                         "in": "query"
                     }
@@ -131,18 +171,18 @@ const docTemplate = `{
         },
         "/filters/tags": {
             "get": {
-                "description": "Get tag list with post counts for filtering",
+                "description": "포스트 개수와 함께 태그 필터 목록을 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "filters"
                 ],
-                "summary": "Get tag filters",
+                "summary": "태그 필터 조회",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Blog ID",
+                        "description": "블로그 ID",
                         "name": "blog_id",
                         "in": "query"
                     },
@@ -152,7 +192,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Categories (OR match)",
+                        "description": "카테고리 목록 (OR 조건)",
                         "name": "categories",
                         "in": "query"
                     }
@@ -169,24 +209,24 @@ const docTemplate = `{
         },
         "/posts": {
             "get": {
-                "description": "List summarized posts with filters and pagination",
+                "description": "필터와 페이징 조건으로 요약된 기술 블로그 포스트 목록을 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "posts"
                 ],
-                "summary": "List posts",
+                "summary": "포스트 목록 조회",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Page number (1-based)",
+                        "description": "페이지 번호 (1부터 시작)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Page size (\u003c=100)",
+                        "description": "페이지 크기 (최대 100)",
                         "name": "page_size",
                         "in": "query"
                     },
@@ -196,7 +236,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Categories (OR match)",
+                        "description": "카테고리 목록 (OR 조건)",
                         "name": "categories",
                         "in": "query"
                     },
@@ -206,19 +246,19 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Tags (OR match)",
+                        "description": "태그 목록 (OR 조건)",
                         "name": "tags",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Blog ID",
+                        "description": "블로그 ID",
                         "name": "blog_id",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Blog name",
+                        "description": "블로그 이름",
                         "name": "blog_name",
                         "in": "query"
                     },
@@ -241,18 +281,18 @@ const docTemplate = `{
         },
         "/posts/{id}": {
             "get": {
-                "description": "Get a single post by ObjectID",
+                "description": "ObjectID 기준으로 특정 포스트를 조회합니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "posts"
                 ],
-                "summary": "Get post by id",
+                "summary": "포스트 단건 조회",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ObjectID",
+                        "description": "포스트 ObjectID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -270,18 +310,18 @@ const docTemplate = `{
         },
         "/posts/{id}/view": {
             "post": {
-                "description": "Increment the view_count of a post by 1",
+                "description": "지정한 포스트의 조회 수(view_count)를 1 증가시킵니다.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "posts"
                 ],
-                "summary": "Increment post view count",
+                "summary": "포스트 조회 수 증가",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ObjectID",
+                        "description": "포스트 ObjectID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -291,34 +331,66 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "message": {
-                                    "type": "string"
-                                }
-                            }
+                            "$ref": "#/definitions/dto.MessageResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "error": {
-                                    "type": "string"
-                                }
-                            }
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "error": {
-                                    "type": "string"
-                                }
-                            }
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/profile": {
+            "get": {
+                "description": "Authorization 헤더에 포함된 JWT를 검증하고, 현재 로그인한 사용자의 프로필 정보를 조회합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "현재 로그인한 사용자 프로필 조회",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.UserProfileDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     }
                 }
@@ -376,6 +448,15 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ErrorResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "invalid_token"
+                }
+            }
+        },
         "dto.FilterItem": {
             "type": "object",
             "properties": {
@@ -384,6 +465,15 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.MessageResponseDTO": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "view count incremented successfully"
                 }
             }
         },
@@ -481,6 +571,47 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "dto.UserProfileDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2025-01-01T12:00:00Z"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "홍길동"
+                },
+                "profile_image": {
+                    "type": "string",
+                    "example": "https://example.com/avatar.png"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "google"
+                },
+                "provider_sub": {
+                    "type": "string",
+                    "example": "1234567890"
+                },
+                "role": {
+                    "type": "string",
+                    "example": "user"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2025-01-01T12:00:00Z"
+                },
+                "user_code": {
+                    "type": "string",
+                    "example": "user_1234"
+                }
+            }
         }
     }
 }`
@@ -491,8 +622,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "Tech-Letter API",
-	Description:      "API for browsing summarized tech blog posts",
+	Title:            "Tech-Letter 공개 API",
+	Description:      "요약된 기술 블로그 포스트를 조회하고 사용자 인증/프로필을 관리하는 API입니다.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

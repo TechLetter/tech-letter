@@ -101,3 +101,8 @@ content_service:
         url: https://medium.com/yanoljacloud-tech
         rss_url: https://medium.com/feed/yanoljacloud-tech
         blog_type: company
+
+      - name: AWS
+        url: https://aws.amazon.com/ko/blogs/tech
+        rss_url: https://aws.amazon.com/ko/blogs/tech/feed
+        blog_type: company

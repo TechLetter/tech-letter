@@ -11,6 +11,7 @@ from .api.v1 import api_router
 from .scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
 from .event_handlers.post_events_consumer import run_post_summary_consumer
 from common.logger import setup_logger
+from common.middleware.request_trace import RequestTraceMiddleware
 
 
 @asynccontextmanager
@@ -41,12 +42,15 @@ async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
 
 
 def create_app() -> FastAPI:
-    setup_logger(name="content-service")
+    setup_logger()
     app = FastAPI(
         title="TechLetter Content Service",
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # 공통 Request/Span ID 로그 미들웨어
+    app.add_middleware(RequestTraceMiddleware)
 
     app.include_router(health_router, tags=["health"])
     app.include_router(api_router, prefix="/api/v1")
@@ -63,7 +67,13 @@ def main() -> None:
     import uvicorn
 
     port = int(os.getenv("CONTENT_SERVICE_PORT", "8001"))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

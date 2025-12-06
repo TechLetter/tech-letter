@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"tech-letter/cmd/api/contentclient"
+	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/dto"
 )
 
