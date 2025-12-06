@@ -18,6 +18,9 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           cp config-production.yaml ./config.yaml
           touch .env
