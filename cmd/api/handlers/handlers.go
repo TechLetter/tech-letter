@@ -25,7 +25,7 @@ import (
 // @Produce      json
 // @Success      200  {object}  dto.PaginationPostDTO
 // @Router       /posts [get]
-func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
+func ListPostsHandler(postSvc *services.PostService, bookmarkSvc *services.BookmarkService, authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var in services.ListPostsInput
 		// pagination
@@ -43,11 +43,25 @@ func ListPostsHandler(svc *services.PostService) gin.HandlerFunc {
 			}
 		}
 
-		page, err := svc.List(c.Request.Context(), in)
+		page, err := postSvc.List(c.Request.Context(), in)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		userCode, hasToken, ok := optionalUserCodeFromHeader(c, authSvc)
+		if !ok {
+			return
+		}
+		if hasToken {
+			marked, err := bookmarkSvc.MarkBookmarked(c.Request.Context(), userCode, page.Data)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_load_bookmarks"})
+				return
+			}
+			page.Data = marked
+		}
+
 		c.JSON(http.StatusOK, page)
 	}
 }

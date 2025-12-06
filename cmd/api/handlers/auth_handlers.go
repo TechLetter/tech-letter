@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -148,27 +147,8 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 // @Router       /users/profile [get]
 func GetUserProfileHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing_authorization_header"})
-			return
-		}
-
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_authorization_header"})
-			return
-		}
-
-		token := strings.TrimSpace(parts[1])
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "empty_token"})
-			return
-		}
-
-		userCode, _, err := authSvc.ParseAccessToken(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+		userCode, ok := requireUserCodeFromHeader(c, authSvc)
+		if !ok {
 			return
 		}
 

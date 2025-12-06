@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from common.models.user import User
+from ..models.bookmark import Bookmark
 
 
 class UserRepositoryInterface(Protocol):
@@ -31,4 +32,31 @@ class UserRepositoryInterface(Protocol):
     def find_by_user_code(
         self, user_code: str
     ) -> User | None:  # pragma: no cover - Protocol
+        ...
+
+
+class BookmarkRepositoryInterface(Protocol):
+    """BookmarkRepository가 따라야 할 최소한의 계약.
+
+    - user_code + post_id 조합으로 유니크하게 북마크를 관리한다.
+    """
+
+    def create(
+        self, user_code: str, post_id: str
+    ) -> Bookmark:  # pragma: no cover - Protocol
+        ...
+
+    def delete(
+        self, user_code: str, post_id: str
+    ) -> bool:  # pragma: no cover - Protocol
+        ...
+
+    def list_by_user(
+        self, user_code: str, page: int, page_size: int
+    ) -> tuple[list[Bookmark], int]:  # pragma: no cover - Protocol
+        ...
+
+    def list_post_ids_for_user(
+        self, user_code: str, post_ids: list[str]
+    ) -> list[str]:  # pragma: no cover - Protocol
         ...

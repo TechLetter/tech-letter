@@ -10,6 +10,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"tech-letter/cmd/api/clients/contentclient"
+	"tech-letter/cmd/api/clients/userclient"
 	"tech-letter/cmd/api/handlers"
 	"tech-letter/cmd/api/middleware"
 	"tech-letter/cmd/api/services"
@@ -44,10 +45,16 @@ func New() *gin.Engine {
 	api := r.Group("/api/v1")
 	{
 		contentClient := contentclient.New()
+		userClient := userclient.New()
 		postsSvc := services.NewPostService(contentClient)
-		api.GET("/posts", handlers.ListPostsHandler(postsSvc))
+		bookmarkSvc := services.NewBookmarkService(contentClient, userClient)
+
+		api.GET("/posts", handlers.ListPostsHandler(postsSvc, bookmarkSvc, authSvc))
 		api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
 		api.POST("/posts/:id/view", handlers.IncrementPostViewCountHandler(postsSvc))
+		api.POST("/posts/:id/bookmark", handlers.AddBookmarkHandler(bookmarkSvc, authSvc))
+		api.DELETE("/posts/:id/bookmark", handlers.RemoveBookmarkHandler(bookmarkSvc, authSvc))
+		api.GET("/posts/bookmarks", handlers.ListBookmarkedPostsHandler(bookmarkSvc, authSvc))
 
 		blogsSvc := services.NewBlogService(contentClient)
 		api.GET("/blogs", handlers.ListBlogsHandler(blogsSvc))

@@ -11,6 +11,7 @@ from ..schemas.posts import (
     PostHtmlResponse,
     PostPlainTextResponse,
     PostResponse,
+    PostsBatchRequest,
 )
 from common.models.post import ListPostsFilter
 
@@ -140,3 +141,18 @@ def increment_post_view(
     if not ok:
         raise HTTPException(status_code=404, detail="post not found")
     return {"message": "view count incremented"}
+
+
+@router.post(
+    "/batch",
+    response_model=ListPostsResponse,
+    summary="포스트 일괄 조회",
+    description="post_id 목록으로 여러 포스트를 한 번에 조회한다.",
+)
+def get_posts_batch(
+    body: PostsBatchRequest,
+    service: PostsService = Depends(get_posts_service),
+) -> ListPostsResponse:
+    posts = service.list_by_ids(body.ids)
+    dto_items = [PostResponse.from_domain(post) for post in posts]
+    return ListPostsResponse(total=len(dto_items), items=dto_items)

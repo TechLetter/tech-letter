@@ -37,6 +37,12 @@ class ListPostsResponse(BaseModel):
     items: list[PostResponse]
 
 
+class PostsBatchRequest(BaseModel):
+    """포스트 일괄 조회 요청 DTO."""
+
+    ids: list[str]
+
+
 class PostPlainTextResponse(BaseModel):
     """포스트 plain_text 전용 DTO."""
 

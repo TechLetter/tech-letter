@@ -18,4 +18,5 @@ type PostDTO struct {
 	Categories   []string  `json:"categories"`
 	Tags         []string  `json:"tags"`
 	Summary      string    `json:"summary"`
+	IsBookmarked *bool     `json:"is_bookmarked,omitempty"`
 }
