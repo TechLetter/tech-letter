@@ -132,3 +132,17 @@ def _ensure_indexes(db: Database) -> None:
         name="uniq_link",
         unique=True,
     )
+
+    users = db["users"]
+
+    users.create_index(
+        [("user_code", 1)],
+        name="uniq_user_code",
+        unique=True,
+    )
+
+    users.create_index(
+        [("provider", 1), ("provider_sub", 1)],
+        name="uniq_provider_provider_sub",
+        unique=True,
+    )

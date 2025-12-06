@@ -45,7 +45,7 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: BaseChatModel) 
 
 
 def main() -> None:
-    setup_logger(name="summary-worker")
+    setup_logger()
     logger.info("summary-worker (python) starting up")
 
     brokers = get_brokers()
