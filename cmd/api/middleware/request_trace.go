@@ -21,8 +21,8 @@ const (
 // 이를 컨텍스트/헤더에 저장한 뒤 Gateway 로그에 포함시킨다.
 func RequestTrace() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		req := c.Request
 		start := time.Now()
+		req := c.Request
 
 		requestID := req.Header.Get(headerRequestID)
 		if requestID == "" {
@@ -33,6 +33,7 @@ func RequestTrace() gin.HandlerFunc {
 		// 마이크로서비스 호출은 1,2,3,... 로 증가)
 		ctxWithTrace := trace.WithRequestAndSpan(req.Context(), requestID, 0)
 		c.Request = req.WithContext(ctxWithTrace)
+		req = c.Request
 
 		// 헤더에 세팅: 마이크로서비스 및 응답 헤더에서 동일 ID를 사용할 수 있도록 한다.
 		currentSpan := trace.CurrentSpanID(ctxWithTrace) // 보통 "0"
@@ -62,7 +63,7 @@ func RequestTrace() gin.HandlerFunc {
 					}
 				}
 				// gin 핸들러에서 다시 읽을 수 있도록 Body 를 복원한다.
-				req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 

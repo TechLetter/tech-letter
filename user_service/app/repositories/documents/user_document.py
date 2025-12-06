@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from common.models.user import User
-from common.mongo.types import BaseDocument
+from common.mongo.types import BaseDocument, build_document_data_from_domain
 
 
 class UserDocument(BaseDocument):
@@ -19,7 +19,7 @@ class UserDocument(BaseDocument):
 
     @classmethod
     def from_domain(cls, user: User) -> "UserDocument":
-        data = user.model_dump(by_alias=True)
+        data = build_document_data_from_domain(user)
         # User 도메인 모델에는 _id 를 노출하지 않으므로 단순 검증만 수행한다.
         return cls.model_validate(data)
 

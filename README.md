@@ -4,30 +4,34 @@
 
 ### 기술 스택
 
-- **언어**: Go 1.25.1
-- **웹 프레임워크**: Gin
-- **데이터베이스**: MongoDB
-- **메시지 큐**: Apache Kafka
+- **언어**: Go 1.25.1, Python 3.11
+- **웹 프레임워크**: Gin (Go), FastAPI (Python)
+- **데이터베이스**: MongoDB (posts, users, bookmarks)
+- **메시지 큐 / 스트리밍**: Apache Kafka
 - **AI**: Google Gemini API
+- **패키지 관리**: Go Modules, uv (Python)
 - **컨테이너**: Docker & Docker Compose
 
 ## 아키텍처
 
 ### 마이크로서비스 구조
 
-- **API Gateway** (`cmd/api/main.go`): REST API 제공 (포트 8080)
-  - 클라이언트 요청을 받아 Content Service의 REST API로 프록시
-  - 사용자 인증/인가 처리 (향후 구현 예정)
-  - Swagger 문서 제공
-- **Content Service** (`content_service/app/main.py`): 콘텐츠 관리 서비스 (포트 8001)
-  - MongoDB 직접 접근 및 CRUD 작업 수행
-  - 포스트/블로그 데이터 조회 API 제공
-  - 이벤트 구독 및 발행 (PostCreated, PostSummarized)
-- **Summary Worker (Python)** (`summary_worker/app/main.py`):
-  - `PostCreated` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
-  - 결과를 담은 `PostSummarized` 이벤트 발행 (DB에는 직접 쓰지 않음)
-- **Retry Worker** (`cmd/retryworker/main.go`):
-  - `eventbus` 레이어가 생성한 지연/재시도 토픽(`*.retry.N`)을 구독
+- **API Gateway** (`cmd/api/main.go`)
+  - 클라이언트 요청을 받는 단일 진입점
+  - Content Service / User Service 를 호출해 응답을 조합
+  - Google OAuth 기반 인증, JWT 발급/검증, 공통 에러 포맷, Swagger 문서 제공
+- **Content Service** (`content_service/app/main.py`)
+  - 기술 블로그 포스트/블로그 메타데이터를 MongoDB 에 저장·조회
+  - 요약 결과(요약문, 썸네일, 렌더링 HTML 등)를 포스트에 반영
+  - 포스트 관련 이벤트(PostCreated, PostSummarized) 발행·구독
+- **User Service** (`user_service/app/main.py`)
+  - OAuth 제공자 기준 유저 식별 정보(provider, provider_sub)를 기반으로 유저를 upsert
+  - 내부 표준 유저 ID(`user_code`)를 관리하고, 북마크 데이터(users/bookmarks)를 담당
+- **Summary Worker (Python)** (`summary_worker/app/main.py`)
+  - PostCreated 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
+  - 결과를 담은 PostSummarized 이벤트를 발행
+- **Retry Worker** (`cmd/retryworker/main.go`)
+  - eventbus 레이어가 생성한 지연/재시도 토픽을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
   - 최대 재시도 횟수 초과 시 DLQ 토픽으로 이동
 
@@ -35,11 +39,13 @@
 
 ```mermaid
 flowchart TB
-    Client[User / Frontend] -->|HTTP| API[API Gateway :8080]
-    API -->|HTTP| CS[Content Service :8001]
+    Client[User / Frontend] -->|HTTP| API[API Gateway]
+    API -->|HTTP| CS[Content Service]
+    API -->|HTTP| US[User Service]
 
     subgraph Services
         CS
+        US
         SW[Summary Worker]
         RW[Retry Worker]
     end
@@ -48,7 +54,11 @@ flowchart TB
     SW <-->|Subscribe/Publish| EB
     RW <-->|Subscribe/Publish| EB
 
-    CS -->|CRUD| DB[(MongoDB)]
+    %% DB 노드 모양을 관계 설정보다 먼저 명시하여 파싱 오류 방지
+    DB[(MongoDB)]
+
+    CS -->|CRUD posts| DB
+    US -->|CRUD users, bookmarks| DB
     SW -->|Summarize| LLM[Gemini API]
 ```
 
@@ -62,9 +72,14 @@ tech-letter/
 │   └── internal/         # 내부 공통 패키지 (Go)
 ├── content_service/      # Content Service (Python FastAPI)
 │   └── app/
-│       ├── api/          # REST API 엔드포인트
-│       ├── services/     # 비즈니스 로직
-│       └── repositories/ # MongoDB 접근 레이어
+│       ├── api/          # 포스트/블로그/필터 REST API 엔드포인트
+│       ├── services/     # 콘텐츠 비즈니스 로직
+│       └── repositories/ # MongoDB 포스트/블로그 접근 레이어
+├── user_service/         # User Service (Python FastAPI)
+│   └── app/
+│       ├── api/          # 유저/북마크 REST API 엔드포인트
+│       ├── services/     # 유저/북마크 비즈니스 로직
+│       └── repositories/ # MongoDB 유저/북마크 접근 레이어
 ├── summary_worker/       # AI 요약 워커 (Python)
 │   └── app/
 │       ├── services/     # 요약 파이프라인 로직
@@ -74,7 +89,7 @@ tech-letter/
 │       ├── models/       # 도메인 모델 (Post, Blog 등)
 │       ├── events/       # 이벤트 정의
 │       └── eventbus/     # EventBus 추상화 레이어
-└── docs/                 # Swagger 문서
+└── docs/                 # API 문서 및 내부 설계 문서
 ```
 
 ### 이벤트 플로우
@@ -167,5 +182,6 @@ docker-compose up -d
 
 - **API Gateway**: 8080 (클라이언트용 REST API)
 - **Content Service**: 8001 (내부 서비스 API)
+- **User Service**: 8002 (내부 서비스 API - 유저/북마크)
 - Kafka: 9092
 - Kafka UI: 8081

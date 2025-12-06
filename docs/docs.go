@@ -55,6 +55,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/session/exchange": {
+            "post": {
+                "description": "짧은 TTL을 가진 session ID를 받아, 유저 서비스에 위임해 JWT 액세스 토큰으로 교환합니다.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "로그인 세션을 JWT 액세스 토큰으로 교환",
+                "parameters": [
+                    {
+                        "description": "세션 교환 요청",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.sessionExchangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "access_token 포함",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "세션 만료 또는 유효하지 않음",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/blogs": {
             "get": {
                 "description": "단순 페이징으로 블로그 목록을 조회합니다.",
@@ -778,6 +824,14 @@ const docTemplate = `{
                 "user_code": {
                     "type": "string",
                     "example": "user_1234"
+                }
+            }
+        },
+        "handlers.sessionExchangeRequest": {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "string"
                 }
             }
         }

@@ -160,3 +160,18 @@ def _ensure_indexes(db: Database) -> None:
         [("user_code", 1), ("created_at", -1)],
         name="idx_user_code_created_at_desc",
     )
+
+    # login_sessions: 세션 ID 유니크 + expires_at 기반 TTL
+    login_sessions = db["login_sessions"]
+
+    login_sessions.create_index(
+        [("session_id", 1)],
+        name="uniq_login_session_id",
+        unique=True,
+    )
+
+    login_sessions.create_index(
+        [("expires_at", 1)],
+        name="ttl_login_session_expires_at",
+        expireAfterSeconds=0,
+    )

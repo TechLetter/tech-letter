@@ -4,6 +4,7 @@ from typing import Protocol
 
 from common.models.user import User
 from ..models.bookmark import Bookmark
+from ..models.login_session import LoginSession
 
 
 class UserRepositoryInterface(Protocol):
@@ -59,4 +60,21 @@ class BookmarkRepositoryInterface(Protocol):
     def list_post_ids_for_user(
         self, user_code: str, post_ids: list[str]
     ) -> list[str]:  # pragma: no cover - Protocol
+        ...
+
+
+class LoginSessionRepositoryInterface(Protocol):
+    """LoginSessionRepository가 따라야 할 최소한의 계약.
+
+    - 세션은 한 번만 사용 가능하며, session_id 로 삭제/조회한다.
+    """
+
+    def create(
+        self, session: LoginSession
+    ) -> LoginSession:  # pragma: no cover - Protocol
+        ...
+
+    def delete_by_session_id(
+        self, session_id: str
+    ) -> LoginSession | None:  # pragma: no cover - Protocol
         ...
