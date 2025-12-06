@@ -2,9 +2,12 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"tech-letter/cmd/api/auth"
 	"tech-letter/cmd/api/clients/userclient"
@@ -18,6 +21,9 @@ type AuthService struct {
 }
 
 var ErrUserNotFound = errors.New("user not found")
+
+// 로그인 세션 TTL. (임시 OAuth 세션의 만료 시간)
+const loginSessionTTL = 60 * time.Second
 
 func NewAuthService(googleOAuth *auth.GoogleOAuthClient, userClient *userclient.Client, jwtManager *auth.JWTManager, redirectURL string) *AuthService {
 	return &AuthService{
@@ -79,18 +85,35 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (st
 		return "", fmt.Errorf("jwt sign: %w", err)
 	}
 
-	return accessToken, nil
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return "", fmt.Errorf("generate login session id: %w", err)
+	}
+	expiresAt := time.Now().Add(loginSessionTTL)
+	if err := s.userClient.CreateLoginSession(ctx, sessionID, accessToken, expiresAt); err != nil {
+		return "", fmt.Errorf("create login session: %w", err)
+	}
+	return sessionID, nil
+}
+
+// ExchangeLoginSession 는 짧은 TTL을 가진 로그인 세션을 JWT 액세스 토큰으로 교환한다.
+func (s *AuthService) ExchangeLoginSession(ctx context.Context, sessionID string) (string, error) {
+	jwtToken, err := s.userClient.ExchangeLoginSession(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("exchange login session: %w", err)
+	}
+	return jwtToken, nil
 }
 
 // GetRedirectURL 는 Google OAuth 플로우 최종 리다이렉트 대상 URL을 반환한다.
-// 성공 시에는 GetRedirectURLWithToken 으로 토큰을 붙여 사용하고,
-// 실패 시에는 이 URL로 토큰 없이 리다이렉트한다.
+// 성공 시에는 GetRedirectURLWithSession 으로 세션 ID 를 붙여 사용하고,
+// 실패 시에는 이 URL로 세션 없이 리다이렉트한다.
 func (s *AuthService) GetRedirectURL() string {
 	return s.redirectURL
 }
 
-func (s *AuthService) GetRedirectURLWithToken(token string) string {
-	return fmt.Sprintf("%s?token=%s", s.redirectURL, token)
+func (s *AuthService) GetRedirectURLWithSession(sessionID string) string {
+	return fmt.Sprintf("%s?session=%s", s.redirectURL, sessionID)
 }
 
 func (s *AuthService) ParseAccessToken(token string) (string, string, error) {
@@ -106,4 +129,12 @@ func (s *AuthService) GetUserProfile(ctx context.Context, userCode string) (user
 		return userclient.UserProfileResponse{}, err
 	}
 	return profile, nil
+}
+
+func generateSessionID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }

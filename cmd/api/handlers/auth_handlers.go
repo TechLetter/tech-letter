@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -112,7 +113,7 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		accessToken, err := authSvc.HandleGoogleCallback(c.Request.Context(), code)
+		sessionID, err := authSvc.HandleGoogleCallback(c.Request.Context(), code)
 		if err != nil {
 			logger.ErrorWithFields("google callback failed", logger.Fields{
 				"error":       err.Error(),
@@ -124,13 +125,61 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		redirectWithToken := authSvc.GetRedirectURLWithToken(accessToken)
-		logger.InfoWithFields("redirect to login success with token", logger.Fields{
-			"redirect_to": redirectWithToken,
+		redirectWithSession := authSvc.GetRedirectURLWithSession(sessionID)
+		logger.InfoWithFields("redirect to login success with session", logger.Fields{
+			"redirect_to": redirectWithSession,
 			"request_id":  c.Request.Header.Get("X-Request-Id"),
 			"span_id":     c.Request.Header.Get("X-Span-Id"),
 		})
-		c.Redirect(http.StatusFound, redirectWithToken)
+		c.Redirect(http.StatusFound, redirectWithSession)
+	}
+}
+
+type sessionExchangeRequest struct {
+	Session string `json:"session"`
+}
+
+// SessionExchangeHandler godoc
+// @Summary      로그인 세션을 JWT 액세스 토큰으로 교환
+// @Description  짧은 TTL을 가진 session ID를 받아, 유저 서비스에 위임해 JWT 액세스 토큰으로 교환합니다.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      sessionExchangeRequest  true  "세션 교환 요청"
+// @Success      200   {object}  map[string]string       "access_token 포함"
+// @Failure      400   {object}  map[string]string       "세션 만료 또는 유효하지 않음"
+// @Router       /auth/session/exchange [post]
+func SessionExchangeHandler(authSvc *services.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req sessionExchangeRequest
+		if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Session) == "" {
+			logger.ErrorWithFields("session exchange failed", logger.Fields{
+				"error":      err.Error(),
+				"request_id": c.Request.Header.Get("X-Request-Id"),
+				"span_id":    c.Request.Header.Get("X-Span-Id"),
+			})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "로그인 세션이 만료되었거나 유효하지 않습니다.",
+			})
+			return
+		}
+
+		accessToken, err := authSvc.ExchangeLoginSession(c.Request.Context(), req.Session)
+		if err != nil {
+			logger.ErrorWithFields("session exchange failed", logger.Fields{
+				"error":      err.Error(),
+				"request_id": c.Request.Header.Get("X-Request-Id"),
+				"span_id":    c.Request.Header.Get("X-Span-Id"),
+			})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "로그인 세션이 만료되었거나 유효하지 않습니다.",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"access_token": accessToken,
+		})
 	}
 }
 

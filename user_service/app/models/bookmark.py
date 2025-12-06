@@ -12,3 +12,4 @@ class Bookmark(BaseModel):
     user_code: str
     post_id: str
     created_at: datetime
+    updated_at: datetime
