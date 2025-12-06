@@ -17,6 +17,9 @@ class PostRepositoryInterface(Protocol):
     ) -> tuple[list[Post], int]:  # pragma: no cover - Protocol
         ...
 
+    def list_by_ids(self, ids: list[str]) -> list[Post]:  # pragma: no cover - Protocol
+        ...
+
     def is_exist_by_link(self, link: str) -> bool:  # pragma: no cover - Protocol
         ...
 
