@@ -13,9 +13,9 @@ import (
 	"github.com/rs/cors"
 )
 
-// @title           Tech-Letter API
+// @title           Tech-Letter 공개 API
 // @version         1.0
-// @description     API for browsing summarized tech blog posts
+// @description     요약된 기술 블로그 포스트를 조회하고 사용자 인증/프로필을 관리하는 API입니다.
 // @BasePath        /api/v1
 
 func main() {
