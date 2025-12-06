@@ -54,8 +54,11 @@ flowchart TB
     SW <-->|Subscribe/Publish| EB
     RW <-->|Subscribe/Publish| EB
 
-    CS -->|CRUD (posts)| DB[(MongoDB)]
-    US -->|CRUD (users, bookmarks)| DB
+    %% DB 노드 모양을 관계 설정보다 먼저 명시하여 파싱 오류 방지
+    DB[(MongoDB)]
+
+    CS -->|CRUD posts| DB
+    US -->|CRUD users, bookmarks| DB
     SW -->|Summarize| LLM[Gemini API]
 ```
 
