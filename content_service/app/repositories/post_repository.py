@@ -135,6 +135,25 @@ class PostRepository(PostRepositoryInterface):
 
         return items, total
 
+    def list_by_ids(self, ids: list[str]) -> list[Post]:
+        """지정된 ObjectID 목록에 해당하는 포스트들을 반환한다."""
+
+        if not ids:
+            return []
+
+        object_ids = [to_object_id(v) for v in ids]
+
+        cursor = self._col.find(
+            {"_id": {"$in": object_ids}},
+            {"rendered_html": 0, "plain_text": 0},
+        )
+
+        items: list[Post] = []
+        for doc in cursor:
+            items.append(self._from_document(doc))
+
+        return items
+
     def find_by_id(self, id_value: str) -> Post | None:
         doc = self._col.find_one(
             {"_id": to_object_id(id_value)},

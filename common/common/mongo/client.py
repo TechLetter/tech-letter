@@ -146,3 +146,17 @@ def _ensure_indexes(db: Database) -> None:
         name="uniq_provider_provider_sub",
         unique=True,
     )
+
+    # bookmarks: user_code + post_id 유니크 제약 및 조회용 인덱스
+    bookmarks = db["bookmarks"]
+
+    bookmarks.create_index(
+        [("user_code", 1), ("post_id", 1)],
+        name="uniq_user_code_post_id",
+        unique=True,
+    )
+
+    bookmarks.create_index(
+        [("user_code", 1), ("created_at", -1)],
+        name="idx_user_code_created_at_desc",
+    )

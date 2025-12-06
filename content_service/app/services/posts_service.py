@@ -33,6 +33,9 @@ class PostsService:
     def increment_view_count(self, post_id: str) -> bool:
         return self._repo.increment_view_count(post_id)
 
+    def list_by_ids(self, ids: list[str]) -> list[Post]:
+        return self._repo.list_by_ids(ids)
+
 
 def get_post_repository(
     db: Database = Depends(get_database),
