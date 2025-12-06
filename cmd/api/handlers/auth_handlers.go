@@ -24,6 +24,13 @@ func generateState() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
+// GoogleLoginHandler godoc
+// @Summary      Google 로그인 시작
+// @Description  state 값을 생성해 쿠키에 저장한 뒤, Google OAuth 인증 페이지로 리다이렉트합니다. 실패 시에도 프론트의 로그인 완료 페이지로 토큰 없이 이동합니다.
+// @Tags         auth
+// @Produce      json
+// @Success      302  {string}  string  "Google OAuth 로그인 페이지 또는 로그인 완료 페이지로 리다이렉트"
+// @Router       /auth/google/login [get]
 func GoogleLoginHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		state, err := generateState()
@@ -53,6 +60,13 @@ func GoogleLoginHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	}
 }
 
+// GoogleCallbackHandler godoc
+// @Summary      Google OAuth 콜백 처리
+// @Description  state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다.
+// @Tags         auth
+// @Produce      json
+// @Success      302  {string}  string  "로그인 완료 페이지로 리다이렉트 (성공 시 토큰 포함)"
+// @Router       /auth/google/callback [get]
 func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		state := c.Query("state")
@@ -121,6 +135,17 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	}
 }
 
+// GetUserProfileHandler godoc
+// @Summary      현재 로그인한 사용자 프로필 조회
+// @Description  Authorization 헤더에 포함된 JWT를 검증하고, 현재 로그인한 사용자의 프로필 정보를 조회합니다.
+// @Tags         users
+// @Param        Authorization  header  string  true  "Bearer 액세스 토큰 (예: Bearer eyJ...)"
+// @Produce      json
+// @Success      200  {object}  dto.UserProfileDTO
+// @Failure      401  {object}  dto.ErrorResponseDTO
+// @Failure      404  {object}  dto.ErrorResponseDTO
+// @Failure      500  {object}  dto.ErrorResponseDTO
+// @Router       /users/profile [get]
 func GetUserProfileHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
