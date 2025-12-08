@@ -59,7 +59,6 @@ class PostSummaryApplyService:
         status = StatusFlags(ai_summarized=True)
 
         updates = {
-            "rendered_html": event.rendered_html or "",
             "plain_text": event.plain_text or "",
             "thumbnail_url": event.thumbnail_url or "",
             "aisummary": summary.model_dump(by_alias=True),

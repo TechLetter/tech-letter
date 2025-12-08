@@ -123,7 +123,7 @@ class PostRepository(PostRepositoryInterface):
 
         cursor = self._col.find(
             filter_doc,
-            {"rendered_html": 0, "plain_text": 0},
+            {"plain_text": 0},
             sort=[("published_at", -1), ("_id", -1)],
             skip=skip,
             limit=page_size,
@@ -145,7 +145,7 @@ class PostRepository(PostRepositoryInterface):
 
         cursor = self._col.find(
             {"_id": {"$in": object_ids}},
-            {"rendered_html": 0, "plain_text": 0},
+            {"plain_text": 0},
         )
 
         items: list[Post] = []
@@ -157,7 +157,7 @@ class PostRepository(PostRepositoryInterface):
     def find_by_id(self, id_value: str) -> Post | None:
         doc = self._col.find_one(
             {"_id": to_object_id(id_value)},
-            {"rendered_html": 0, "plain_text": 0},
+            {"plain_text": 0},
         )
         if not doc:
             return None
@@ -175,18 +175,6 @@ class PostRepository(PostRepositoryInterface):
             return ""
         return str(value)
 
-    def get_rendered_html(self, id_value: str) -> str | None:
-        doc = self._col.find_one(
-            {"_id": to_object_id(id_value)},
-            {"rendered_html": 1},
-        )
-        if not doc:
-            return None
-        value = doc.get("rendered_html")
-        if value is None:
-            return ""
-        return str(value)
-
     def increment_view_count(self, id_value: str) -> bool:
         result = self._col.update_one(
             {"_id": to_object_id(id_value)},
@@ -199,7 +187,6 @@ class PostRepository(PostRepositoryInterface):
 
     def update_fields(self, id_value: str, updates: dict) -> None:
         allowed_keys = {
-            "rendered_html",
             "plain_text",
             "thumbnail_url",
             "aisummary",

@@ -27,9 +27,6 @@ class PostsService:
     def get_plain_text(self, post_id: str) -> str | None:
         return self._repo.get_plain_text(post_id)
 
-    def get_rendered_html(self, post_id: str) -> str | None:
-        return self._repo.get_rendered_html(post_id)
-
     def increment_view_count(self, post_id: str) -> bool:
         return self._repo.increment_view_count(post_id)
 
