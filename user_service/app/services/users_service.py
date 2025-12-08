@@ -9,8 +9,12 @@ from pymongo.database import Database
 from common.models.user import User, UserProfile, UserUpsertInput
 from common.mongo.client import get_database
 
-from ..repositories.interfaces import UserRepositoryInterface
+from ..repositories.interfaces import (
+    UserRepositoryInterface,
+    BookmarkRepositoryInterface,
+)
 from ..repositories.user_repository import UserRepository
+from ..repositories.bookmark_repository import BookmarkRepository
 
 
 class UsersService:
@@ -19,11 +23,16 @@ class UsersService:
     - Repository(UserRepositoryInterface)에만 의존하고, Mongo 세부 구현은 알지 않는다.
     """
 
-    def __init__(self, repo: UserRepositoryInterface) -> None:
-        self._repo = repo
+    def __init__(
+        self,
+        user_repo: UserRepositoryInterface,
+        bookmark_repo: BookmarkRepositoryInterface,
+    ) -> None:
+        self._user_repo = user_repo
+        self._bookmark_repo = bookmark_repo
 
     def upsert_user(self, input_model: UserUpsertInput) -> UserProfile:
-        existing = self._repo.find_by_provider_and_sub(
+        existing = self._user_repo.find_by_provider_and_sub(
             provider=input_model.provider,
             provider_sub=input_model.provider_sub,
         )
@@ -44,10 +53,10 @@ class UsersService:
                 updated_at=now,
             )
 
-            created = self._repo.insert(user)
+            created = self._user_repo.insert(user)
             return self._to_profile(created)
 
-        updated = self._repo.update_profile(
+        updated = self._user_repo.update_profile(
             user_code=existing.user_code,
             email=input_model.email,
             name=input_model.name,
@@ -56,10 +65,25 @@ class UsersService:
         return self._to_profile(updated)
 
     def get_profile(self, user_code: str) -> UserProfile | None:
-        user = self._repo.find_by_user_code(user_code)
+        user = self._user_repo.find_by_user_code(user_code)
         if user is None:
             return None
         return self._to_profile(user)
+
+    def delete_user(self, user_code: str) -> bool:
+        """유저와 해당 유저의 모든 북마크를 삭제한다.
+
+        - user 가 존재하지 않으면 False 를 반환한다.
+        - 존재하는 경우 북마크를 먼저 삭제하고, 이후 유저 도큐먼트를 삭제한다.
+        """
+
+        user = self._user_repo.find_by_user_code(user_code)
+        if user is None:
+            return False
+
+        # 북마크는 존재하지 않아도 delete_many 결과가 0 이므로 별도 체크는 하지 않는다.
+        self._bookmark_repo.delete_all_by_user_code(user_code)
+        return self._user_repo.delete_by_user_code(user_code)
 
     @staticmethod
     def _to_profile(user: User) -> UserProfile:
@@ -84,9 +108,20 @@ def get_user_repository(
     return UserRepository(db)
 
 
+def get_bookmark_repository_for_users(
+    db: Database = Depends(get_database),
+) -> BookmarkRepositoryInterface:
+    """UsersService 에서 사용할 BookmarkRepository DI 팩토리."""
+
+    return BookmarkRepository(db)
+
+
 def get_users_service(
-    repo: UserRepositoryInterface = Depends(get_user_repository),
+    user_repo: UserRepositoryInterface = Depends(get_user_repository),
+    bookmark_repo: BookmarkRepositoryInterface = Depends(
+        get_bookmark_repository_for_users
+    ),
 ) -> UsersService:
     """FastAPI DI용 UsersService 팩토리."""
 
-    return UsersService(repo)
+    return UsersService(user_repo=user_repo, bookmark_repo=bookmark_repo)

@@ -81,3 +81,9 @@ class BookmarkRepository(BookmarkRepositoryInterface):
             if value is not None:
                 ids.append(str(value))
         return ids
+
+    def delete_all_by_user_code(self, user_code: str) -> int:
+        """특정 유저의 모든 북마크를 삭제하고 삭제된 개수를 반환한다."""
+
+        result = self._col.delete_many({"user_code": user_code})
+        return int(result.deleted_count)
