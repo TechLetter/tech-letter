@@ -135,6 +135,55 @@ const profile = await res.json();
 
 ---
 
+### 2.5 `DELETE /api/v1/users/me`
+
+- **용도**: 로그인한 사용자의 계정(프로필 + 북마크)을 삭제하는 **회원 탈퇴** 엔드포인트
+- **입력**
+  - 헤더: `Authorization: Bearer <JWT>`
+  - 바디 없음
+- **외부 계약 (Gateway)**
+  - 클라이언트는 항상 `DELETE /api/v1/users/me` 만 호출한다.
+  - Gateway 는 JWT 를 검증하고, `sub` 클레임에서 `user_code` 를 추출한다.
+  - 추출한 `user_code` 를 사용해 User Service 의 내부 API 를 호출한다.
+- **내부 동작 (User Service)**
+  - `DELETE /api/v1/users/{user_code}`
+    - users 컬렉션에서 해당 유저 도큐먼트 삭제
+    - bookmarks 컬렉션에서 해당 `user_code` 의 북마크 전부 삭제
+    - User Service 는 인증/인가 판단 없이 **순수 CRUD 역할**만 수행한다.
+- **응답 규칙 (Gateway 기준)**
+  - **성공:** `200 OK`
+  - **JWT 누락/검증 실패:** `401 Unauthorized`
+  - **유저 미존재(이미 탈퇴된 계정 포함):** `404 Not Found`
+  - **서버 오류:** `5xx`
+
+프론트 예시:
+
+```ts
+const token = localStorage.getItem("access_token");
+
+const res = await fetch(`${VITE_API_BASE_URL}/api/v1/users/me`, {
+  method: "DELETE",
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
+
+if (res.ok) {
+  // 200: 탈퇴 성공 → 로컬 토큰/프로필 제거 후 랜딩 페이지로 이동
+  localStorage.removeItem("access_token");
+  window.location.href = "/";
+} else if (res.status === 404) {
+  // 이미 탈퇴된 계정 등: 유저 미존재 → 토큰 제거 후 랜딩 페이지 이동
+  localStorage.removeItem("access_token");
+  window.location.href = "/";
+} else if (res.status === 401) {
+  // 인증 만료/무효: 일반 로그아웃 처리
+  localStorage.removeItem("access_token");
+}
+```
+
+---
+
 ## 3. JWT 스펙
 
 - **알고리즘**: `HS256`

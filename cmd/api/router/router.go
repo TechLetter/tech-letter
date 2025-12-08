@@ -68,6 +68,7 @@ func New() *gin.Engine {
 		api.GET("/auth/google/callback", handlers.GoogleCallbackHandler(authSvc))
 		api.POST("/auth/session/exchange", handlers.SessionExchangeHandler(authSvc))
 		api.GET("/users/profile", handlers.GetUserProfileHandler(authSvc))
+		api.DELETE("/users/me", handlers.DeleteCurrentUserHandler(authSvc))
 	}
 
 	return r

@@ -35,6 +35,11 @@ class UserRepositoryInterface(Protocol):
     ) -> User | None:  # pragma: no cover - Protocol
         ...
 
+    def delete_by_user_code(
+        self, user_code: str
+    ) -> bool:  # pragma: no cover - Protocol
+        ...
+
 
 class BookmarkRepositoryInterface(Protocol):
     """BookmarkRepository가 따라야 할 최소한의 계약.
@@ -60,6 +65,12 @@ class BookmarkRepositoryInterface(Protocol):
     def list_post_ids_for_user(
         self, user_code: str, post_ids: list[str]
     ) -> list[str]:  # pragma: no cover - Protocol
+        ...
+
+    def delete_all_by_user_code(
+        self, user_code: str
+    ) -> int:  # pragma: no cover - Protocol
+        """주어진 user_code 의 모든 북마크를 삭제하고 삭제된 개수를 반환한다."""
         ...
 
 

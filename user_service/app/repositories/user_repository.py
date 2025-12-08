@@ -67,3 +67,12 @@ class UserRepository(UserRepositoryInterface):
         if not doc:
             return None
         return self._from_document(doc)
+
+    def delete_by_user_code(self, user_code: str) -> bool:
+        """user_code 기준으로 유저 도큐먼트를 삭제한다.
+
+        - 삭제된 도큐먼트가 있으면 True, 없으면 False 를 반환한다.
+        """
+
+        result = self._col.delete_one({"user_code": user_code})
+        return result.deleted_count > 0
