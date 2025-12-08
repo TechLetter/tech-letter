@@ -47,9 +47,3 @@ class PostPlainTextResponse(BaseModel):
     """포스트 plain_text 전용 DTO."""
 
     plain_text: str | None = None
-
-
-class PostHtmlResponse(BaseModel):
-    """포스트 rendered_html 전용 DTO."""
-
-    rendered_html: str | None = None

@@ -51,7 +51,6 @@ class PostSummarizedEvent:
     tags: list[str]
     summary: str
     model_name: str
-    rendered_html: str
     plain_text: str
     thumbnail_url: str
 
@@ -65,7 +64,6 @@ class PostSummarizedEvent:
             version=str(data.get("version", "1.0")),
             post_id=str(data["post_id"]),
             link=str(data["link"]),
-            rendered_html=str(data["rendered_html"]),
             plain_text=str(data["plain_text"]),
             thumbnail_url=str(data["thumbnail_url"]),
             categories=list(data.get("categories", [])),
