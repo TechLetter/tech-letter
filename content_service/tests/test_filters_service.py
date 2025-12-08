@@ -34,10 +34,10 @@ class FakePostRepository(PostRepositoryInterface):
     def find_by_id(self, id_value: str) -> Any | None:  # type: ignore[override]
         raise NotImplementedError
 
-    def get_plain_text(self, id_value: str) -> str | None:  # type: ignore[override]
+    def list_by_ids(self, ids: list[str]) -> list[Any]:  # type: ignore[override]
         raise NotImplementedError
 
-    def get_rendered_html(self, id_value: str) -> str | None:  # type: ignore[override]
+    def get_plain_text(self, id_value: str) -> str | None:  # type: ignore[override]
         raise NotImplementedError
 
     def increment_view_count(self, id_value: str) -> bool:  # type: ignore[override]

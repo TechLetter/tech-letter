@@ -20,7 +20,6 @@ class PostDocument(BaseDocument):
     # - Mongo projection에서 제외되거나
     # - 도메인 Post -> Document 변환 시 필드가 비어 있어도 ValidationError가 발생하지 않도록 한다.
     thumbnail_url: str | None = ""
-    rendered_html: str | None = ""
     plain_text: str | None = ""
     aisummary: AISummary
 
