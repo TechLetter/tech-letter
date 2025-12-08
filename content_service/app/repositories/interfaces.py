@@ -34,11 +34,6 @@ class PostRepositoryInterface(Protocol):
     ) -> str | None:  # pragma: no cover - Protocol
         ...
 
-    def get_rendered_html(
-        self, id_value: str
-    ) -> str | None:  # pragma: no cover - Protocol
-        ...
-
     def increment_view_count(
         self, id_value: str
     ) -> bool:  # pragma: no cover - Protocol

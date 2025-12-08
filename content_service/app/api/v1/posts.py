@@ -8,7 +8,6 @@ from ...services.posts_service import PostsService, get_posts_service
 
 from ..schemas.posts import (
     ListPostsResponse,
-    PostHtmlResponse,
     PostPlainTextResponse,
     PostResponse,
     PostsBatchRequest,
@@ -106,26 +105,6 @@ def get_post_plain_text(
         raise HTTPException(status_code=404, detail="post not found")
 
     return PostPlainTextResponse(plain_text=result)
-
-
-@router.get(
-    "/{post_id}/html",
-    response_model=PostHtmlResponse,
-    summary="포스트 rendered_html 조회",
-    description=(
-        "특정 포스트의 rendered_html 을 별도로 조회한다. "
-        "리스트/기본 조회에서는 rendered_html 을 포함하지 않는다."
-    ),
-)
-def get_post_html(
-    post_id: str,
-    service: PostsService = Depends(get_posts_service),
-) -> PostHtmlResponse:
-    result = service.get_rendered_html(post_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="post not found")
-
-    return PostHtmlResponse(rendered_html=result)
 
 
 @router.post(

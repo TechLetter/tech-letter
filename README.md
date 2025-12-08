@@ -27,7 +27,7 @@
   - Google OAuth 기반 인증, JWT 발급/검증, 공통 에러 포맷, Swagger 문서 제공
 - **Content Service** (`content_service/app/main.py`)
   - 기술 블로그 포스트/블로그 메타데이터를 MongoDB 에 저장·조회
-  - 요약 결과(요약문, 썸네일, 렌더링 HTML 등)를 포스트에 반영
+  - 요약 결과(요약문, 썸네일, 본문 텍스트 등)를 포스트에 반영
   - 포스트 관련 이벤트(PostCreated, PostSummarized) 발행·구독
 - **User Service** (`user_service/app/main.py`)
   - OAuth 제공자 기준 유저 식별 정보(provider, provider_sub)를 기반으로 유저를 upsert
@@ -107,12 +107,12 @@ tech-letter/
 
    - `PostCreated` 이벤트를 구독
    - HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → Gemini 요약 수행
-   - 렌더링된 HTML, 썸네일 URL, 요약 결과를 포함한 `PostSummarized` 이벤트 발행 (`tech-letter.post.events`)
+   - plain_text, 썸네일 URL, 요약 결과를 포함한 `PostSummarized` 이벤트 발행 (`tech-letter.post.events`)
 
 3. **결과 DB 반영 (Content Service)**
 
    - `PostSummarized` 이벤트를 구독
-   - `posts.aisummary`, `posts.thumbnail_url`, `posts.rendered_html`, `posts.plain_text` 업데이트
+   - `posts.aisummary`, `posts.thumbnail_url`, `posts.plain_text` 업데이트
    - `status.ai_summarized = true` 로 상태 플래그 갱신
 
 4. **실패 시 재시도 (EventBus + Retry Worker)**
@@ -137,7 +137,7 @@ sequenceDiagram
     SW->>SW: RenderHTML + ParseText + ParseThumbnail + Summarize
     SW->>EB: PostSummarized (tech-letter.post.events)
     EB->>CS: Deliver PostSummarized
-    CS->>DB: Update aisummary + rendered_html + thumbnail_url + plain_text + status.ai_summarized=true
+    CS->>DB: Update aisummary + thumbnail_url + plain_text + status.ai_summarized=true
 
     alt Handler error (Summary Worker or Content Service)
         EB->>EB: Publish to retry topic (tech-letter.post.events.retry.N)
