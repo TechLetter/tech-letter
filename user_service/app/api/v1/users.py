@@ -34,3 +34,14 @@ async def get_user_profile(
     if profile is None:
         raise HTTPException(status_code=404, detail="user not found")
     return UserProfileResponse.from_domain(profile)
+
+
+@router.delete("/{user_code}", summary="유저 삭제 (내부용)")
+async def delete_user(
+    user_code: str,
+    service: UsersService = Depends(get_users_service),
+) -> dict[str, str]:
+    deleted = service.delete_user(user_code)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="user not found")
+    return {"message": "user_deleted"}

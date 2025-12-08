@@ -131,6 +131,17 @@ func (s *AuthService) GetUserProfile(ctx context.Context, userCode string) (user
 	return profile, nil
 }
 
+// DeleteUser 는 주어진 userCode 에 해당하는 유저와 북마크를 삭제한다.
+func (s *AuthService) DeleteUser(ctx context.Context, userCode string) error {
+	if err := s.userClient.DeleteUser(ctx, userCode); err != nil {
+		if errors.Is(err, userclient.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
+}
+
 func generateSessionID() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {

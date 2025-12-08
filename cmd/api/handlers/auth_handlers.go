@@ -183,6 +183,37 @@ func SessionExchangeHandler(authSvc *services.AuthService) gin.HandlerFunc {
 	}
 }
 
+// DeleteCurrentUserHandler godoc
+// @Summary      회원 탈퇴 (현재 로그인한 사용자)
+// @Description  Authorization 헤더의 JWT에서 user_code를 추출해 해당 사용자의 계정과 북마크를 삭제합니다.
+// @Tags         users
+// @Param        Authorization  header  string  true  "Bearer 액세스 토큰 (예: Bearer eyJ...)"
+// @Produce      json
+// @Success      200  {object}  map[string]string  "삭제 성공"
+// @Failure      401  {object}  map[string]string  "인증 실패"
+// @Failure      404  {object}  map[string]string  "유저 미존재"
+// @Failure      500  {object}  map[string]string  "서버 오류"
+// @Router       /users/me [delete]
+func DeleteCurrentUserHandler(authSvc *services.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userCode, ok := requireUserCodeFromHeader(c, authSvc)
+		if !ok {
+			return
+		}
+
+		if err := authSvc.DeleteUser(c.Request.Context(), userCode); err != nil {
+			if errors.Is(err, services.ErrUserNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "user_not_found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_user"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "user_deleted"})
+	}
+}
+
 // GetUserProfileHandler godoc
 // @Summary      현재 로그인한 사용자 프로필 조회
 // @Description  Authorization 헤더에 포함된 JWT를 검증하고, 현재 로그인한 사용자의 프로필 정보를 조회합니다.

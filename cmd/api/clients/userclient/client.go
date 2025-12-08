@@ -41,6 +41,31 @@ func New() *Client {
 	}
 }
 
+// DeleteUser는 DELETE /api/v1/users/{user_code} 를 호출해 유저와 해당 유저의 북마크를 삭제한다.
+func (c *Client) DeleteUser(ctx context.Context, userCode string) error {
+	relPath := path.Join("/api/v1/users", userCode)
+	req, err := c.base.NewRequest(ctx, http.MethodDelete, relPath, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusNotFound:
+		return ErrNotFound
+	default:
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("user-service DeleteUser: status=%d body=%s", resp.StatusCode, string(body))
+	}
+}
+
 // -------------------- DTOs --------------------
 
 type UpsertRequest struct {
