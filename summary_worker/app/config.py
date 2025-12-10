@@ -10,6 +10,7 @@ SUMMARY_WORKER_LLM_PROVIDER = "SUMMARY_WORKER_LLM_PROVIDER"
 SUMMARY_WORKER_LLM_MODEL_NAME = "SUMMARY_WORKER_LLM_MODEL_NAME"
 SUMMARY_WORKER_LLM_API_KEY = "SUMMARY_WORKER_LLM_API_KEY"
 SUMMARY_WORKER_LLM_TEMPERATURE = "SUMMARY_WORKER_LLM_TEMPERATURE"
+SUMMARY_WORKER_LLM_BASE_URL = "SUMMARY_WORKER_LLM_BASE_URL"
 
 
 @dataclass(slots=True)
@@ -37,11 +38,14 @@ def load_chat_model_config() -> ChatModelConfig:
     temperature_raw = os.getenv(SUMMARY_WORKER_LLM_TEMPERATURE)
     temperature = float(temperature_raw) if temperature_raw is not None else 0.3
 
+    base_url = os.getenv(SUMMARY_WORKER_LLM_BASE_URL) or None
+
     return ChatModelConfig(
         provider=provider,
         model=model,
         temperature=temperature,
         api_key=api_key,
+        base_url=base_url,
     )
 
 

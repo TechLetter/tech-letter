@@ -13,7 +13,7 @@
 - **웹 프레임워크**: Gin (Go), FastAPI (Python)
 - **데이터베이스**: MongoDB (posts, users, bookmarks)
 - **메시지 큐 / 스트리밍**: Apache Kafka
-- **AI**: Google Gemini API
+- **AI**: Google Gemini / OpenAI / Ollama (LangChain 기반 LLM 팩토리)
 - **패키지 관리**: Go Modules, uv (Python)
 - **컨테이너**: Docker & Docker Compose
 
@@ -33,7 +33,7 @@
   - OAuth 제공자 기준 유저 식별 정보(provider, provider_sub)를 기반으로 유저를 upsert
   - 내부 표준 유저 ID(`user_code`)를 관리하고, 북마크 데이터(users/bookmarks)를 담당
 - **Summary Worker (Python)** (`summary_worker/app/main.py`)
-  - PostCreated 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → AI 요약 수행
+  - PostCreated 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → 구성된 LLM(Gemini / OpenAI / Ollama)으로 요약 수행
   - 결과를 담은 PostSummarized 이벤트를 발행
 - **Retry Worker** (`cmd/retryworker/main.go`)
   - eventbus 레이어가 생성한 지연/재시도 토픽을 구독
@@ -64,7 +64,7 @@ flowchart TB
 
     CS -->|CRUD posts| DB
     US -->|CRUD users, bookmarks| DB
-    SW -->|Summarize| LLM[Gemini API]
+    SW -->|Summarize| LLM[LLM Provider]
 ```
 
 ### 디렉토리 구조
@@ -177,6 +177,44 @@ docker-compose up -d
 ### 환경 변수 설정
 
 `.env` 파일을 생성하고 `.env.example`을 참고하여 설정
+
+#### Summary Worker LLM 설정
+
+Summary Worker(Python)는 공통 LLM 팩토리(`common/common/llm/factory.py`)를 통해 여러 LLM 공급자를 지원합니다.
+
+- `SUMMARY_WORKER_LLM_PROVIDER`
+  - 사용 가능한 값: `google`, `openai`, `ollama`
+  - 기본값: `google`
+- `SUMMARY_WORKER_LLM_MODEL_NAME`
+  - 사용할 LLM 모델 이름 (예: `gemini-1.5-pro`, `gpt-4.1-mini`, `llama3.1`) **필수**
+- `SUMMARY_WORKER_LLM_API_KEY`
+  - `google` / `openai` 사용 시 필수
+  - `ollama` 사용 시 로컬 Ollama 서버를 호출하므로 이 값은 설정하지 않아도 되고, 설정해도 무시됩니다.
+- `SUMMARY_WORKER_LLM_TEMPERATURE`
+  - 선택값, 기본값 `0.3`
+- `SUMMARY_WORKER_LLM_BASE_URL`
+  - 선택값, 주로 `ollama` 사용 시 의미 있음
+  - 설정하지 않으면 Ollama 기본 base URL(일반적으로 `http://localhost:11434`)을 사용
+
+예시:
+
+```env
+# Google Gemini 사용
+SUMMARY_WORKER_LLM_PROVIDER=google
+SUMMARY_WORKER_LLM_MODEL_NAME=gemini-1.5-pro
+SUMMARY_WORKER_LLM_API_KEY=your-gemini-api-key
+
+# OpenAI 사용
+# SUMMARY_WORKER_LLM_PROVIDER=openai
+# SUMMARY_WORKER_LLM_MODEL_NAME=gpt-4.1-mini
+# SUMMARY_WORKER_LLM_API_KEY=your-openai-api-key
+
+# Ollama 사용 (로컬 ollama 서버 필요)
+# SUMMARY_WORKER_LLM_PROVIDER=ollama
+# SUMMARY_WORKER_LLM_MODEL_NAME=llama3.1
+# SUMMARY_WORKER_LLM_API_KEY=  # 비워 두거나 설정하지 않아도 됨
+# SUMMARY_WORKER_LLM_BASE_URL=http://localhost:11434  # 또는 원격 Ollama 서버 URL
+```
 
 ### Kafka 토픽
 
