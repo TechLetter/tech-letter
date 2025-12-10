@@ -11,11 +11,13 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 
 class LlmProvider(str, Enum):
     GOOGLE = "google"
     OPENAI = "openai"
+    OLLAMA = "ollama"
 
     @classmethod
     def from_str(cls, value: str) -> Self:
@@ -31,6 +33,7 @@ class EmbeddingConfig:
     provider: LlmProvider
     model: str
     api_key: str | None = None
+    base_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -39,6 +42,7 @@ class ChatModelConfig:
     model: str
     temperature: float = 1.0
     api_key: str | None = None
+    base_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -61,6 +65,10 @@ def _apply_api_key_env(provider: LlmProvider, api_key: str | None) -> None:
 _EMBEDDING_FACTORIES: dict[LlmProvider, Callable[[EmbeddingConfig], Embeddings]] = {
     LlmProvider.GOOGLE: lambda cfg: GoogleGenerativeAIEmbeddings(model=cfg.model),
     LlmProvider.OPENAI: lambda cfg: OpenAIEmbeddings(model=cfg.model),
+    LlmProvider.OLLAMA: lambda cfg: OllamaEmbeddings(
+        model=cfg.model,
+        base_url=cfg.base_url,
+    ),
 }
 
 
@@ -72,6 +80,11 @@ _CHAT_FACTORIES: dict[LlmProvider, Callable[[ChatModelConfig], BaseChatModel]] =
     LlmProvider.OPENAI: lambda cfg: ChatOpenAI(
         model=cfg.model,
         temperature=cfg.temperature,
+    ),
+    LlmProvider.OLLAMA: lambda cfg: ChatOllama(
+        model=cfg.model,
+        temperature=cfg.temperature,
+        base_url=cfg.base_url,
     ),
 }
 

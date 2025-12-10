@@ -8,6 +8,7 @@ dependencies = [
   "langchain-openai",
   "langchain-google-genai",
   "langchain-community",
+  "langchain-ollama",
   "chromadb",
   "confluent-kafka==2.5.0",
   "pymongo",
