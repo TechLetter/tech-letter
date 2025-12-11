@@ -13,7 +13,7 @@
 - **웹 프레임워크**: Gin (Go), FastAPI (Python)
 - **데이터베이스**: MongoDB (posts, users, bookmarks)
 - **메시지 큐 / 스트리밍**: Apache Kafka
-- **AI**: Google Gemini / OpenAI / Ollama (LangChain 기반 LLM 팩토리)
+- **AI**: Google Gemini / OpenAI / Ollama / OpenRouter (LangChain 기반 LLM 팩토리)
 - **패키지 관리**: Go Modules, uv (Python)
 - **컨테이너**: Docker & Docker Compose
 
@@ -183,22 +183,29 @@ docker-compose up -d
 Summary Worker(Python)는 공통 LLM 팩토리(`common/common/llm/factory.py`)를 통해 여러 LLM 공급자를 지원합니다.
 
 - `SUMMARY_WORKER_LLM_PROVIDER`
-  - 사용 가능한 값: `google`, `openai`, `ollama`
+  - 사용 가능한 값: `google`, `openai`, `ollama`, `openrouter`
   - 기본값: `google`
 - `SUMMARY_WORKER_LLM_MODEL_NAME`
   - 사용할 LLM 모델 이름 (예: `gemini-1.5-pro`, `gpt-4.1-mini`, `llama3.1`) **필수**
 - `SUMMARY_WORKER_LLM_API_KEY`
-  - `google` / `openai` 사용 시 필수
+  - `google` / `openai` / `openrouter` 사용 시 필수
   - `ollama` 사용 시 로컬 Ollama 서버를 호출하므로 이 값은 설정하지 않아도 되고, 설정해도 무시됩니다.
 - `SUMMARY_WORKER_LLM_TEMPERATURE`
   - 선택값, 기본값 `0.3`
+- `SUMMARY_WORKER_LLM_MAX_RETRIES`
+  - 선택값, 기본값 `0` (LangChain LLM 레벨 재시도 횟수)
+  - `0`이면 LangChain이 동일 요청을 재시도하지 않고 즉시 예외를 반환
 - `SUMMARY_WORKER_LLM_BASE_URL`
-  - 선택값, 주로 `ollama` 사용 시 의미 있음
-  - 설정하지 않으면 Ollama 기본 base URL(일반적으로 `http://localhost:11434`)을 사용
+  - 선택값, 주로 `ollama` 또는 `openrouter` 사용 시 의미 있음
+  - `ollama` 사용 시 설정하지 않으면 Ollama 기본 base URL(일반적으로 `http://localhost:11434`)을 사용
+  - `openrouter` 사용 시 값을 비우면 기본값 `https://openrouter.ai/api/v1` 를 사용
 
 예시:
 
 ```env
+# 공통 재시도 설정 (옵션, 기본 0)
+# SUMMARY_WORKER_LLM_MAX_RETRIES=0
+
 # Google Gemini 사용
 SUMMARY_WORKER_LLM_PROVIDER=google
 SUMMARY_WORKER_LLM_MODEL_NAME=gemini-1.5-pro
@@ -208,6 +215,12 @@ SUMMARY_WORKER_LLM_API_KEY=your-gemini-api-key
 # SUMMARY_WORKER_LLM_PROVIDER=openai
 # SUMMARY_WORKER_LLM_MODEL_NAME=gpt-4.1-mini
 # SUMMARY_WORKER_LLM_API_KEY=your-openai-api-key
+
+# OpenRouter 사용 (OpenAI 호환 API)
+# SUMMARY_WORKER_LLM_PROVIDER=openrouter
+# SUMMARY_WORKER_LLM_MODEL_NAME=google/gemini-2.0-flash-001  # 예시, OpenRouter에서 제공하는 모델 이름
+# SUMMARY_WORKER_LLM_API_KEY=your-openrouter-api-key
+# SUMMARY_WORKER_LLM_BASE_URL=https://openrouter.ai/api/v1
 
 # Ollama 사용 (로컬 ollama 서버 필요)
 # SUMMARY_WORKER_LLM_PROVIDER=ollama

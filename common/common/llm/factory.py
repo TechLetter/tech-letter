@@ -18,6 +18,7 @@ class LlmProvider(str, Enum):
     GOOGLE = "google"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    OPENROUTER = "openrouter"
 
     @classmethod
     def from_str(cls, value: str) -> Self:
@@ -43,6 +44,7 @@ class ChatModelConfig:
     temperature: float = 1.0
     api_key: str | None = None
     base_url: str | None = None
+    max_retries: int = 0
 
 
 @dataclass(slots=True)
@@ -60,14 +62,24 @@ def _apply_api_key_env(provider: LlmProvider, api_key: str | None) -> None:
         os.environ.setdefault("GOOGLE_API_KEY", api_key)
     elif provider is LlmProvider.OPENAI:
         os.environ.setdefault("OPENAI_API_KEY", api_key)
+    elif provider is LlmProvider.OPENROUTER:
+        os.environ.setdefault("OPENAI_API_KEY", api_key)
+        os.environ.setdefault("OPENROUTER_API_KEY", api_key)
 
 
 _EMBEDDING_FACTORIES: dict[LlmProvider, Callable[[EmbeddingConfig], Embeddings]] = {
     LlmProvider.GOOGLE: lambda cfg: GoogleGenerativeAIEmbeddings(model=cfg.model),
-    LlmProvider.OPENAI: lambda cfg: OpenAIEmbeddings(model=cfg.model),
-    LlmProvider.OLLAMA: lambda cfg: OllamaEmbeddings(
+    LlmProvider.OPENAI: lambda cfg: OpenAIEmbeddings(
         model=cfg.model,
         base_url=cfg.base_url,
+    ),
+    LlmProvider.OLLAMA: lambda cfg: OllamaEmbeddings(
+        model=cfg.model,
+        base_url=cfg.base_url or "http://localhost:11434",
+    ),
+    LlmProvider.OPENROUTER: lambda cfg: OpenAIEmbeddings(
+        model=cfg.model,
+        base_url=cfg.base_url or "https://openrouter.ai/api/v1",
     ),
 }
 
@@ -76,15 +88,24 @@ _CHAT_FACTORIES: dict[LlmProvider, Callable[[ChatModelConfig], BaseChatModel]] =
     LlmProvider.GOOGLE: lambda cfg: ChatGoogleGenerativeAI(
         model=cfg.model,
         temperature=cfg.temperature,
+        max_retries=cfg.max_retries,
     ),
     LlmProvider.OPENAI: lambda cfg: ChatOpenAI(
         model=cfg.model,
         temperature=cfg.temperature,
+        base_url=cfg.base_url,
+        max_retries=cfg.max_retries,
     ),
     LlmProvider.OLLAMA: lambda cfg: ChatOllama(
         model=cfg.model,
         temperature=cfg.temperature,
-        base_url=cfg.base_url,
+        base_url=cfg.base_url or "http://localhost:11434",
+    ),
+    LlmProvider.OPENROUTER: lambda cfg: ChatOpenAI(
+        model=cfg.model,
+        temperature=cfg.temperature,
+        base_url=cfg.base_url or "https://openrouter.ai/api/v1",
+        max_retries=cfg.max_retries,
     ),
 }
 
