@@ -11,6 +11,7 @@ SUMMARY_WORKER_LLM_MODEL_NAME = "SUMMARY_WORKER_LLM_MODEL_NAME"
 SUMMARY_WORKER_LLM_API_KEY = "SUMMARY_WORKER_LLM_API_KEY"
 SUMMARY_WORKER_LLM_TEMPERATURE = "SUMMARY_WORKER_LLM_TEMPERATURE"
 SUMMARY_WORKER_LLM_BASE_URL = "SUMMARY_WORKER_LLM_BASE_URL"
+SUMMARY_WORKER_LLM_MAX_RETRIES = "SUMMARY_WORKER_LLM_MAX_RETRIES"
 
 
 @dataclass(slots=True)
@@ -40,12 +41,29 @@ def load_chat_model_config() -> ChatModelConfig:
 
     base_url = os.getenv(SUMMARY_WORKER_LLM_BASE_URL) or None
 
+    max_retries_raw = os.getenv(SUMMARY_WORKER_LLM_MAX_RETRIES)
+    if max_retries_raw in (None, ""):
+        max_retries = 0
+    else:
+        try:
+            parsed_max_retries = int(max_retries_raw)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"{SUMMARY_WORKER_LLM_MAX_RETRIES} must be an integer if set, got: {max_retries_raw!r}",
+            ) from exc
+        if parsed_max_retries < 0:
+            raise RuntimeError(
+                f"{SUMMARY_WORKER_LLM_MAX_RETRIES} must be >= 0, got: {parsed_max_retries}",
+            )
+        max_retries = parsed_max_retries
+
     return ChatModelConfig(
         provider=provider,
         model=model,
         temperature=temperature,
         api_key=api_key,
         base_url=base_url,
+        max_retries=max_retries,
     )
 
 
