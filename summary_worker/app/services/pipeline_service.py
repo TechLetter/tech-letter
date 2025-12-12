@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -104,8 +105,9 @@ def handle_post_created_event(
 
     # 6. PostSummarized 이벤트 구성 및 publish
     now = datetime.now(timezone.utc).isoformat()
+    summarized_event_id = str(uuid.uuid4())
     summarized_event = PostSummarizedEvent(
-        id=created.id,
+        id=summarized_event_id,
         type=EventType.POST_SUMMARIZED,
         timestamp=now,
         source="summary-worker",
@@ -122,7 +124,10 @@ def handle_post_created_event(
     )
 
     try:
-        out_evt = new_json_event(payload=asdict(summarized_event))
+        out_evt = new_json_event(
+            payload=asdict(summarized_event),
+            event_id=summarized_event_id,
+        )
         bus.publish(TOPIC_POST_EVENTS.base, out_evt)
     except Exception:  # noqa: BLE001
         logger.exception(
