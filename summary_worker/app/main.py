@@ -8,12 +8,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from common.eventbus.config import get_brokers, get_group_id
 from common.eventbus.core import Event
 from common.eventbus.kafka import KafkaEventBus
-from common.eventbus.topics import TOPIC_POST_EVENTS
-from common.events.post import EventType, PostCreatedEvent
+from common.eventbus.topics import TOPIC_POST_SUMMARY
+from common.events.post import EventType, PostSummaryRequestedEvent
 from common.llm.factory import create_chat_model
 
 from .config import load_config
-from .services.pipeline_service import handle_post_created_event
+from .services.pipeline_service import handle_post_summary_requested_event
 from common.logger import setup_logger
 
 
@@ -27,21 +27,25 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: BaseChatModel) 
         return
 
     event_type = str(payload.get("type", ""))
-    if event_type != EventType.POST_CREATED:
+    if event_type != EventType.POST_SUMMARY_REQUESTED:
         # 다른 타입의 이벤트는 이 워커의 책임이 아니므로 무시한다.
         return
 
     try:
-        created = PostCreatedEvent.from_dict(payload)
+        requested = PostSummaryRequestedEvent.from_dict(payload)
     except Exception:
         logger.exception(
-            "failed to decode PostCreatedEvent id=%s payload=%r",
+            "failed to decode PostSummaryRequestedEvent id=%s payload=%r",
             payload.get("id"),
             payload,
         )
         raise
 
-    handle_post_created_event(created=created, bus=bus, chat_model=chat_model)
+    handle_post_summary_requested_event(
+        requested=requested,
+        bus=bus,
+        chat_model=chat_model,
+    )
 
 
 def main() -> None:
@@ -49,7 +53,7 @@ def main() -> None:
     logger.info("summary-worker (python) starting up")
 
     brokers = get_brokers()
-    group_id = get_group_id()
+    group_id = f"{get_group_id()}-summary-worker"
 
     bus = KafkaEventBus(brokers)
 
@@ -68,7 +72,7 @@ def main() -> None:
     try:
         bus.subscribe(
             group_id=group_id,
-            topic=TOPIC_POST_EVENTS,
+            topic=TOPIC_POST_SUMMARY,
             handler=lambda evt: _handle_event(evt, bus=bus, chat_model=chat_model),
             stop_flag=stop_flag,
         )

@@ -4,9 +4,9 @@ package eventbus
 // 필요시 환경설정으로 교체할 수 있도록 한 곳에서 관리합니다.
 
 var (
-	TopicPostEvents = NewTopic("tech-letter.post.events")
+	TopicPostSummary = NewTopic("tech-letter.post.summary")
 )
 
 var AllTopics = []Topic{
-	TopicPostEvents,
+	TopicPostSummary,
 }

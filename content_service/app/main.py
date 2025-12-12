@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
     """애플리케이션 생명주기 동안 백그라운드 작업을 관리한다.
 
     - RSS 스케줄러 스레드
-    - PostSummarized 이벤트를 소비하는 Kafka 컨슈머 스레드
+    - post.summary_response 이벤트를 소비하는 Kafka 컨슈머 스레드
     """
 
     start_rss_scheduler()
