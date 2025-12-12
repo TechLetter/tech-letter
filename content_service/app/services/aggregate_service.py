@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 from common.eventbus.helpers import new_json_event
 from common.eventbus.kafka import KafkaEventBus
-from common.eventbus.topics import TOPIC_POST_EVENTS
-from common.events.post import EventType, PostCreatedEvent
+from common.eventbus.topics import TOPIC_POST_SUMMARY
+from common.events.post import EventType, PostSummaryRequestedEvent
 from common.models.blog import Blog
 from common.models.post import AISummary, Post, StatusFlags
 
@@ -149,10 +149,10 @@ class AggregateService:
             post.id = inserted_id
 
             try:
-                self._publish_post_created(post)
+                self._publish_post_summary_requested(post)
             except Exception as exc:  # noqa: BLE001
                 logger.error(
-                    "failed to publish PostCreated event (post_id=%s, title=%s): %s",
+                    "failed to publish post summary requested event (post_id=%s, title=%s): %s",
                     inserted_id,
                     post.title,
                     exc,
@@ -189,34 +189,31 @@ class AggregateService:
             aisummary=empty_summary,
         )
 
-    def _publish_post_created(self, post: Post) -> None:
+    def _publish_post_summary_requested(self, post: Post) -> None:
         if post.id is None:
-            logger.error("cannot publish PostCreated event: post.id is None")
+            logger.error("cannot publish PostSummaryRequested event: post.id is None")
             return
 
         event_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        evt = PostCreatedEvent(
+        evt = PostSummaryRequestedEvent(
             id=event_id,
-            type=EventType.POST_CREATED,
+            type=EventType.POST_SUMMARY_REQUESTED,
             timestamp=timestamp,
             source=self._source,
             version="1.0",
             post_id=post.id,
-            blog_id=post.blog_id,
-            blog_name=post.blog_name,
-            title=post.title,
             link=post.link,
         )
 
         payload = asdict(evt)
         wrapped = new_json_event(payload=payload, event_id=event_id)
-        self._event_bus.publish(TOPIC_POST_EVENTS.base, wrapped)
+        self._event_bus.publish(TOPIC_POST_SUMMARY.base, wrapped)
 
         logger.info(
-            "published PostCreated event id=%s post_id=%s title=%s",
+            "published PostSummaryRequested event id=%s post_id=%s link=%s",
             event_id,
             post.id,
-            post.title,
+            post.link,
         )

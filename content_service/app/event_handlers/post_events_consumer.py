@@ -7,8 +7,8 @@ from typing import List
 from common.eventbus.config import get_brokers, get_group_id
 from common.eventbus.core import Event
 from common.eventbus.kafka import KafkaEventBus
-from common.eventbus.topics import TOPIC_POST_EVENTS
-from common.events.post import EventType, PostSummarizedEvent
+from common.eventbus.topics import TOPIC_POST_SUMMARY
+from common.events.post import EventType, PostSummaryResponseEvent
 from common.mongo.client import get_database
 
 from ..repositories.post_repository import PostRepository
@@ -25,22 +25,24 @@ def _handle_event(evt: Event, *, service: PostSummaryApplyService) -> None:
         return
 
     event_type = str(payload.get("type", ""))
-    if event_type != EventType.POST_SUMMARIZED:
+    if event_type != EventType.POST_SUMMARY_RESPONSE:
         # 다른 타입의 이벤트는 이 핸들러의 책임이 아니므로 무시한다.
         logger.debug(
-            "ignoring non-PostSummarized event: type=%s id=%s", event_type, evt.id
+            "ignoring non-PostSummaryResponse event: type=%s id=%s", event_type, evt.id
         )
         return
 
     logger.info(
-        "received PostSummarizedEvent id=%s post_id=%s", evt.id, payload.get("post_id")
+        "received PostSummaryResponseEvent id=%s post_id=%s",
+        evt.id,
+        payload.get("post_id"),
     )
 
     try:
-        summarized = PostSummarizedEvent.from_dict(payload)
+        summarized = PostSummaryResponseEvent.from_dict(payload)
     except Exception:  # noqa: BLE001
         logger.exception(
-            "failed to decode PostSummarizedEvent id=%s payload=%r",
+            "failed to decode PostSummaryResponseEvent id=%s payload=%r",
             payload.get("id"),
             payload,
         )
@@ -50,7 +52,7 @@ def _handle_event(evt: Event, *, service: PostSummaryApplyService) -> None:
 
 
 def run_post_summary_consumer(stop_flag: List[bool]) -> None:
-    """PostSummarizedEvent 를 계속 소비하는 구독 루프를 실행한다.
+    """PostSummaryResponseEvent 를 계속 소비하는 구독 루프를 실행한다.
 
     - stop_flag[0] 이 True 가 되면 안전하게 루프를 종료한다.
     - FastAPI lifespan 스레드나 단독 프로세스(main) 양쪽에서 재사용 가능하다.
@@ -62,17 +64,17 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
     service = PostSummaryApplyService(post_repository=post_repo)
 
     brokers = get_brokers()
-    group_id = get_group_id()
+    group_id = f"{get_group_id()}-content-service"
 
     bus = KafkaEventBus(brokers)
 
     try:
         logger.info(
-            "subscribing to topic=%s group_id=%s", TOPIC_POST_EVENTS.base, group_id
+            "subscribing to topic=%s group_id=%s", TOPIC_POST_SUMMARY.base, group_id
         )
         bus.subscribe(
             group_id=group_id,
-            topic=TOPIC_POST_EVENTS,
+            topic=TOPIC_POST_SUMMARY,
             handler=lambda evt: _handle_event(evt, service=service),
             stop_flag=stop_flag,
         )
