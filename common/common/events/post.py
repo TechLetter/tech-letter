@@ -5,21 +5,18 @@ from typing import Any, Mapping, Self
 
 
 class EventType:
-    POST_CREATED = "post.created"
-    POST_SUMMARIZED = "post.summarized"
+    POST_SUMMARY_REQUESTED = "post.summary_requested"
+    POST_SUMMARY_RESPONSE = "post.summary_response"
 
 
 @dataclass(slots=True)
-class PostCreatedEvent:
+class PostSummaryRequestedEvent:
     id: str
     type: str
     timestamp: str
     source: str
     version: str
     post_id: str
-    blog_id: str
-    blog_name: str
-    title: str
     link: str
 
     @classmethod
@@ -31,15 +28,12 @@ class PostCreatedEvent:
             source=str(data["source"]),
             version=str(data.get("version", "1.0")),
             post_id=str(data["post_id"]),
-            blog_id=str(data["blog_id"]),
-            blog_name=str(data["blog_name"]),
-            title=str(data["title"]),
             link=str(data["link"]),
         )
 
 
 @dataclass(slots=True)
-class PostSummarizedEvent:
+class PostSummaryResponseEvent:
     id: str
     type: str
     timestamp: str

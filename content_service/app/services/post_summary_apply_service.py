@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from common.events.post import PostSummarizedEvent
+from common.events.post import PostSummaryResponseEvent
 from common.models.post import AISummary, StatusFlags
 
 from ..repositories.interfaces import PostRepositoryInterface
@@ -13,36 +13,38 @@ logger = logging.getLogger(__name__)
 
 
 class PostSummaryApplyService:
-    """PostSummarizedEvent 를 받아 MongoDB Post 문서에 요약 정보를 반영하는 서비스."""
+    """PostSummaryResponseEvent 를 받아 MongoDB Post 문서에 요약 정보를 반영하는 서비스."""
 
     def __init__(self, post_repository: PostRepositoryInterface) -> None:
         self._post_repository = post_repository
 
-    def apply(self, event: PostSummarizedEvent) -> None:
+    def apply(self, event: PostSummaryResponseEvent) -> None:
         """요약 완료 이벤트를 받아 Post 문서에 요약/플래그를 반영한다."""
 
         post_id = event.post_id
         if not post_id:
-            logger.error("PostSummarizedEvent has empty post_id: %r", event)
+            logger.error("PostSummaryResponseEvent has empty post_id: %r", event)
             return
 
         try:
             post = self._post_repository.find_by_id(post_id)
         except Exception:  # noqa: BLE001
             logger.exception(
-                "failed to load post for PostSummarizedEvent post_id=%s", post_id
+                "failed to load post for PostSummaryResponseEvent post_id=%s", post_id
             )
             raise
 
         if post is None:
-            logger.warning("post not found for PostSummarizedEvent post_id=%s", post_id)
+            logger.warning(
+                "post not found for PostSummaryResponseEvent post_id=%s", post_id
+            )
             return
 
         try:
             generated_at = datetime.fromisoformat(event.timestamp)
         except Exception:  # noqa: BLE001
             logger.exception(
-                "invalid timestamp on PostSummarizedEvent id=%s timestamp=%r, falling back to now",
+                "invalid timestamp on PostSummaryResponseEvent id=%s timestamp=%r, falling back to now",
                 event.id,
                 event.timestamp,
             )
@@ -76,7 +78,7 @@ class PostSummaryApplyService:
             raise
 
         logger.info(
-            "applied PostSummarizedEvent id=%s to post_id=%s (model=%s)",
+            "applied PostSummaryResponseEvent id=%s to post_id=%s (model=%s)",
             event.id,
             post_id,
             event.model_name,

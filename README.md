@@ -28,13 +28,13 @@
 - **Content Service** (`content_service/app/main.py`)
   - 기술 블로그 포스트/블로그 메타데이터를 MongoDB 에 저장·조회
   - 요약 결과(요약문, 썸네일, 본문 텍스트 등)를 포스트에 반영
-  - 포스트 관련 이벤트(PostCreated, PostSummarized) 발행·구독
+  - 요약 관련 이벤트(`post.summary_requested`, `post.summary_response`) 발행·구독
 - **User Service** (`user_service/app/main.py`)
   - OAuth 제공자 기준 유저 식별 정보(provider, provider_sub)를 기반으로 유저를 upsert
   - 내부 표준 유저 ID(`user_code`)를 관리하고, 북마크 데이터(users/bookmarks)를 담당
 - **Summary Worker (Python)** (`summary_worker/app/main.py`)
-  - PostCreated 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → 구성된 LLM(Gemini / OpenAI / Ollama)으로 요약 수행
-  - 결과를 담은 PostSummarized 이벤트를 발행
+  - `post.summary_requested` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → 구성된 LLM(Gemini / OpenAI / Ollama)으로 요약 수행
+  - 결과를 담은 `post.summary_response` 이벤트를 발행
 - **Retry Worker** (`cmd/retryworker/main.go`)
   - eventbus 레이어가 생성한 지연/재시도 토픽을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
@@ -101,25 +101,26 @@ tech-letter/
 
 1. **포스트 수집 (Content Service)**  
    RSS 피드에서 새 포스트 발견 → MongoDB에 새 포스트 저장  
-   `status.ai_summarized=false` 로 초기화 후 `PostCreated` 이벤트 발행 (`tech-letter.post.events` 토픽)
+   `status.ai_summarized=false` 로 초기화 후 요약 파이프라인을 트리거하기 위해 `post.summary_requested` 이벤트 발행 (`tech-letter.post.summary` 토픽)
 
 2. **요약 + 썸네일 파이프라인 (Summary Worker)**
 
-   - `PostCreated` 이벤트를 구독
+   - `post.summary_requested` 이벤트를 구독
+   - Content Service의 요약 반영 컨슈머와는 **서로 다른 consumer group** 으로 동작해야 한다.
    - HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → Gemini 요약 수행
-   - plain_text, 썸네일 URL, 요약 결과를 포함한 `PostSummarized` 이벤트 발행 (`tech-letter.post.events`)
+   - plain_text, 썸네일 URL, 요약 결과를 포함한 `post.summary_response` 이벤트 발행 (`tech-letter.post.summary`)
 
 3. **결과 DB 반영 (Content Service)**
 
-   - `PostSummarized` 이벤트를 구독
+   - `post.summary_response` 이벤트를 구독
    - `posts.aisummary`, `posts.thumbnail_url`, `posts.plain_text` 업데이트
    - `status.ai_summarized = true` 로 상태 플래그 갱신
 
 4. **실패 시 재시도 (EventBus + Retry Worker)**
 
-   - Summary Worker 또는 Content Service에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.events.retry.N`)으로 이벤트를 이동
-   - Retry Worker가 지연 시간이 지난 메시지를 다시 기본 토픽(`tech-letter.post.events`)으로 재주입
-   - 최대 재시도 횟수를 초과하면 DLQ 토픽(`tech-letter.post.events.dlq`)으로 이동하여 후속 수동 처리
+   - Summary Worker 또는 Content Service에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.summary.retry.N`)으로 이벤트를 이동
+   - Retry Worker가 지연 시간이 지난 메시지를 다시 기본 토픽(`tech-letter.post.summary`)으로 재주입
+   - 최대 재시도 횟수를 초과하면 DLQ 토픽(`tech-letter.post.summary.dlq`)으로 이동하여 후속 수동 처리
 
 #### Event Flow Diagram
 
@@ -132,15 +133,15 @@ sequenceDiagram
     participant DB as MongoDB
 
     CS->>DB: Insert new Post (status.ai_summarized=false)
-    CS->>EB: PostCreated (tech-letter.post.events)
-    EB->>SW: Deliver PostCreated
+    CS->>EB: post.summary_requested (tech-letter.post.summary)
+    EB->>SW: Deliver post.summary_requested
     SW->>SW: RenderHTML + ParseText + ParseThumbnail + Summarize
-    SW->>EB: PostSummarized (tech-letter.post.events)
-    EB->>CS: Deliver PostSummarized
+    SW->>EB: post.summary_response (tech-letter.post.summary)
+    EB->>CS: Deliver post.summary_response
     CS->>DB: Update aisummary + thumbnail_url + plain_text + status.ai_summarized=true
 
     alt Handler error (Summary Worker or Content Service)
-        EB->>EB: Publish to retry topic (tech-letter.post.events.retry.N)
+        EB->>EB: Publish to retry topic (tech-letter.post.summary.retry.N)
         RW->>EB: After delay, re-publish to base topic
         EB->>SW: or CS: Redeliver event
     end
