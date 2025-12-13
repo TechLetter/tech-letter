@@ -160,6 +160,80 @@ services:
         reservations:
           memory: 512M
 
+  embedding_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.embedding_worker
+    container_name: techletter_embedding_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      EMBEDDING_WORKER_LLM_API_KEY: ${EMBEDDING_WORKER_LLM_API_KEY}
+      EMBEDDING_WORKER_LLM_PROVIDER: google
+      EMBEDDING_WORKER_LLM_MODEL_NAME: gemini-embedding-001
+      EMBEDDING_WORKER_CHUNK_SIZE: 1000
+      EMBEDDING_WORKER_CHUNK_OVERLAP: 200
+      MONGO_URI: ${MONGO_URI}
+      MONGO_DB_NAME: techletter
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-embedding-worker
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_MAX_POLL_INTERVAL_MS: 3200000
+      LOG_LEVEL: INFO
+      SERVICE_NAME: embedding-worker
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  chatbot_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.chatbot_service
+    container_name: techletter_chatbot_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY}
+      CHATBOT_LLM_PROVIDER: openrouter
+      CHATBOT_LLM_MODEL_NAME: mistralai/devstral-2512:free
+      CHATBOT_LLM_TEMPERATURE: 0.7
+      CHATBOT_LLM_MAX_RETRIES: 0
+      CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY}
+      CHATBOT_EMBEDDING_PROVIDER: google
+      CHATBOT_EMBEDDING_MODEL_NAME: gemini-embedding-001
+      CHATBOT_RAG_TOP_K: 5
+      CHATBOT_RAG_SCORE_THRESHOLD: 0.5
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_COLLECTION_NAME: tech_letter_posts
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-chatbot-service
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      CHATBOT_SERVICE_PORT: 8003
+      LOG_LEVEL: INFO
+      SERVICE_NAME: chatbot-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - tech-letter_default
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
 networks:
   tech-letter_default:
     external: true

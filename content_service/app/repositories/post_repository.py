@@ -49,6 +49,7 @@ class PostRepository(PostRepositoryInterface):
             published_at=document.published_at,
             thumbnail_url=document.thumbnail_url,
             aisummary=document.aisummary,
+            embedding=document.embedding,
         )
 
     # --- commands ----------------------------------------------------------------
@@ -191,6 +192,7 @@ class PostRepository(PostRepositoryInterface):
             "thumbnail_url",
             "aisummary",
             "status",
+            "embedding",
         }
         invalid_keys = [key for key in updates.keys() if key not in allowed_keys]
         if invalid_keys:

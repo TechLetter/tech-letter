@@ -7,6 +7,7 @@ class StatusFlags(BaseModel):
     """포스트 상태 플래그"""
 
     ai_summarized: bool = Field(default=False, alias="ai_summarized")
+    embedded: bool = Field(default=False, alias="embedded")
 
 
 class AISummary(BaseModel):
@@ -17,6 +18,16 @@ class AISummary(BaseModel):
     summary: str | None = None
     model_name: str | None = Field(default=None, alias="model_name")
     generated_at: datetime = Field(alias="generated_at")
+
+
+class EmbeddingMetadata(BaseModel):
+    """임베딩 정보"""
+
+    model_name: str | None = Field(default=None, alias="model_name")
+    collection_name: str | None = Field(default=None, alias="collection_name")
+    vector_dimension: int | None = Field(default=None, alias="vector_dimension")
+    chunk_count: int = Field(default=0, alias="chunk_count")
+    embedded_at: datetime | None = Field(default=None, alias="embedded_at")
 
 
 class Post(BaseModel):
@@ -34,6 +45,7 @@ class Post(BaseModel):
     published_at: datetime = Field(alias="published_at")
     thumbnail_url: str | None = Field(default=None, alias="thumbnail_url")
     aisummary: AISummary
+    embedding: EmbeddingMetadata | None = Field(default=None)
 
 
 class ListPostsFilter(BaseModel):
