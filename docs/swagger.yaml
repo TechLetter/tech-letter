@@ -32,6 +32,19 @@ definitions:
           $ref: '#/definitions/dto.FilterItem'
         type: array
     type: object
+  dto.ChatbotChatRequestDTO:
+    properties:
+      query:
+        example: 벡터 DB는 어떤 원리로 동작하나요?
+        type: string
+    required:
+    - query
+    type: object
+  dto.ChatbotChatResponseDTO:
+    properties:
+      answer:
+        type: string
+    type: object
   dto.ErrorResponseDTO:
     properties:
       error:
@@ -236,6 +249,53 @@ paths:
       summary: 블로그 목록 조회
       tags:
       - blogs
+  /chatbot/chat:
+    post:
+      consumes:
+      - application/json
+      description: 로그인된 사용자만 사용할 수 있는 챗봇 질의 API. API Gateway가 chatbot-service로 프록시한다.
+      parameters:
+      - description: 'Bearer 액세스 토큰 (예: Bearer eyJ...)'
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: chat request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChatbotChatRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ChatbotChatResponseDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: 챗봇 질의
+      tags:
+      - chatbot
   /filters/blogs:
     get:
       description: 포스트 개수와 함께 블로그 필터 목록을 조회합니다.

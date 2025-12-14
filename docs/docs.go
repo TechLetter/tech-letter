@@ -135,6 +135,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/chatbot/chat": {
+            "post": {
+                "description": "로그인된 사용자만 사용할 수 있는 챗봇 질의 API. API Gateway가 chatbot-service로 프록시한다.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "챗봇 질의",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "chat request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatbotChatRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatbotChatResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/filters/blogs": {
             "get": {
                 "description": "포스트 개수와 함께 블로그 필터 목록을 조회합니다.",
@@ -715,6 +786,26 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.FilterItem"
                     }
+                }
+            }
+        },
+        "dto.ChatbotChatRequestDTO": {
+            "type": "object",
+            "required": [
+                "query"
+            ],
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "example": "벡터 DB는 어떤 원리로 동작하나요?"
+                }
+            }
+        },
+        "dto.ChatbotChatResponseDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string"
                 }
             }
         },

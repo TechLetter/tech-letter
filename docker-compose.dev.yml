@@ -201,7 +201,8 @@ services:
     environment:
       CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY}
       CHATBOT_LLM_PROVIDER: openrouter
-      CHATBOT_LLM_MODEL_NAME: mistralai/devstral-2512:free
+      # CHATBOT_LLM_MODEL_NAME: mistralai/devstral-2512:free
+      CHATBOT_LLM_MODEL_NAME: tngtech/deepseek-r1t2-chimera:free
       CHATBOT_LLM_TEMPERATURE: 0.7
       CHATBOT_LLM_MAX_RETRIES: 0
       CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY}
