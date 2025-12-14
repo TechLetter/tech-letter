@@ -18,6 +18,9 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
+          EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
+          CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
+          CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
