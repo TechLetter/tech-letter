@@ -204,7 +204,10 @@ class AggregateService:
             source=self._source,
             version="1.0",
             post_id=post.id,
+            title=post.title,
+            blog_name=post.blog_name,
             link=post.link,
+            published_at=post.published_at.isoformat(),
         )
 
         payload = asdict(evt)

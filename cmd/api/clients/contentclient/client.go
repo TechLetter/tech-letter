@@ -88,6 +88,7 @@ type ListPostsParams struct {
 	BlogName   string
 	// Status Filters (추후 DocumentEmbedded 등 추가 가능)
 	StatusAISummarized *bool
+	StatusEmbedded     *bool
 }
 
 type ListPostsResponse struct {
@@ -96,21 +97,40 @@ type ListPostsResponse struct {
 }
 
 type PostItem struct {
-	ID           string    `json:"id"`
-	ViewCount    int       `json:"view_count"`
-	BlogID       string    `json:"blog_id"`
-	BlogName     string    `json:"blog_name"`
-	Title        string    `json:"title"`
-	Link         string    `json:"link"`
-	PublishedAt  time.Time `json:"published_at"`
-	ThumbnailURL string    `json:"thumbnail_url"`
-	AISummary    AISummary `json:"aisummary"`
+	ID           string             `json:"id"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	ViewCount    int                `json:"view_count"`
+	BlogID       string             `json:"blog_id"`
+	BlogName     string             `json:"blog_name"`
+	Title        string             `json:"title"`
+	Link         string             `json:"link"`
+	PublishedAt  time.Time          `json:"published_at"`
+	ThumbnailURL string             `json:"thumbnail_url"`
+	Status       StatusFlags        `json:"status"`
+	AISummary    *AISummary         `json:"aisummary"`
+	Embedding    *EmbeddingMetadata `json:"embedding"`
+}
+
+type StatusFlags struct {
+	AISummarized bool `json:"ai_summarized"`
+	Embedded     bool `json:"embedded"`
 }
 
 type AISummary struct {
-	Categories []string `json:"categories"`
-	Tags       []string `json:"tags"`
-	Summary    string   `json:"summary"`
+	Categories  []string  `json:"categories"`
+	Tags        []string  `json:"tags"`
+	Summary     string    `json:"summary"`
+	ModelName   string    `json:"model_name"`
+	GeneratedAt time.Time `json:"generated_at"`
+}
+
+type EmbeddingMetadata struct {
+	ModelName       string    `json:"model_name"`
+	CollectionName  string    `json:"collection_name"`
+	VectorDimension int       `json:"vector_dimension"`
+	ChunkCount      int       `json:"chunk_count"`
+	EmbeddedAt      time.Time `json:"embedded_at"`
 }
 
 func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPostsResponse, error) {
@@ -135,6 +155,9 @@ func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPos
 	}
 	if params.StatusAISummarized != nil {
 		q.Set("status_ai_summarized", strconv.FormatBool(*params.StatusAISummarized))
+	}
+	if params.StatusEmbedded != nil {
+		q.Set("status_embedded", strconv.FormatBool(*params.StatusEmbedded))
 	}
 	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/posts", q, nil)
 	if err != nil {
@@ -410,4 +433,108 @@ func (c *Client) GetBlogFilters(ctx context.Context, params FilterParams) (BlogF
 		return BlogFilterResponse{}, err
 	}
 	return out, nil
+}
+
+// -------------------- Admin Methods --------------------
+
+type CreatePostRequest struct {
+	Title  string `json:"title"`
+	Link   string `json:"link"`
+	BlogID string `json:"blog_id"`
+}
+
+type CreatePostResponse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+func (c *Client) CreatePost(ctx context.Context, title, link, blogID string) (CreatePostResponse, error) {
+	body := CreatePostRequest{Title: title, Link: link, BlogID: blogID}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return CreatePostResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/posts", nil, bytes.NewReader(buf))
+	if err != nil {
+		return CreatePostResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return CreatePostResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return CreatePostResponse{}, fmt.Errorf("content-service CreatePost: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out CreatePostResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return CreatePostResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) DeletePost(ctx context.Context, id string) error {
+	relPath := path.Join("/api/v1/posts", id)
+	req, err := c.base.NewRequest(ctx, http.MethodDelete, relPath, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("content-service DeletePost: status=%d body=%s", resp.StatusCode, string(b))
+	}
+	return nil
+}
+
+func (c *Client) TriggerSummary(ctx context.Context, id string) error {
+	relPath := path.Join("/api/v1/posts", id, "summarize")
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("content-service TriggerSummary: status=%d body=%s", resp.StatusCode, string(b))
+	}
+	return nil
+}
+
+func (c *Client) TriggerEmbedding(ctx context.Context, id string) error {
+	relPath := path.Join("/api/v1/posts", id, "embed")
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("content-service TriggerEmbedding: status=%d body=%s", resp.StatusCode, string(b))
+	}
+	return nil
 }

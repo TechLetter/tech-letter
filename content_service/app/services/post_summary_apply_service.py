@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import logging
+import uuid
+from dataclasses import asdict
 from datetime import datetime, timezone
 
-from common.events.post import PostSummaryResponseEvent
-from common.models.post import AISummary, StatusFlags
+from common.eventbus.helpers import new_json_event
+from common.eventbus.kafka import KafkaEventBus
+from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.events.post import (
+    EventType,
+    PostEmbeddingRequestedEvent,
+    PostSummaryResponseEvent,
+)
+from common.models.post import AISummary, Post, StatusFlags
 
 from ..repositories.interfaces import PostRepositoryInterface
 
@@ -15,8 +24,13 @@ logger = logging.getLogger(__name__)
 class PostSummaryApplyService:
     """PostSummaryResponseEvent 를 받아 MongoDB Post 문서에 요약 정보를 반영하는 서비스."""
 
-    def __init__(self, post_repository: PostRepositoryInterface) -> None:
+    def __init__(
+        self,
+        post_repository: PostRepositoryInterface,
+        event_bus: KafkaEventBus,
+    ) -> None:
         self._post_repository = post_repository
+        self._event_bus = event_bus
 
     def apply(self, event: PostSummaryResponseEvent) -> None:
         """요약 완료 이벤트를 받아 Post 문서에 요약/플래그를 반영한다."""
@@ -58,7 +72,8 @@ class PostSummaryApplyService:
             generated_at=generated_at,
         )
 
-        status = StatusFlags(ai_summarized=True)
+        status = post.status
+        status.ai_summarized = True
 
         updates = {
             "plain_text": event.plain_text or "",
@@ -83,3 +98,53 @@ class PostSummaryApplyService:
             post_id,
             event.model_name,
         )
+
+        # 요약 저장 성공 후 임베딩 파이프라인 트리거
+        self._publish_embedding_requested(
+            post=post,
+            event=event,
+        )
+
+    def _publish_embedding_requested(
+        self,
+        post: Post,
+        event: PostSummaryResponseEvent,
+    ) -> None:
+        """임베딩 파이프라인을 트리거하기 위해 PostEmbeddingRequestedEvent를 발행한다."""
+
+        embedding_event_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+
+        embedding_event = PostEmbeddingRequestedEvent(
+            id=embedding_event_id,
+            type=EventType.POST_EMBEDDING_REQUESTED,
+            timestamp=now,
+            source="content-service",
+            version="1.0",
+            post_id=event.post_id,
+            title=post.title,
+            blog_name=post.blog_name,
+            link=event.link,
+            published_at=post.published_at.isoformat(),
+            categories=event.categories,
+            tags=event.tags,
+            plain_text=event.plain_text,
+            summary=event.summary,
+        )
+
+        try:
+            out_evt = new_json_event(
+                payload=asdict(embedding_event),
+                event_id=embedding_event_id,
+            )
+            self._event_bus.publish(TOPIC_POST_EMBEDDING.base, out_evt)
+            logger.info(
+                "published PostEmbeddingRequestedEvent id=%s post_id=%s",
+                embedding_event_id,
+                event.post_id,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "failed to publish PostEmbeddingRequestedEvent for post_id=%s (non-fatal)",
+                event.post_id,
+            )

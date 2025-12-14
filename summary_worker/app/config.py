@@ -25,7 +25,7 @@ class AppConfig:
 
 
 def load_chat_model_config() -> ChatModelConfig:
-    provider_raw = os.getenv(SUMMARY_WORKER_LLM_PROVIDER, "google")
+    provider_raw = os.getenv(SUMMARY_WORKER_LLM_PROVIDER) or "google"
     provider = LlmProvider.from_str(provider_raw)
 
     model = os.getenv(SUMMARY_WORKER_LLM_MODEL_NAME)

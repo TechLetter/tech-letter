@@ -40,6 +40,11 @@ class UserRepositoryInterface(Protocol):
     ) -> bool:  # pragma: no cover - Protocol
         ...
 
+    def list(
+        self, page: int, page_size: int
+    ) -> tuple[list[User], int]:  # pragma: no cover - Protocol
+        ...
+
 
 class BookmarkRepositoryInterface(Protocol):
     """BookmarkRepository가 따라야 할 최소한의 계약.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from common.models.post import AISummary, Post, StatusFlags
+from common.models.post import AISummary, EmbeddingMetadata, Post, StatusFlags
 from common.mongo.types import BaseDocument, PyObjectId
 
 
@@ -22,6 +22,7 @@ class PostDocument(BaseDocument):
     thumbnail_url: str | None = ""
     plain_text: str | None = ""
     aisummary: AISummary
+    embedding: EmbeddingMetadata | None = None
 
     @classmethod
     def from_domain(cls, post: Post) -> "PostDocument":

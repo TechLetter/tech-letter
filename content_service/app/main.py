@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from .api.health import router as health_router
 from .api.v1 import api_router
 from .scheduler.rss_scheduler import start_rss_scheduler, stop_rss_scheduler
+from .event_handlers.post_embedding_consumer import run_post_embedding_consumer
 from .event_handlers.post_events_consumer import run_post_summary_consumer
 from common.logger import setup_logger
 from common.middleware.request_trace import RequestTraceMiddleware
@@ -33,11 +34,22 @@ async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
     )
     summary_thread.start()
 
+    embedding_stop_flag = [False]
+    embedding_thread = threading.Thread(
+        target=run_post_embedding_consumer,
+        args=(embedding_stop_flag,),
+        name="post-embedding-consumer",
+        daemon=True,
+    )
+    embedding_thread.start()
+
     try:
         yield
     finally:
         summary_stop_flag[0] = True
         summary_thread.join(timeout=10.0)
+        embedding_stop_flag[0] = True
+        embedding_thread.join(timeout=10.0)
         stop_rss_scheduler()
 
 

@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/bookmarks",
+    "",
     response_model=BookmarkItem,
     summary="유저 북마크 추가",
 )
@@ -29,7 +29,7 @@ async def add_bookmark(
 
 
 @router.delete(
-    "/bookmarks",
+    "",
     summary="유저 북마크 삭제",
 )
 async def remove_bookmark(
@@ -43,7 +43,7 @@ async def remove_bookmark(
 
 
 @router.get(
-    "/bookmarks",
+    "",
     response_model=ListBookmarksResponse,
     summary="유저 북마크 목록 조회",
 )
@@ -68,7 +68,7 @@ async def list_bookmarks(
 
 
 @router.post(
-    "/bookmarks/check",
+    "/check",
     response_model=BookmarkCheckResponse,
     summary="유저 북마크 여부 일괄 조회",
 )

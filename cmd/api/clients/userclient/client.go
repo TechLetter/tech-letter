@@ -393,3 +393,42 @@ func (c *Client) CheckBookmarks(ctx context.Context, userCode string, postIDs []
 	}
 	return out, nil
 }
+
+// -------------------- Admin Methods --------------------
+
+type ListUsersResponse struct {
+	Total int                   `json:"total"`
+	Items []UserProfileResponse `json:"items"`
+}
+
+func (c *Client) ListUsers(ctx context.Context, page, pageSize int) (ListUsersResponse, error) {
+	q := url.Values{}
+	if page > 0 {
+		q.Set("page", fmt.Sprint(page))
+	}
+	if pageSize > 0 {
+		q.Set("page_size", fmt.Sprint(pageSize))
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/users", q, nil)
+	if err != nil {
+		return ListUsersResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return ListUsersResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return ListUsersResponse{}, fmt.Errorf("user-service ListUsers: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out ListUsersResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return ListUsersResponse{}, err
+	}
+	return out, nil
+}
