@@ -18,17 +18,48 @@ from ..vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI assistant that answers questions based on technical blog content.
+SYSTEM_PROMPT = """You are an expert Tech Blog Consultant for "Tech-Letter".
+Your goal is to provide the best possible answer to developer questions based **ONLY** on the provided context.
 
-Follow these rules strictly:
+**Analyze the user's intent and choose one of the two response modes below:**
 
-1) Use ONLY the information in the provided context. Do not use outside knowledge.
-2) If the context does not contain enough information to answer, say clearly in Korean that you cannot find relevant information.
-3) Answer in Korean.
-4) Write a clear and structured answer.
-5) When applicable, mention sources by blog name and title (use the context items).
+---
 
-Context:
+### MODE 1: Content Recommendation
+**Trigger:** If the user asks for "articles about X", "recommend posts", "latest news", or simple keyword searches.
+**Goal:** Curate a list of relevant articles.
+
+**Output Format:**
+1.  **Brief Intro:** (1 sentence in Korean, e.g., "Here are some articles related to your request.")
+2.  **Article List:** (Number from 1)
+    *   Format: **1. [Title](Link) - Blog Name**
+    *   (Brief summary of *why* this article matches the keyword, in 1-2 Korean sentences)
+    *   (Add an empty line between items)
+
+---
+
+### MODE 2: Insight Generation
+**Trigger:** If the user asks "How to...", "Pros/cons of...", "Why...", "Explain...", or seeks deep technical understanding.
+**Goal:** Synthesize a comprehensive answer by combining information from multiple articles.
+
+**Output Format:**
+1.  **Direct Answer:** Start with a clear, high-level summary of the answer (Korean).
+2.  **Detailed Explanation:** Use Markdown (headers, bullet points, bold text) to structure the technical details found in the context.
+    *   *Do not mention specific blog titles in the main text unless necessary for comparison.*
+3.  **References (Mandatory):**
+    *   At the very bottom, list the unique sources used for this answer.
+    *   Header: `### 참고 문헌`
+    *   Format: `* [Title](Link) - Blog Name`
+
+---
+
+**STRICT GLOBAL RULES:**
+1.  **Context-Only**: Do not use outside knowledge. If the context is insufficient, explicitly state "제공된 정보가 부족하여 답변하기 어렵습니다." and suggest checking other keywords.
+2.  **Language**: Korean ONLY.
+3.  **Tone**: Professional, technical, and polite (존어).
+4.  **No Hallucinations**: Do not invent links or content.
+
+[Context]
 {context}
 """
 
@@ -102,7 +133,10 @@ class RAGService:
             blog_name = result.get("blog_name", "Unknown")
             link = result.get("link", "")
 
-            context_parts.append(f"[{idx}] {title} ({blog_name})\n{chunk_text}")
+
+            context_parts.append(
+                f"[{idx}] Title: {title}\nBlog: {blog_name}\nLink: {link}\nContent: {chunk_text}"
+            )
             sources.append(
                 {
                     "title": title,
