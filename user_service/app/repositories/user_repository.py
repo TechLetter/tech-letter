@@ -73,6 +73,27 @@ class UserRepository(UserRepositoryInterface):
 
         - 삭제된 도큐먼트가 있으면 True, 없으면 False 를 반환한다.
         """
-
         result = self._col.delete_one({"user_code": user_code})
         return result.deleted_count > 0
+
+    def list(self, page: int, page_size: int) -> tuple[list[User], int]:
+        if page <= 0:
+            page = 1
+        if page_size <= 0:
+            page_size = 20
+        
+        skip = (page - 1) * page_size
+        total = self._col.count_documents({})
+        
+        cursor = self._col.find(
+            {},
+            sort=[("created_at", -1)],
+            skip=skip,
+            limit=page_size
+        )
+
+        users = []
+        for doc in cursor:
+            users.append(self._from_document(doc))
+        
+        return users, total

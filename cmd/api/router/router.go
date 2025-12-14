@@ -51,6 +51,7 @@ func New() *gin.Engine {
 		postsSvc := services.NewPostService(contentClient)
 		bookmarkSvc := services.NewBookmarkService(contentClient, userClient)
 		chatbotSvc := services.NewChatbotService(chatbotClient)
+		adminSvc := services.NewAdminService(contentClient, userClient)
 
 		api.GET("/posts", handlers.ListPostsHandler(postsSvc, bookmarkSvc, authSvc))
 		api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
@@ -74,6 +75,20 @@ func New() *gin.Engine {
 		api.DELETE("/users/me", handlers.DeleteCurrentUserHandler(authSvc))
 
 		api.POST("/chatbot/chat", handlers.ChatbotChatHandler(chatbotSvc, authSvc))
+
+		// Admin Routes
+		admin := api.Group("/admin")
+		admin.Use(middleware.AdminAuthMiddleware(authSvc))
+		{
+			// TODO: Implement Admin Handlers
+			admin.GET("/blogs", handlers.AdminListBlogsHandler(blogsSvc))
+			admin.GET("/posts", handlers.AdminListPostsHandler(adminSvc))
+			admin.POST("/posts", handlers.AdminCreatePostHandler(adminSvc))
+			admin.DELETE("/posts/:id", handlers.AdminDeletePostHandler(adminSvc))
+			admin.POST("/posts/:id/summarize", handlers.AdminTriggerSummaryHandler(adminSvc))
+			admin.POST("/posts/:id/embed", handlers.AdminTriggerEmbeddingHandler(adminSvc))
+			admin.GET("/users", handlers.AdminListUsersHandler(adminSvc))
+		}
 	}
 
 	return r

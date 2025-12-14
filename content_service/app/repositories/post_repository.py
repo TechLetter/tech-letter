@@ -112,6 +112,8 @@ class PostRepository(PostRepositoryInterface):
 
         if flt.status_ai_summarized is not None:
             filter_doc["status.ai_summarized"] = flt.status_ai_summarized
+        if flt.status_embedded is not None:
+            filter_doc["status.embedded"] = flt.status_embedded
 
         page = flt.page if flt.page > 0 else 1
         page_size = flt.page_size
@@ -204,6 +206,10 @@ class PostRepository(PostRepositoryInterface):
             {"_id": to_object_id(id_value)},
             {"$set": set_doc},
         )
+
+    def delete_by_id(self, id_value: str) -> bool:
+        result = self._col.delete_one({"_id": to_object_id(id_value)})
+        return result.deleted_count > 0
 
     def get_category_stats(
         self, blog_id: str | None, tags: list[str]
