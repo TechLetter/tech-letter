@@ -70,6 +70,21 @@ class BlogRepository(BlogRepositoryInterface):
             blog_type=doc.blog_type,
         )
 
+    def find_by_id(self, id_value: str) -> Blog | None:
+        raw = self._col.find_one({"_id": to_object_id(id_value)})
+        if not raw:
+            return None
+        doc = BlogDocument.model_validate(raw)
+        return Blog(
+            id=from_object_id(doc.id),
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+            name=doc.name,
+            url=doc.url,
+            rss_url=doc.rss_url,
+            blog_type=doc.blog_type,
+        )
+
     def list(self, flt: ListBlogsFilter) -> tuple[list[Blog], int]:
         page = flt.page if flt.page > 0 else 1
         page_size = flt.page_size

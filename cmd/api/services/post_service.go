@@ -38,6 +38,7 @@ type ListPostsInput struct {
 	BlogName   string // optional; case-insensitive exact match
 	// Status Filters
 	StatusAISummarized *bool
+	StatusEmbedded     *bool
 }
 
 func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Pagination[dto.PostDTO], error) {
@@ -50,6 +51,7 @@ func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Paginati
 		BlogID:             in.BlogID,
 		BlogName:           in.BlogName,
 		StatusAISummarized: in.StatusAISummarized,
+		StatusEmbedded:     in.StatusEmbedded,
 	})
 	if err != nil {
 		return dto.Pagination[dto.PostDTO]{}, err
@@ -80,7 +82,7 @@ func (s *PostService) IncrementViewCount(ctx context.Context, hexID string) erro
 
 // mapPostFromContentService converts content-service PostItem into public PostDTO.
 func mapPostFromContentService(p contentclient.PostItem) dto.PostDTO {
-	return dto.PostDTO{
+	d := dto.PostDTO{
 		ID:           p.ID,
 		BlogID:       p.BlogID,
 		BlogName:     p.BlogName,
@@ -89,8 +91,11 @@ func mapPostFromContentService(p contentclient.PostItem) dto.PostDTO {
 		PublishedAt:  p.PublishedAt,
 		ThumbnailURL: p.ThumbnailURL,
 		ViewCount:    int64(p.ViewCount),
-		Categories:   p.AISummary.Categories,
-		Tags:         p.AISummary.Tags,
-		Summary:      p.AISummary.Summary,
 	}
+	if p.AISummary != nil {
+		d.Categories = p.AISummary.Categories
+		d.Tags = p.AISummary.Tags
+		d.Summary = p.AISummary.Summary
+	}
+	return d
 }

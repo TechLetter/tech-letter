@@ -99,6 +99,11 @@ class UsersService:
             updated_at=user.updated_at,
         )
 
+    def list_users(self, page: int, page_size: int) -> tuple[list[UserProfile], int]:
+        users, total = self._user_repo.list(page, page_size)
+        profiles = [self._to_profile(u) for u in users]
+        return profiles, total
+
 
 def get_user_repository(
     db: Database = Depends(get_database),

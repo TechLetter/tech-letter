@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from common.models.post import AISummary, Post, StatusFlags
+from common.models.post import AISummary, EmbeddingMetadata, Post, StatusFlags
 from common.types.datetime import UtcDateTime
 
 
@@ -24,6 +24,7 @@ class PostResponse(BaseModel):
     published_at: UtcDateTime
     thumbnail_url: str | None = None
     aisummary: AISummary
+    embedding: EmbeddingMetadata | None = None
 
     @classmethod
     def from_domain(cls, post: Post) -> "PostResponse":

@@ -164,3 +164,20 @@ class KafkaEventBus:
             max_retry=int(raw.get("max_retry", 0)),
             last_error=raw.get("last_error"),
         )
+
+
+# FastAPI Dependency Injection을 위한 팩토리 함수
+_event_bus: KafkaEventBus | None = None
+
+
+def get_kafka_event_bus() -> KafkaEventBus:
+    """KafkaEventBus 싱글톤 인스턴스를 반환한다.
+
+    KAFKA_BOOTSTRAP_SERVERS 환경변수로 브로커 주소를 설정한다.
+    """
+    from .config import get_brokers
+
+    global _event_bus
+    if _event_bus is None:
+        _event_bus = KafkaEventBus(get_brokers())
+    return _event_bus

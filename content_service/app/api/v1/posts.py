@@ -10,8 +10,21 @@ from ..schemas.posts import (
     ListPostsResponse,
     PostPlainTextResponse,
     PostResponse,
+    ListPostsResponse,
+    PostPlainTextResponse,
+    PostResponse,
     PostsBatchRequest,
 )
+from pydantic import BaseModel, HttpUrl
+
+class CreatePostRequest(BaseModel):
+    title: str
+    link: HttpUrl
+    blog_id: str
+
+class CreatePostResponse(BaseModel):
+    id: str
+    title: str
 from common.models.post import ListPostsFilter
 
 
@@ -55,6 +68,10 @@ def list_posts(
         default=None,
         description="AI 요약 완료 여부 필터링",
     ),
+    status_embedded: Optional[bool] = Query(
+        default=None,
+        description="임베딩 완료 여부 필터링",
+    ),
     service: PostsService = Depends(get_posts_service),
 ) -> ListPostsResponse:
     flt = ListPostsFilter(
@@ -65,6 +82,7 @@ def list_posts(
         blog_id=blog_id,
         blog_name=blog_name,
         status_ai_summarized=status_ai_summarized,
+        status_embedded=status_embedded,
     )
     items, total = service.list_posts(flt)
     dto_items = [PostResponse.from_domain(post) for post in items]
@@ -135,3 +153,52 @@ def get_posts_batch(
     posts = service.list_by_ids(body.ids)
     dto_items = [PostResponse.from_domain(post) for post in posts]
     return ListPostsResponse(total=len(dto_items), items=dto_items)
+
+
+@router.post("", response_model=CreatePostResponse, summary="포스트 수동 생성")
+def create_post(
+    body: CreatePostRequest,
+    service: PostsService = Depends(get_posts_service),
+) -> CreatePostResponse:
+    try:
+        post = service.create_post(
+            title=body.title,
+            link=str(body.link),
+            blog_id=body.blog_id,
+        )
+        return CreatePostResponse(id=post.id, title=post.title)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{post_id}", summary="포스트 삭제")
+def delete_post(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> dict[str, bool]:
+    ok = service.delete_post(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="post not found")
+    return {"ok": True}
+
+
+@router.post("/{post_id}/summarize", summary="AI 요약 트리거")
+def trigger_summary(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> dict[str, bool]:
+    ok = service.trigger_summary(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="post not found")
+    return {"ok": True}
+
+
+@router.post("/{post_id}/embed", summary="AI 임베딩 트리거")
+def trigger_embedding(
+    post_id: str,
+    service: PostsService = Depends(get_posts_service),
+) -> dict[str, bool]:
+    ok = service.trigger_embedding(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="post not found")
+    return {"ok": True}

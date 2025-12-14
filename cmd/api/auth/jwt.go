@@ -8,6 +8,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
 // JWTManager 는 HS256 단일 시크릿 문자열을 사용해 JWT 를 발급/검증한다.
 type JWTManager struct {
 	secret []byte

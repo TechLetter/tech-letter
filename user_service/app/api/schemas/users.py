@@ -43,3 +43,7 @@ class UserProfileResponse(BaseModel):
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
+    
+class ListUsersResponse(BaseModel):
+    total: int
+    items: list[UserProfileResponse]
