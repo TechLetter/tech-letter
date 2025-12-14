@@ -110,10 +110,28 @@ class PostRepository(PostRepositoryInterface):
         if flt.blog_name:
             filter_doc["blog_name"] = {"$regex": f"^{flt.blog_name}$", "$options": "i"}
 
+        # Status 필터링: false 조회 시 필드가 없는 경우도 포함
         if flt.status_ai_summarized is not None:
-            filter_doc["status.ai_summarized"] = flt.status_ai_summarized
+            if flt.status_ai_summarized:
+                filter_doc["status.ai_summarized"] = True
+            else:
+                # false이거나 필드가 없는 경우 모두 매칭
+                filter_doc["$and"] = filter_doc.get("$and", []) + [
+                    {"$or": [
+                        {"status.ai_summarized": False},
+                        {"status.ai_summarized": {"$exists": False}},
+                    ]}
+                ]
         if flt.status_embedded is not None:
-            filter_doc["status.embedded"] = flt.status_embedded
+            if flt.status_embedded:
+                filter_doc["status.embedded"] = True
+            else:
+                filter_doc["$and"] = filter_doc.get("$and", []) + [
+                    {"$or": [
+                        {"status.embedded": False},
+                        {"status.embedded": {"$exists": False}},
+                    ]}
+                ]
 
         page = flt.page if flt.page > 0 else 1
         page_size = flt.page_size

@@ -153,6 +153,14 @@ class PostsService:
         event_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
 
+        # Post에서 aisummary 정보 가져오기
+        categories = post.aisummary.categories if post.aisummary else []
+        tags = post.aisummary.tags if post.aisummary else []
+        summary = post.aisummary.summary if post.aisummary else ""
+        
+        # plain_text는 별도 조회 필요 (저장소에서)
+        plain_text = self._post_repo.get_plain_text(post.id) or ""
+
         evt = PostEmbeddingRequestedEvent(
             id=event_id,
             type=EventType.POST_EMBEDDING_REQUESTED,
@@ -164,6 +172,10 @@ class PostsService:
             blog_name=post.blog_name or "Unknown",
             link=post.link,
             published_at=post.published_at.isoformat(),
+            categories=categories,
+            tags=tags,
+            plain_text=plain_text,
+            summary=summary,
         )
 
         payload = asdict(evt)
