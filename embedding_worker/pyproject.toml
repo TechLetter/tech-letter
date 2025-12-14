@@ -1,0 +1,26 @@
+[project]
+name = "techletter-embedding-worker"
+version = "0.1.0"
+description = "Embedding worker service for Tech-Letter RAG chatbot."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "techletter-common",
+  "langchain-text-splitters",
+  "langchain-openai",
+  "tiktoken",
+  "pytest",
+]
+
+[project.scripts]
+embedding-worker = "app.main:main"
+
+[tool.pytest.ini_options]
+testpaths = [
+  "tests",
+]
+python_files = [
+  "test_*.py",
+]
+pythonpath = [
+  "..",
+]

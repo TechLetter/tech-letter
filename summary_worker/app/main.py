@@ -53,7 +53,7 @@ def main() -> None:
     logger.info("summary-worker (python) starting up")
 
     brokers = get_brokers()
-    group_id = f"{get_group_id()}-summary-worker"
+    group_id = get_group_id()
 
     bus = KafkaEventBus(brokers)
 

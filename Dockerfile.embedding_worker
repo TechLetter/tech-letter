@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 기본 유틸 및 CA 설치
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv 설치 (빠른 Python 패키지 매니저)
+RUN pip install --no-cache-dir uv
+
+# 의존성 파일 복사
+COPY pyproject.toml uv.lock ./
+COPY common/pyproject.toml ./common/pyproject.toml
+COPY embedding_worker/pyproject.toml ./embedding_worker/pyproject.toml
+
+# 소스 코드 복사 (local 패키지 설치를 위해 필요)
+COPY common ./common
+COPY embedding_worker ./embedding_worker
+
+# 의존성 설치 (BuildKit 캐시 마운트 사용)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system ./common ./embedding_worker
+
+ENV TZ=Asia/Seoul \
+    PYTHONUNBUFFERED=1
+
+# embedding_worker 메인 루프 실행
+CMD ["python", "-m", "embedding_worker.app.main"]

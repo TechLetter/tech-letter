@@ -62,6 +62,9 @@ class PostRepositoryInterface(Protocol):
         """블로그별 포스트 개수를 반환한다. (blog_id, blog_name, count)"""
         ...
 
+    def delete_by_id(self, id_value: str) -> bool:  # pragma: no cover - Protocol
+        ...
+
 
 class BlogRepositoryInterface(Protocol):
     """BlogRepository가 따라야 할 최소한의 계약."""
@@ -77,4 +80,7 @@ class BlogRepositoryInterface(Protocol):
     def get_by_rss_url(
         self, rss_url: str
     ) -> Blog | None:  # pragma: no cover - Protocol
+        ...
+
+    def find_by_id(self, id_value: str) -> Blog | None:  # pragma: no cover - Protocol
         ...

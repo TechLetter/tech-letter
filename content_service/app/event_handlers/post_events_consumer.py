@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-import signal
-from typing import List
 
 from common.eventbus.config import get_brokers, get_group_id
 from common.eventbus.core import Event
@@ -51,7 +49,7 @@ def _handle_event(evt: Event, *, service: PostSummaryApplyService) -> None:
     service.apply(summarized)
 
 
-def run_post_summary_consumer(stop_flag: List[bool]) -> None:
+def run_post_summary_consumer(stop_flag: list[bool]) -> None:
     """PostSummaryResponseEvent 를 계속 소비하는 구독 루프를 실행한다.
 
     - stop_flag[0] 이 True 가 되면 안전하게 루프를 종료한다.
@@ -59,14 +57,14 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
     """
     logger.info("post-summary-consumer starting up")
 
-    db = get_database()
-    post_repo = PostRepository(db)
-    service = PostSummaryApplyService(post_repository=post_repo)
-
     brokers = get_brokers()
-    group_id = f"{get_group_id()}-content-service"
+    group_id = get_group_id()
 
     bus = KafkaEventBus(brokers)
+
+    db = get_database()
+    post_repo = PostRepository(db)
+    service = PostSummaryApplyService(post_repository=post_repo, event_bus=bus)
 
     try:
         logger.info(
@@ -81,27 +79,3 @@ def run_post_summary_consumer(stop_flag: List[bool]) -> None:
     finally:
         bus.close()
         logger.info("post-summary-consumer stopped")
-
-
-def main() -> None:
-    """단독 프로세스로 실행할 때 사용하는 엔트리 포인트."""
-
-    logging.basicConfig(level=logging.INFO)
-    logger.info("content-service post-summary-consumer starting up")
-
-    stop_flag: List[bool] = [False]
-
-    def _signal_handler(signum, frame) -> None:  # type: ignore[unused-argument]
-        logger.info(
-            "received signal %s, shutting down post-summary-consumer...", signum
-        )
-        stop_flag[0] = True
-
-    signal.signal(signal.SIGINT, _signal_handler)
-    signal.signal(signal.SIGTERM, _signal_handler)
-
-    run_post_summary_consumer(stop_flag)
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()

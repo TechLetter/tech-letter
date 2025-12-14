@@ -35,6 +35,15 @@
 - **Summary Worker (Python)** (`summary_worker/app/main.py`)
   - `post.summary_requested` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → 구성된 LLM(Gemini / OpenAI / Ollama)으로 요약 수행
   - 결과를 담은 `post.summary_response` 이벤트를 발행
+  - 요약 완료 후 `post.embedding_requested` 이벤트를 발행하여 임베딩 파이프라인 트리거
+- **Embedding Worker (Python)** (`embedding_worker/app/main.py`)
+  - `post.embedding_requested` 이벤트를 구독해 텍스트 청킹 + 임베딩 생성
+  - MongoDB 기반 캐시로 중복 임베딩 비용 절감
+  - 결과를 담은 `post.embedding_response` 이벤트를 발행
+- **Chatbot Service (Python)** (`chatbot_service/app/main.py`)
+  - `post.embedding_response` 이벤트를 구독해 Qdrant Vector DB에 임베딩 upsert
+  - `/api/v1/chat` REST API를 통해 RAG 기반 질의응답 제공
+  - LLM(OpenAI)을 활용한 답변 생성
 - **Retry Worker** (`cmd/retryworker/main.go`)
   - eventbus 레이어가 생성한 지연/재시도 토픽을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
@@ -52,11 +61,15 @@ flowchart TB
         CS
         US
         SW[Summary Worker]
+        EW[Embedding Worker]
+        CBS[Chatbot Service]
         RW[Retry Worker]
     end
 
     CS <-->|Subscribe/Publish| EB[EventBus / Kafka]
     SW <-->|Subscribe/Publish| EB
+    EW <-->|Subscribe/Publish| EB
+    CBS <-->|Subscribe/Publish| EB
     RW <-->|Subscribe/Publish| EB
 
     %% DB 노드 모양을 관계 설정보다 먼저 명시하여 파싱 오류 방지
@@ -64,7 +77,11 @@ flowchart TB
 
     CS -->|CRUD posts| DB
     US -->|CRUD users, bookmarks| DB
+    EW -->|Cache embeddings| DB
     SW -->|Summarize| LLM[LLM Provider]
+    EW -->|Embed| LLM
+    CBS -->|RAG Answer| LLM
+    CBS -->|Vector Search| VDB[(Qdrant)]
 ```
 
 ### 디렉토리 구조
@@ -89,6 +106,18 @@ tech-letter/
 │   └── app/
 │       ├── services/     # 요약 파이프라인 로직
 │       └── main.py       # 이벤트 구독자
+├── embedding_worker/     # 임베딩 워커 (Python)
+│   └── app/
+│       ├── services/     # 임베딩 파이프라인 로직
+│       ├── embedder.py   # 텍스트 청킹 + 임베딩 생성
+│       ├── cache.py      # MongoDB 기반 임베딩 캐시
+│       └── main.py       # 이벤트 구독자
+├── chatbot_service/      # RAG 챗봇 서비스 (Python FastAPI)
+│   └── app/
+│       ├── api/          # /chat REST API 엔드포인트
+│       ├── services/     # RAG 질의응답 로직
+│       ├── vector_store.py  # Qdrant Vector DB 클라이언트
+│       └── main.py       # FastAPI 앱 + 이벤트 구독자
 ├── common/               # 공통 모델 및 유틸리티
 │   └── common/
 │       ├── models/       # 도메인 모델 (Post, Blog 등)
@@ -116,7 +145,27 @@ tech-letter/
    - `posts.aisummary`, `posts.thumbnail_url`, `posts.plain_text` 업데이트
    - `status.ai_summarized = true` 로 상태 플래그 갱신
 
-4. **실패 시 재시도 (EventBus + Retry Worker)**
+4. **임베딩 요청 발행 (Content Service)**
+
+   - 요약 결과 DB 저장 성공 후 `post.embedding_requested` 이벤트 발행
+   - Post 정보(title, blog_name, published_at)와 요약 결과를 포함
+
+5. **임베딩 파이프라인 (Embedding Worker)**
+
+   - `post.embedding_requested` 이벤트를 구독 (`tech-letter.post.embedding` 토픽)
+   - 텍스트 청킹 (RecursiveCharacterTextSplitter)
+   - MongoDB 캐시 확인 후 캐시 미스 시 OpenAI Embeddings API로 임베딩 생성
+   - 새로 생성된 임베딩을 캐시에 저장
+   - `post.embedding_response` 이벤트 발행 (`tech-letter.post.embedding` 토픽)
+
+6. **Vector DB 업데이트 + RAG 챗봇 (Chatbot Service)**
+
+   - `post.embedding_response` 이벤트를 구독
+   - Qdrant Vector DB에 청크별 임베딩 upsert
+   - `/api/v1/chat` API로 RAG 기반 질의응답 제공
+   - 쿼리 임베딩 → Vector DB 검색 → LLM 답변 생성
+
+7. **실패 시 재시도 (EventBus + Retry Worker)**
 
    - Summary Worker 또는 Content Service에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.summary.retry.N`)으로 이벤트를 이동
    - Retry Worker가 지연 시간이 지난 메시지를 다시 기본 토픽(`tech-letter.post.summary`)으로 재주입
@@ -128,9 +177,12 @@ tech-letter/
 sequenceDiagram
     participant CS as Content Service
     participant SW as Summary Worker
+    participant EW as Embedding Worker
+    participant CBS as Chatbot Service
     participant RW as RetryWorker
     participant EB as EventBus/Kafka
     participant DB as MongoDB
+    participant VDB as Qdrant
 
     CS->>DB: Insert new Post (status.ai_summarized=false)
     CS->>EB: post.summary_requested (tech-letter.post.summary)
@@ -139,11 +191,20 @@ sequenceDiagram
     SW->>EB: post.summary_response (tech-letter.post.summary)
     EB->>CS: Deliver post.summary_response
     CS->>DB: Update aisummary + thumbnail_url + plain_text + status.ai_summarized=true
+    CS->>EB: post.embedding_requested (tech-letter.post.embedding)
 
-    alt Handler error (Summary Worker or Content Service)
-        EB->>EB: Publish to retry topic (tech-letter.post.summary.retry.N)
+    EB->>EW: Deliver post.embedding_requested
+    EW->>DB: Check embedding cache
+    EW->>EW: Chunk text + Generate embeddings (if cache miss)
+    EW->>DB: Store embeddings in cache
+    EW->>EB: post.embedding_response (tech-letter.post.embedding)
+
+    EB->>CBS: Deliver post.embedding_response
+    CBS->>VDB: Upsert chunk embeddings
+
+    alt Handler error (any worker)
+        EB->>EB: Publish to retry topic (*.retry.N)
         RW->>EB: After delay, re-publish to base topic
-        EB->>SW: or CS: Redeliver event
     end
 ```
 
@@ -230,9 +291,48 @@ SUMMARY_WORKER_LLM_API_KEY=your-gemini-api-key
 # SUMMARY_WORKER_LLM_BASE_URL=http://localhost:11434  # 또는 원격 Ollama 서버 URL
 ```
 
+#### Embedding Worker LLM 설정
+
+Embedding Worker도 공통 LLM 팩토리(`common/common/llm/factory.py`)를 통해 여러 LLM 공급자를 지원합니다.
+
+- `EMBEDDING_WORKER_LLM_PROVIDER`
+  - 사용 가능한 값: `google`, `openai`, `ollama`, `openrouter`
+  - 기본값: `openai`
+- `EMBEDDING_WORKER_LLM_MODEL_NAME`
+  - 사용할 임베딩 모델 이름 (예: `text-embedding-3-small`, `text-embedding-ada-002`)
+  - 기본값: `text-embedding-3-small`
+- `EMBEDDING_WORKER_LLM_API_KEY`
+  - `google` / `openai` / `openrouter` 사용 시 필수
+- `EMBEDDING_WORKER_LLM_BASE_URL`
+  - 선택값, 주로 `ollama` 또는 커스텀 엔드포인트 사용 시 설정
+- `EMBEDDING_WORKER_CHUNK_SIZE`
+  - 텍스트 청킹 크기 (기본값: `1000`)
+- `EMBEDDING_WORKER_CHUNK_OVERLAP`
+  - 청크 간 오버랩 크기 (기본값: `200`)
+
+예시:
+
+```env
+# OpenAI 사용 (기본)
+EMBEDDING_WORKER_LLM_PROVIDER=openai
+EMBEDDING_WORKER_LLM_MODEL_NAME=text-embedding-3-small
+EMBEDDING_WORKER_LLM_API_KEY=your-openai-api-key
+
+# Google 사용
+# EMBEDDING_WORKER_LLM_PROVIDER=google
+# EMBEDDING_WORKER_LLM_MODEL_NAME=models/embedding-001
+# EMBEDDING_WORKER_LLM_API_KEY=your-google-api-key
+
+# Ollama 사용 (로컬)
+# EMBEDDING_WORKER_LLM_PROVIDER=ollama
+# EMBEDDING_WORKER_LLM_MODEL_NAME=nomic-embed-text
+# EMBEDDING_WORKER_LLM_BASE_URL=http://localhost:11434
+```
+
 ### Kafka 토픽
 
-- `tech-letter.post.events`: 포스트 관련 이벤트
+- `tech-letter.post.summary`: 요약 파이프라인 이벤트 (`post.summary_requested`, `post.summary_response`)
+- `tech-letter.post.embedding`: 임베딩 파이프라인 이벤트 (`post.embedding_requested`, `post.embedding_response`)
 - `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 (Phase 2)
 
 ## 서비스 포트
@@ -240,5 +340,7 @@ SUMMARY_WORKER_LLM_API_KEY=your-gemini-api-key
 - **API Gateway**: 8080 (클라이언트용 REST API)
 - **Content Service**: 8001 (내부 서비스 API)
 - **User Service**: 8002 (내부 서비스 API - 유저/북마크)
+- **Chatbot Service**: 8003 (RAG 챗봇 API)
+- **Qdrant**: 6333 (Vector DB HTTP), 6334 (gRPC)
 - Kafka: 9092
 - Kafka UI: 8081

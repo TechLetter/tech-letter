@@ -2,6 +2,8 @@
 members = [
   "common",
   "summary_worker",
+  "embedding_worker",
+  "chatbot_service",
   "content_service",
   "user_service",
 ]
@@ -10,9 +12,13 @@ members = [
 techletter-common = { workspace = true }
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 extraPaths = [
     "common",
     "summary_worker",
+    "embedding_worker",
+    "chatbot_service",
     "content_service",
     "user_service",
 ]
@@ -20,6 +26,8 @@ extraPaths = [
 include = [
     "common",
     "summary_worker",
+    "embedding_worker",
+    "chatbot_service",
     "content_service",
     "user_service",
 ]

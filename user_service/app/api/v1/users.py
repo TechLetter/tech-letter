@@ -7,6 +7,7 @@ from ..schemas.users import (
     UserUpsertRequest,
     UserUpsertResponse,
     UserProfileResponse,
+    ListUsersResponse,
 )
 from ...services.users_service import UsersService, get_users_service
 
@@ -45,3 +46,16 @@ async def delete_user(
     if not deleted:
         raise HTTPException(status_code=404, detail="user not found")
     return {"message": "user_deleted"}
+
+
+@router.get("", response_model=ListUsersResponse, summary="유저 목록 조회")
+async def list_users(
+    page: int = 1,
+    page_size: int = 20,
+    service: UsersService = Depends(get_users_service),
+) -> ListUsersResponse:
+    users, total = service.list_users(page, page_size)
+    return ListUsersResponse(
+        total=total,
+        items=[UserProfileResponse.from_domain(u) for u in users],
+    )
