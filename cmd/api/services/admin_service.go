@@ -26,6 +26,7 @@ func NewAdminService(contentClient *contentclient.Client, userClient *userclient
 type AdminListPostsInput struct {
 	Page               int
 	PageSize           int
+	BlogID             string
 	StatusAISummarized *bool
 	StatusEmbedded     *bool
 }
@@ -35,6 +36,7 @@ func (s *AdminService) ListPosts(ctx context.Context, in AdminListPostsInput) (d
 	resp, err := s.contentClient.ListPosts(ctx, contentclient.ListPostsParams{
 		Page:               in.Page,
 		PageSize:           in.PageSize,
+		BlogID:             in.BlogID,
 		StatusAISummarized: in.StatusAISummarized,
 		StatusEmbedded:     in.StatusEmbedded,
 	})
