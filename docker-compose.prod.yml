@@ -142,10 +142,10 @@ services:
       - .env
     environment:
       SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
-      # SUMMARY_WORKER_LLM_PROVIDER: google
-      # SUMMARY_WORKER_LLM_MODEL_NAME: gemini-2.5-flash
-      SUMMARY_WORKER_LLM_PROVIDER: openrouter
-      SUMMARY_WORKER_LLM_MODEL_NAME: google/gemini-2.5-flash
+      SUMMARY_WORKER_LLM_PROVIDER: google
+      SUMMARY_WORKER_LLM_MODEL_NAME: gemini-2.5-flash
+      # SUMMARY_WORKER_LLM_PROVIDER: openrouter
+      # SUMMARY_WORKER_LLM_MODEL_NAME: google/gemini-2.5-flash
       SUMMARY_WORKER_LLM_TEMPERATURE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
@@ -172,10 +172,10 @@ services:
       - .env
     environment:
       EMBEDDING_WORKER_LLM_API_KEY: ${EMBEDDING_WORKER_LLM_API_KEY}
-      # EMBEDDING_WORKER_LLM_PROVIDER: google
-      # EMBEDDING_WORKER_LLM_MODEL_NAME: gemini-embedding-001
-      EMBEDDING_WORKER_LLM_PROVIDER: openrouter
-      EMBEDDING_WORKER_LLM_MODEL_NAME: google/gemini-embedding-001
+      EMBEDDING_WORKER_LLM_PROVIDER: google
+      EMBEDDING_WORKER_LLM_MODEL_NAME: gemini-embedding-001
+      # EMBEDDING_WORKER_LLM_PROVIDER: openrouter
+      # EMBEDDING_WORKER_LLM_MODEL_NAME: google/gemini-embedding-001
       EMBEDDING_WORKER_CHUNK_SIZE: 1000
       EMBEDDING_WORKER_CHUNK_OVERLAP: 200
       MONGO_URI: ${MONGO_URI}
@@ -205,8 +205,10 @@ services:
       - .env
     environment:
       CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY}
-      CHATBOT_LLM_PROVIDER: openrouter
-      CHATBOT_LLM_MODEL_NAME: google/gemma-3-27b-it:free
+      CHATBOT_LLM_PROVIDER: google
+      CHATBOT_LLM_MODEL_NAME: gemini-2.5-flash
+      # CHATBOT_LLM_PROVIDER: openrouter
+      # CHATBOT_LLM_MODEL_NAME: google/gemma-3-27b-it:free
       CHATBOT_LLM_TEMPERATURE: 0.7
       CHATBOT_LLM_MAX_RETRIES: 0
       CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY}
