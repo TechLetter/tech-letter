@@ -7,7 +7,7 @@ from pymongo.database import Database
 from .documents.blog_document import BlogDocument
 from .interfaces import BlogRepositoryInterface
 from common.models.blog import Blog, ListBlogsFilter
-from common.mongo.types import from_object_id
+from common.mongo.types import from_object_id, to_object_id
 
 
 class BlogRepository(BlogRepositoryInterface):

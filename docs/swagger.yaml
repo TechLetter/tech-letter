@@ -337,7 +337,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all posts with pagination and optional status filtering
+      description: List all posts with pagination and optional status/blog filtering
       parameters:
       - default: 1
         description: Page number
@@ -349,6 +349,10 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: Filter by blog ID
+        in: query
+        name: blog_id
+        type: string
       - description: Filter by AI summary status
         in: query
         name: status_ai_summarized
