@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 
 import pytest
@@ -39,7 +37,6 @@ def test_render_parse_validate_pipeline(url: str) -> None:
     html = render_html(url)
     assert isinstance(html, str)
     assert len(html) > 0, f"empty html for url={url}"
-
     # print(html)
 
     # 2. 본문 텍스트 추출
