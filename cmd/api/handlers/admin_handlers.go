@@ -11,12 +11,13 @@ import (
 )
 
 // @Summary List posts for admin
-// @Description List all posts with pagination and optional status filtering
+// @Description List all posts with pagination and optional status/blog filtering
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
+// @Param blog_id query string false "Filter by blog ID"
 // @Param status_ai_summarized query bool false "Filter by AI summary status"
 // @Param status_embedded query bool false "Filter by embedding status"
 // @Success 200 {object} dto.PaginationAdminPostDTO
@@ -26,6 +27,7 @@ func AdminListPostsHandler(svc *services.AdminService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+		blogID := c.Query("blog_id")
 
 		var statusAISummarized *bool
 		if v := c.Query("status_ai_summarized"); v != "" {
@@ -45,6 +47,7 @@ func AdminListPostsHandler(svc *services.AdminService) gin.HandlerFunc {
 		resp, err := svc.ListPosts(c.Request.Context(), services.AdminListPostsInput{
 			Page:               page,
 			PageSize:           pageSize,
+			BlogID:             blogID,
 			StatusAISummarized: statusAISummarized,
 			StatusEmbedded:     statusEmbedded,
 		})
