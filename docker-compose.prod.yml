@@ -144,8 +144,8 @@ services:
       SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
       # SUMMARY_WORKER_LLM_PROVIDER: google
       # SUMMARY_WORKER_LLM_MODEL_NAME: gemini-2.5-flash
-      CHATBOT_LLM_PROVIDER: openrouter
-      CHATBOT_LLM_MODEL_NAME: google/gemini-2.5-flash
+      SUMMARY_WORKER_LLM_PROVIDER: openrouter
+      SUMMARY_WORKER_LLM_MODEL_NAME: google/gemini-2.5-flash
       SUMMARY_WORKER_LLM_TEMPERATURE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
