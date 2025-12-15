@@ -62,7 +62,7 @@ const docTemplate = `{
         },
         "/api/v1/admin/posts": {
             "get": {
-                "description": "List all posts with pagination and optional status filtering",
+                "description": "List all posts with pagination and optional status/blog filtering",
                 "consumes": [
                     "application/json"
                 ],
@@ -86,6 +86,12 @@ const docTemplate = `{
                         "default": 20,
                         "description": "Page size",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by blog ID",
+                        "name": "blog_id",
                         "in": "query"
                     },
                     {
