@@ -2,6 +2,9 @@
 
 이 문서는 Tech-Letter 챗봇 기능의 **Phase 2 설계 및 구현 계획**을 정리한다.
 
+- **Phase 2-A**: 크레딧 시스템 (사용량 제한)
+- **Phase 2-B**: 대화 세션 (대화 내역 저장)
+
 ---
 
 ## 1. 개요
@@ -77,9 +80,129 @@ flowchart TB
 
 ---
 
-## 3. 이벤트 설계
+## 3. Common 패키지 활용 (기존 관행)
 
-### 3.1 새 Kafka 토픽
+Phase 2 구현 시 기존 `common` 패키지의 패턴을 따른다.
+
+### 3.1 MongoDB Document 패턴
+
+```python
+# 기존 관행: common/mongo/types.py의 BaseDocument 상속
+from common.mongo.types import BaseDocument, MongoDateTime, PyObjectId
+
+class CreditDocument(BaseDocument):
+    """credits 컬렉션 도큐먼트."""
+    user_code: str
+    remaining: int
+    granted: int
+    expired_at: MongoDateTime  # UTC datetime 자동 정규화
+
+    @classmethod
+    def from_domain(cls, credit: Credit) -> "CreditDocument":
+        data = build_document_data_from_domain(credit)
+        return cls.model_validate(data)
+
+    def to_domain(self) -> Credit:
+        return Credit(
+            id=from_object_id(self.id),
+            user_code=self.user_code,
+            # ...
+        )
+```
+
+**활용할 타입:**
+
+- `BaseDocument`: MongoDB 공통 필드 (`_id`, `created_at`, `updated_at`)
+- `MongoDateTime`: UTC 기준 datetime 자동 정규화
+- `PyObjectId`: ObjectId 타입 변환
+- `build_document_data_from_domain()`: 도메인 → Document 변환
+
+### 3.2 이벤트 정의 패턴
+
+```python
+# 기존 관행: @dataclass(slots=True) + from_dict 클래스메서드
+from dataclasses import dataclass
+from typing import Any, Mapping, Self
+
+@dataclass(slots=True)
+class CreditConsumedEvent:
+    id: str
+    type: str
+    timestamp: str
+    source: str
+    version: str
+    user_code: str
+    credit_expired_at: str  # ISO8601 문자열
+    amount: int
+    remaining: int
+    reason: str
+    session_id: str
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+        return cls(
+            id=str(data["id"]),
+            type=str(data["type"]),
+            timestamp=str(data["timestamp"]),
+            source=str(data["source"]),
+            version=str(data.get("version", "1.0")),
+            user_code=str(data["user_code"]),
+            credit_expired_at=str(data["credit_expired_at"]),
+            amount=int(data["amount"]),
+            remaining=int(data["remaining"]),
+            reason=str(data["reason"]),
+            session_id=str(data["session_id"]),
+        )
+```
+
+### 3.3 이벤트 발행 패턴
+
+```python
+# 기존 관행: new_json_event + asdict + KafkaEventBus.publish
+from dataclasses import asdict
+from common.eventbus.helpers import new_json_event
+from common.eventbus.kafka import get_kafka_event_bus
+
+event_id = str(uuid.uuid4())
+timestamp = datetime.now(timezone.utc).isoformat()
+
+event = CreditConsumedEvent(
+    id=event_id,
+    type=CreditEventType.CREDIT_CONSUMED,
+    timestamp=timestamp,
+    source="user-service",
+    version="1.0",
+    # ...
+)
+
+wrapped = new_json_event(payload=asdict(event), event_id=event_id)
+bus = get_kafka_event_bus()
+bus.publish(TOPIC_CREDIT.base, wrapped)
+```
+
+### 3.4 Repository 패턴
+
+```python
+# 기존 관행: Interface + 구체 구현 분리
+# user_service/app/repositories/interfaces.py
+class CreditRepositoryInterface(Protocol):
+    def get_active(self, user_code: str) -> Credit | None: ...
+    def consume(self, user_code: str, amount: int) -> tuple[Credit, str] | None: ...
+    def refund(self, user_code: str, expired_at: datetime, amount: int) -> Credit: ...
+
+# user_service/app/repositories/credit_repository.py
+class CreditRepository(CreditRepositoryInterface):
+    def __init__(self, database: Database) -> None:
+        self._db = database
+        self._col = database["credits"]
+    # ...
+```
+
+---
+
+## 4. 이벤트 설계
+
+### 4.1 새 Kafka 토픽
 
 | 토픽                 | 설명               |
 | -------------------- | ------------------ |
@@ -106,17 +229,17 @@ class ChatEventType:
 
 ```json
 {
-  "id": "evt-123",
+  "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
   "type": "credit.consumed",
   "timestamp": "2024-12-18T10:30:00Z",
   "source": "api-gateway",
   "version": "1.0",
   "user_code": "google:uuid-xxx",
-  "credit_date": "2024-12-18",
+  "credit_expired_at": "2024-12-19T00:00:00Z",
   "amount": 1,
   "remaining": 9,
   "reason": "chat",
-  "session_id": "session-456"
+  "session_id": "67890abc-def0-4123-4567-89abcdef0123"
 }
 ```
 
@@ -124,17 +247,17 @@ class ChatEventType:
 
 ```json
 {
-  "id": "evt-456",
+  "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
   "type": "chat.completed",
   "timestamp": "2024-12-18T10:30:05Z",
   "source": "api-gateway",
   "version": "1.0",
   "user_code": "google:uuid-xxx",
-  "session_id": "session-456",
+  "session_id": "67890abc-def0-4123-4567-89abcdef0123",
   "query": "React에서 성능을 최적화하는 방법은?",
   "answer": "React 성능 최적화를 위해...",
   "sources": [...],
-  "credit_consumed_id": "evt-123"
+  "credit_consumed_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
 }
 ```
 
@@ -142,41 +265,60 @@ class ChatEventType:
 
 ```json
 {
-  "id": "evt-789",
+  "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
   "type": "chat.failed",
   "timestamp": "2024-12-18T10:30:05Z",
   "source": "api-gateway",
   "version": "1.0",
   "user_code": "google:uuid-xxx",
-  "session_id": "session-456",
+  "session_id": "67890abc-def0-4123-4567-89abcdef0123",
   "query": "React에서...",
   "error_code": "chatbot_unavailable",
-  "credit_consumed_id": "evt-123"
+  "credit_consumed_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
 }
 ```
 
 ---
 
-## 4. 크레딧 시스템
+# Phase 2-A: 크레딧 시스템
 
-### 4.1 MongoDB 컬렉션
+기존 `/chatbot/chat` API에 크레딧 차감 기능을 추가한다.
 
-#### credits
+## A.1 크레딧 정책
+
+| 항목        | 결정                   |
+| ----------- | ---------------------- |
+| 충전        | 매일 10개 자동         |
+| 유효기간    | 1일 (다음 날 소멸)     |
+| 채팅 비용   | 1회 = 1 크레딧         |
+| 부족 응답   | `402 Payment Required` |
+| 관리자 부여 | 포함                   |
+
+## A.2 MongoDB 컬렉션
+
+### credits
 
 ```javascript
 {
   _id: ObjectId,
   user_code: "google:uuid-xxx",
-  credit_date: "2024-12-18",
   remaining: 7,
   granted: 10,
+  expired_at: ISODate("2024-12-19T00:00:00Z"),  // 만료 일시
   created_at: ISODate,
   updated_at: ISODate
 }
 
 // 인덱스
-{ user_code: 1, credit_date: 1 }  // unique
+{ user_code: 1, expired_at: 1 }  // unique
+{ expired_at: 1 }                 // TTL 인덱스 (선택적)
 ```
+
+> [!NOTE] > **설계 의도**: `expired_at`을 사용하면 비즈니스 로직(일일/주간/월간 충전)과 데이터 구조가 분리됨
+>
+> - 일일 충전: `expired_at = 다음 날 00:00:00`
+> - 월간 충전: `expired_at = 다음 달 1일 00:00:00`
+> - TTL 인덱스로 만료된 데이터 자동 삭제 가능
 
 #### credit_transactions
 
@@ -184,7 +326,7 @@ class ChatEventType:
 {
   _id: ObjectId,
   user_code: "google:uuid-xxx",
-  credit_date: "2024-12-18",
+  credit_expired_at: ISODate("2024-12-19T00:00:00Z"),  // 연결된 크레딧의 만료일시
   type: "consume",  // grant | consume | refund | admin_grant
   amount: 1,
   reason: "chat",
@@ -194,68 +336,199 @@ class ChatEventType:
 
 // 인덱스
 { user_code: 1, created_at: -1 }
-{ credit_date: 1, type: 1 }
+{ credit_expired_at: 1, type: 1 }
 ```
 
-### 4.2 일일 자동 충전 (Lazy Initialization)
+## A.3 일일 자동 충전 (Lazy Initialization)
 
 ```python
-def get_or_create_today_credits(user_code: str) -> Credits:
-    """오늘 크레딧 조회/생성. 첫 호출 시 10 크레딧 자동 부여."""
-    today = date.today().isoformat()
+def get_or_create_active_credits(user_code: str) -> Credits:
+    """현재 유효한 크레딧 조회/생성. 없으면 10 크레딧 자동 부여."""
+    now = datetime.now(timezone.utc)
 
-    doc = self._col.find_one_and_update(
-        {"user_code": user_code, "credit_date": today},
-        {
-            "$setOnInsert": {
-                "granted": 10,
-                "remaining": 10,
-                "created_at": datetime.now(timezone.utc),
-            },
-            "$set": {"updated_at": datetime.now(timezone.utc)}
-        },
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
+    # 현재 시간 기준 유효한 크레딧 조회
+    doc = self._col.find_one({
+        "user_code": user_code,
+        "expired_at": {"$gt": now}
+    })
+
+    if doc:
+        return self._from_document(doc)
+
+    # 유효한 크레딧 없음 -> 새로 생성 (다음 날 00:00:00 만료)
+    tomorrow_midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
     )
-    return self._from_document(doc)
+
+    new_doc = {
+        "user_code": user_code,
+        "granted": 10,
+        "remaining": 10,
+        "expired_at": tomorrow_midnight,
+        "created_at": now,
+        "updated_at": now,
+    }
+    self._col.insert_one(new_doc)
+    return self._from_document(new_doc)
 ```
 
-### 4.3 Atomic 크레딧 차감
+## A.4 Atomic 크레딧 차감
 
 ```python
-def consume(self, user_code: str, amount: int = 1) -> Credits | None:
-    """크레딧 차감. 잔액 부족 시 None 반환."""
-    today = date.today().isoformat()
-    self.get_or_create_today_credits(user_code)
+def consume(self, user_code: str, amount: int = 1) -> tuple[Credits, str] | None:
+    """크레딧 차감. 잔액 부족 시 None 반환. 성공 시 (Credits, expired_at_iso) 반환."""
+    now = datetime.now(timezone.utc)
+    credits = self.get_or_create_active_credits(user_code)
 
     doc = self._col.find_one_and_update(
         {
             "user_code": user_code,
-            "credit_date": today,
+            "expired_at": {"$gt": now},
             "remaining": {"$gte": amount}
         },
         {
             "$inc": {"remaining": -amount},
+            "$set": {"updated_at": now}
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if not doc:
+        return None
+
+    result = self._from_document(doc)
+    return result, result.expired_at.isoformat()
+```
+
+## A.5 채팅 실패 시 크레딧 환불
+
+> [!IMPORTANT] > **크레딧 차감 기준**: AI 호출 성공 여부
+>
+> - AI 호출 성공 → 크레딧 유지 (답변 품질과 무관)
+> - AI 호출 실패 → 환불
+
+#### 처리 흐름
+
+1. **Gateway: 요청 검증** → 실패 시 `400 invalid_request` (크레딧 차감 안 함)
+2. **Gateway: 크레딧 차감**
+3. **Chatbot Service: AI 호출**
+4. **성공 → 크레딧 유지 / 실패 → 환불**
+
+#### 환불 케이스
+
+| 실패 유형           | 에러 코드             | 환불 여부 |
+| ------------------- | --------------------- | --------- |
+| AI API Rate Limit   | `rate_limited`        | ✅ 환불   |
+| AI API 서버 장애    | `chatbot_unavailable` | ✅ 환불   |
+| Chatbot Service 5xx | `chatbot_unavailable` | ✅ 환불   |
+| 이벤트 발행 실패    | `internal_error`      | ✅ 환불   |
+
+#### 크레딧 차감 전 검증 (환불 불필요)
+
+| 검증 단계      | 에러 코드              | 처리             |
+| -------------- | ---------------------- | ---------------- |
+| 요청 형식 오류 | `invalid_request`      | 차감 전 → 400    |
+| 크레딧 부족    | `insufficient_credits` | 차감 안 함 → 402 |
+
+#### 환불 흐름
+
+```mermaid
+sequenceDiagram
+    participant Gateway
+    participant UserService
+    participant Kafka
+    participant EventHandler
+    participant MongoDB
+
+    Note over Gateway: 채팅 실패 발생
+
+    Gateway->>Kafka: chat.failed 이벤트 발행
+    Note over Kafka: { user_code, credit_consumed_id, error_code }
+
+    Kafka->>EventHandler: 이벤트 소비
+    EventHandler->>EventHandler: 환불 대상 검증
+
+    EventHandler->>MongoDB: credits.remaining += 1
+    Note over MongoDB: Atomic increment
+
+    EventHandler->>MongoDB: credit_transactions 기록
+    Note over MongoDB: type: "refund", reason: error_code
+```
+
+#### 환불 로직
+
+```python
+def refund(self, user_code: str, expired_at: datetime, amount: int = 1) -> Credits:
+    """채팅 실패로 인한 크레딧 환불."""
+    doc = self._col.find_one_and_update(
+        {"user_code": user_code, "expired_at": expired_at},
+        {
+            "$inc": {"remaining": amount},
             "$set": {"updated_at": datetime.now(timezone.utc)}
         },
         return_document=ReturnDocument.AFTER,
     )
-    return self._from_document(doc) if doc else None
+    if not doc:
+        raise ValueError(f"Credits not found: {user_code}, expired_at={expired_at}")
+    return self._from_document(doc)
 ```
 
-### 4.4 크레딧 API
+#### 환불 트랜잭션 로그
 
-| Method | Endpoint                                  | 설명             | 인증  |
-| ------ | ----------------------------------------- | ---------------- | ----- |
-| `GET`  | `/api/v1/users/credits`                   | 오늘 크레딧 조회 | JWT   |
-| `GET`  | `/api/v1/users/credits/history`           | 사용 이력 조회   | JWT   |
-| `POST` | `/api/v1/admin/users/:code/credits/grant` | 크레딧 부여      | Admin |
+```javascript
+// credit_transactions (환불 기록)
+{
+  _id: ObjectId,
+  user_code: "google:uuid-xxx",
+  credit_expired_at: ISODate("2024-12-19T00:00:00Z"),
+  type: "refund",
+  amount: 1,
+  reason: "chatbot_unavailable",
+  metadata: {
+    original_consume_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    chat_failed_id: "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+    error_code: "chatbot_unavailable"
+  },
+  created_at: ISODate
+}
+```
+
+## A.6 크레딧 API
+
+| Method | Endpoint                                  | 설명                                       | 인증  |
+| ------ | ----------------------------------------- | ------------------------------------------ | ----- |
+| `GET`  | `/api/v1/users/credits`                   | 현재 사용자의 오늘 사용 가능한 크레딧 조회 | JWT   |
+| `GET`  | `/api/v1/users/credits/history`           | 현재 사용자의 크레딧 사용 이력 조회        | JWT   |
+| `POST` | `/api/v1/admin/users/:code/credits/grant` | 특정 사용자에게 크레딧 부여                | Admin |
+
+**크레딧 조회 응답 예시:**
+
+```json
+{
+  "remaining": 7,
+  "granted": 10,
+  "expired_at": "2024-12-19T00:00:00+09:00"
+}
+```
+
+- `remaining`: 현재 사용 가능한 크레딧 수
+- `granted`: 부여된 총 크레딧 수
+- `expired_at`: 크레딧 만료 일시
 
 ---
 
-## 5. 대화 세션
+# Phase 2-B: 대화 세션
 
-### 5.1 MongoDB 스키마
+사용자의 대화 내역을 세션별로 저장하고 조회할 수 있는 기능을 추가한다.
+
+## B.1 세션 정책
+
+| 항목      | 결정             |
+| --------- | ---------------- |
+| 저장 위치 | `user_service`   |
+| 만료      | 없음 (영구 저장) |
+| 제목 생성 | 첫 질문 앞 30자  |
+
+## B.2 MongoDB 스키마
 
 ```javascript
 // chat_sessions
@@ -275,7 +548,7 @@ def consume(self, user_code: str, amount: int = 1) -> Credits | None:
 { user_code: 1, updated_at: -1 }
 ```
 
-### 5.2 세션 제목 생성
+## B.3 세션 제목 생성
 
 ```python
 def generate_title(query: str) -> str:
@@ -286,7 +559,7 @@ def generate_title(query: str) -> str:
     return title
 ```
 
-### 5.3 세션 API
+## B.4 세션 API
 
 | Method   | Endpoint                            | 설명      |
 | -------- | ----------------------------------- | --------- |
@@ -298,7 +571,7 @@ def generate_title(query: str) -> str:
 
 ---
 
-## 6. 채팅 흐름 (최종)
+## 7. 채팅 흐름 (최종)
 
 ```mermaid
 sequenceDiagram
@@ -341,9 +614,9 @@ sequenceDiagram
 
 ---
 
-## 7. 이벤트 핸들러
+## 8. 이벤트 핸들러
 
-### 7.1 크레딧 이벤트 핸들러
+### 8.1 크레딧 이벤트 핸들러
 
 ```python
 class CreditEventHandler:
@@ -363,7 +636,7 @@ class CreditEventHandler:
         self._transaction_repo.create(...)
 ```
 
-### 7.2 채팅 이벤트 핸들러
+### 8.2 채팅 이벤트 핸들러
 
 ```python
 class ChatEventHandler:
@@ -388,7 +661,7 @@ class ChatEventHandler:
 
 ---
 
-## 8. 구현 계획
+## 9. 구현 계획
 
 ### Phase 2-A: 크레딧 시스템 (~3일)
 
@@ -416,7 +689,7 @@ class ChatEventHandler:
 
 ---
 
-## 9. 파일 변경 목록
+## 10. 파일 변경 목록
 
 ### 신규 파일 (16개)
 
@@ -455,7 +728,7 @@ class ChatEventHandler:
 
 ---
 
-## 10. 검증 계획
+## 11. 검증 계획
 
 ### 기능 테스트
 
