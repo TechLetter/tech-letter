@@ -25,6 +25,7 @@ TEST_RSS_URLS = [
     "https://insight.infograb.net/blog/rss.xml",
     "https://tech.inflab.com/rss.xml",
     "https://medium.com/feed/yanoljacloud-tech",
+    "https://techblog.yogiyo.co.kr/feed",
 ]
 
 
