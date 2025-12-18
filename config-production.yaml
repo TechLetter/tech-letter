@@ -106,3 +106,7 @@ content_service:
         url: https://aws.amazon.com/ko/blogs/tech
         rss_url: https://aws.amazon.com/ko/blogs/tech/feed
         blog_type: company
+      - name: 요기요
+        url: https://techblog.yogiyo.co.kr/
+        rss_url: https://techblog.yogiyo.co.kr/feed
+        blog_type: company
