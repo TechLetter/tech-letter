@@ -6,9 +6,13 @@ package eventbus
 var (
 	TopicPostSummary   = NewTopic("tech-letter.post.summary")
 	TopicPostEmbedding = NewTopic("tech-letter.post.embedding")
+	TopicCredit        = NewTopic("tech-letter.credit")
+	TopicChat          = NewTopic("tech-letter.chat")
 )
 
 var AllTopics = []Topic{
 	TopicPostSummary,
 	TopicPostEmbedding,
+	TopicCredit,
+	TopicChat,
 }

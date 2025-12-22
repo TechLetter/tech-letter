@@ -11,4 +11,5 @@ type UserProfileDTO struct {
 	Role         string `json:"role" example:"user"`
 	CreatedAt    string `json:"created_at" example:"2025-01-01T12:00:00Z"`
 	UpdatedAt    string `json:"updated_at" example:"2025-01-01T12:00:00Z"`
+	Credits      int    `json:"credits" example:"10"`
 }

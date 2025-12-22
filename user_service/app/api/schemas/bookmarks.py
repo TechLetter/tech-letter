@@ -15,9 +15,7 @@ class BookmarkItem(BaseModel):
     created_at: UtcDateTime
 
 
-class ListBookmarksResponse(BaseModel):
-    total: int
-    items: list[BookmarkItem]
+# ListBookmarksResponse 대신 common.schemas.pagination.PaginatedResponse[BookmarkItem] 사용
 
 
 class BookmarkCheckRequest(BaseModel):

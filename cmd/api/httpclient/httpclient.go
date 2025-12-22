@@ -3,10 +3,12 @@ package httpclient
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"tech-letter/cmd/api/trace"
@@ -131,10 +133,15 @@ func NewBaseClientWithClient(httpClient *http.Client, baseURL string) *BaseClien
 }
 
 // NewRequest는 baseURL과 상대 경로, 쿼리, 바디를 사용해 새로운 HTTP 요청을 생성한다.
-// relPath는 "/api/v1/..." 형태의 경로를 기대한다.
+// relPath는 "/api/v1/..." 형태의 경로를 기대하며, 쿼리 파라미터는 반드시 query 인자로 전달해야 한다.
+// relPath에 쿼리(?)가 포함된 경우 path.Join이 쿼리를 손상시키므로 에러를 반환한다.
 func (c *BaseClient) NewRequest(ctx context.Context, method, relPath string, query url.Values, body io.Reader) (*http.Request, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	// 방어적 검증: relPath에 쿼리가 포함되면 path.Join이 손상시키므로 사전 차단
+	if strings.Contains(relPath, "?") {
+		return nil, fmt.Errorf("httpclient: relPath must not contain query string (use query parameter instead): %s", relPath)
 	}
 	base, err := url.Parse(c.BaseURL)
 	if err != nil {
