@@ -14,6 +14,7 @@ services:
       KAFKA_GROUP_ID: tech-letter-api
       CONTENT_SERVICE_BASE_URL: http://content_service:8001
       USER_SERVICE_BASE_URL: http://user_service:8002
+      CHATBOT_SERVICE_BASE_URL: http://chatbot_service:8003
       LOG_LEVEL: INFO
       SERVICE_NAME: api-gateway
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
@@ -93,6 +94,9 @@ services:
       USER_SERVICE_PORT: 8002
       LOG_LEVEL: INFO
       SERVICE_NAME: user-service
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: tech-letter-user-service
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 10s
