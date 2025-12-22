@@ -12,8 +12,14 @@ from .api.health import router as health_router
 from .api.v1 import api_router
 
 
+from .event_handlers.chat_handler import ChatEventHandler
+
+chat_event_handler = ChatEventHandler()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pragma: no cover - framework hook
+    chat_event_handler.start_consuming()
     yield
 
 

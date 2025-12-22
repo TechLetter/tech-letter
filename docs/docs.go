@@ -48,7 +48,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/contentclient.ListBlogsResponse"
+                            "type": "object"
                         }
                     },
                     "500": {
@@ -149,7 +149,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/contentclient.CreatePostResponse"
+                            "type": "object"
                         }
                     },
                     "400": {
@@ -305,7 +305,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/userclient.ListUsersResponse"
+                            "type": "object"
                         }
                     },
                     "500": {
@@ -319,7 +319,7 @@ const docTemplate = `{
         },
         "/auth/google/callback": {
             "get": {
-                "description": "state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다.",
+                "description": "state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다. 성공 시 일일 크레딧도 자동 지급합니다.",
                 "produces": [
                     "application/json"
                 ],
@@ -439,7 +439,12 @@ const docTemplate = `{
         },
         "/chatbot/chat": {
             "post": {
-                "description": "로그인된 사용자만 사용할 수 있는 챗봇 질의 API. API Gateway가 chatbot-service로 프록시한다.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "로그인된 사용자만 사용할 수 있는 챗봇 질의 API. 크레딧이 차감된다.",
                 "consumes": [
                     "application/json"
                 ],
@@ -451,13 +456,6 @@ const docTemplate = `{
                 ],
                 "summary": "챗봇 질의",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "description": "chat request",
                         "name": "body",
@@ -487,6 +485,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     },
+                    "402": {
+                        "description": "크레딧 부족",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
@@ -503,6 +507,140 @@ const docTemplate = `{
                         "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/chatbot/sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "사용자의 대화 세션 목록을 페이지네이션하여 조회합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "대화 세션 목록 조회",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "페이지 번호 (기본 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "페이지 크기 (기본 20)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListSessionsResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "빈 대화 세션을 생성합니다. (UI에서 '+ 새 채팅' 버튼 클릭 시)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "대화 세션 생성",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatSession"
+                        }
+                    }
+                }
+            }
+        },
+        "/chatbot/sessions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "특정 대화 세션의 상세 정보(메시지 목록 포함)를 조회합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "대화 세션 상세 조회",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "세션 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatSession"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "특정 대화 세션을 삭제합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "대화 세션 삭제",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "세션 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MessageResponseDTO"
                         }
                     }
                 }
@@ -700,6 +838,11 @@ const docTemplate = `{
         },
         "/posts/bookmarks": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "현재 로그인한 사용자의 북마크한 포스트들을 /posts 목록과 동일한 형식으로 조회합니다.",
                 "produces": [
                     "application/json"
@@ -709,13 +852,6 @@ const docTemplate = `{
                 ],
                 "summary": "북마크한 포스트 목록 조회",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "type": "integer",
                         "description": "페이지 번호 (1부터 시작)",
@@ -782,6 +918,11 @@ const docTemplate = `{
         },
         "/posts/{id}/bookmark": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "현재 로그인한 사용자의 지정된 포스트를 북마크합니다.",
                 "produces": [
                     "application/json"
@@ -791,13 +932,6 @@ const docTemplate = `{
                 ],
                 "summary": "포스트 북마크 추가",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "type": "string",
                         "description": "포스트 ObjectID",
@@ -834,6 +968,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "현재 로그인한 사용자의 지정된 포스트 북마크를 해제합니다.",
                 "produces": [
                     "application/json"
@@ -843,13 +982,6 @@ const docTemplate = `{
                 ],
                 "summary": "포스트 북마크 제거",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "type": "string",
                         "description": "포스트 ObjectID",
@@ -935,6 +1067,11 @@ const docTemplate = `{
         },
         "/users/me": {
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Authorization 헤더의 JWT에서 user_code를 추출해 해당 사용자의 계정과 북마크를 삭제합니다.",
                 "produces": [
                     "application/json"
@@ -943,50 +1080,29 @@ const docTemplate = `{
                     "users"
                 ],
                 "summary": "회원 탈퇴 (현재 로그인한 사용자)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
-                        "description": "삭제 성공",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/dto.MessageResponseDTO"
                         }
                     },
                     "401": {
-                        "description": "인증 실패",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     },
                     "404": {
-                        "description": "유저 미존재",
+                        "description": "Not Found",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     },
                     "500": {
-                        "description": "서버 오류",
+                        "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     }
                 }
@@ -994,6 +1110,11 @@ const docTemplate = `{
         },
         "/users/profile": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Authorization 헤더에 포함된 JWT를 검증하고, 현재 로그인한 사용자의 프로필 정보를 조회합니다.",
                 "produces": [
                     "application/json"
@@ -1002,15 +1123,6 @@ const docTemplate = `{
                     "users"
                 ],
                 "summary": "현재 로그인한 사용자 프로필 조회",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 액세스 토큰 (예: Bearer eyJ...)",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1041,45 +1153,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "contentclient.BlogItem": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "contentclient.CreatePostResponse": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "contentclient.ListBlogsResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/contentclient.BlogItem"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "dto.AdminAISummaryDTO": {
             "type": "object",
             "properties": {
@@ -1231,6 +1304,46 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ChatMessage": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ChatSession": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ChatMessage"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_code": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ChatbotChatRequestDTO": {
             "type": "object",
             "required": [
@@ -1240,6 +1353,10 @@ const docTemplate = `{
                 "query": {
                     "type": "string",
                     "example": "벡터 DB는 어떤 원리로 동작하나요?"
+                },
+                "session_id": {
+                    "description": "Optional for first message (will create new session if empty, but client should create session first ideally)",
+                    "type": "string"
                 }
             }
         },
@@ -1248,6 +1365,12 @@ const docTemplate = `{
             "properties": {
                 "answer": {
                     "type": "string"
+                },
+                "consumed_credits": {
+                    "type": "integer"
+                },
+                "remaining_credits": {
+                    "type": "integer"
                 }
             }
         },
@@ -1268,6 +1391,26 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ListSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ChatSession"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -1405,6 +1548,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2025-01-01T12:00:00Z"
                 },
+                "credits": {
+                    "type": "integer",
+                    "example": 10
+                },
                 "email": {
                     "type": "string",
                     "example": "user@example.com"
@@ -1446,52 +1593,14 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
-        },
-        "userclient.ListUsersResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/userclient.UserProfileResponse"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "userclient.UserProfileResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "profile_image": {
-                    "type": "string"
-                },
-                "provider": {
-                    "type": "string"
-                },
-                "provider_sub": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_code": {
-                    "type": "string"
-                }
-            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "JWT Bearer 토큰. 형식: \"Bearer {token}\"",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

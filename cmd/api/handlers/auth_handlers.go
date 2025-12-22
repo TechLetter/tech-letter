@@ -3,10 +3,8 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -62,12 +60,12 @@ func GoogleLoginHandler(authSvc *services.AuthService) gin.HandlerFunc {
 
 // GoogleCallbackHandler godoc
 // @Summary      Google OAuth 콜백 처리
-// @Description  state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다.
+// @Description  state 값을 검증하고, code로 Google 액세스 토큰을 교환한 뒤 사용자 정보를 조회/업서트하고 JWT를 발급하여 로그인 완료 페이지로 리다이렉트합니다. 성공 시 일일 크레딧도 자동 지급합니다.
 // @Tags         auth
 // @Produce      json
 // @Success      302  {string}  string  "로그인 완료 페이지로 리다이렉트 (성공 시 토큰 포함)"
 // @Router       /auth/google/callback [get]
-func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
+func GoogleCallbackHandler(authSvc *services.AuthService, userSvc *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		state := c.Query("state")
 		code := c.Query("code")
@@ -113,7 +111,7 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		sessionID, err := authSvc.HandleGoogleCallback(c.Request.Context(), code)
+		sessionID, userCode, err := authSvc.HandleGoogleCallbackWithUserCode(c.Request.Context(), code)
 		if err != nil {
 			logger.ErrorWithFields("google callback failed", logger.Fields{
 				"error":       err.Error(),
@@ -123,6 +121,18 @@ func GoogleCallbackHandler(authSvc *services.AuthService) gin.HandlerFunc {
 			})
 			c.Redirect(http.StatusFound, redirectURL)
 			return
+		}
+
+		// 로그인 성공 시 일일 크레딧 지급 (실패해도 로그인은 진행)
+		if userCode != "" {
+			if grantErr := userSvc.GrantDailyCredits(c.Request.Context(), userCode); grantErr != nil {
+				logger.ErrorWithFields("failed to grant daily credits on login", logger.Fields{
+					"user_code":  userCode,
+					"error":      grantErr.Error(),
+					"request_id": c.Request.Header.Get("X-Request-Id"),
+					"span_id":    c.Request.Header.Get("X-Span-Id"),
+				})
+			}
 		}
 
 		redirectWithSession := authSvc.GetRedirectURLWithSession(sessionID)
@@ -179,79 +189,6 @@ func SessionExchangeHandler(authSvc *services.AuthService) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"access_token": accessToken,
-		})
-	}
-}
-
-// DeleteCurrentUserHandler godoc
-// @Summary      회원 탈퇴 (현재 로그인한 사용자)
-// @Description  Authorization 헤더의 JWT에서 user_code를 추출해 해당 사용자의 계정과 북마크를 삭제합니다.
-// @Tags         users
-// @Param        Authorization  header  string  true  "Bearer 액세스 토큰 (예: Bearer eyJ...)"
-// @Produce      json
-// @Success      200  {object}  map[string]string  "삭제 성공"
-// @Failure      401  {object}  map[string]string  "인증 실패"
-// @Failure      404  {object}  map[string]string  "유저 미존재"
-// @Failure      500  {object}  map[string]string  "서버 오류"
-// @Router       /users/me [delete]
-func DeleteCurrentUserHandler(authSvc *services.AuthService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userCode, ok := requireUserCodeFromHeader(c, authSvc)
-		if !ok {
-			return
-		}
-
-		if err := authSvc.DeleteUser(c.Request.Context(), userCode); err != nil {
-			if errors.Is(err, services.ErrUserNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "user_not_found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_user"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "user_deleted"})
-	}
-}
-
-// GetUserProfileHandler godoc
-// @Summary      현재 로그인한 사용자 프로필 조회
-// @Description  Authorization 헤더에 포함된 JWT를 검증하고, 현재 로그인한 사용자의 프로필 정보를 조회합니다.
-// @Tags         users
-// @Param        Authorization  header  string  true  "Bearer 액세스 토큰 (예: Bearer eyJ...)"
-// @Produce      json
-// @Success      200  {object}  dto.UserProfileDTO
-// @Failure      401  {object}  dto.ErrorResponseDTO
-// @Failure      404  {object}  dto.ErrorResponseDTO
-// @Failure      500  {object}  dto.ErrorResponseDTO
-// @Router       /users/profile [get]
-func GetUserProfileHandler(authSvc *services.AuthService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userCode, ok := requireUserCodeFromHeader(c, authSvc)
-		if !ok {
-			return
-		}
-
-		profile, err := authSvc.GetUserProfile(c.Request.Context(), userCode)
-		if err != nil {
-			if errors.Is(err, services.ErrUserNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "user_not_found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_load_profile"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"user_code":     profile.UserCode,
-			"provider":      profile.Provider,
-			"provider_sub":  profile.ProviderSub,
-			"email":         profile.Email,
-			"name":          profile.Name,
-			"profile_image": profile.ProfileImage,
-			"role":          profile.Role,
-			"created_at":    profile.CreatedAt.Format(time.RFC3339),
-			"updated_at":    profile.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 }
