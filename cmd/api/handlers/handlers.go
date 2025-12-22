@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"tech-letter/cmd/api/dto"
 	_ "tech-letter/cmd/api/dto"
 
 	"github.com/gin-gonic/gin"
@@ -104,7 +105,7 @@ func IncrementPostViewCountHandler(svc *services.PostService) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post id or post not found"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "view count incremented successfully"})
+		c.JSON(http.StatusOK, dto.MessageResponseDTO{Message: "view count incremented successfully"})
 	}
 }
 

@@ -33,9 +33,7 @@ class PostResponse(BaseModel):
         return cls.model_validate(post.model_dump())
 
 
-class ListPostsResponse(BaseModel):
-    total: int
-    items: list[PostResponse]
+# ListPostsResponse 대신 common.schemas.pagination.PaginatedResponse[PostResponse] 사용
 
 
 class PostsBatchRequest(BaseModel):

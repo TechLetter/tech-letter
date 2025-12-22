@@ -38,7 +38,9 @@ func New() *gin.Engine {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// v1 routes
-	authSvc, err := services.NewAuthServiceFromEnv()
+	userClient := userclient.New()
+	userSvc := services.NewUserService(userClient)
+	authSvc, err := services.NewAuthServiceFromEnv(userSvc)
 	if err != nil {
 		panic(err)
 	}
@@ -47,10 +49,10 @@ func New() *gin.Engine {
 	{
 		chatbotClient := chatbotclient.New()
 		contentClient := contentclient.New()
-		userClient := userclient.New()
+		// userClient는 위에서 이미 생성됨
 		postsSvc := services.NewPostService(contentClient)
 		bookmarkSvc := services.NewBookmarkService(contentClient, userClient)
-		chatbotSvc := services.NewChatbotService(chatbotClient)
+		chatbotSvc := services.NewChatbotService(chatbotClient, userClient)
 		adminSvc := services.NewAdminService(contentClient, userClient)
 
 		api.GET("/posts", handlers.ListPostsHandler(postsSvc, bookmarkSvc, authSvc))
@@ -69,12 +71,21 @@ func New() *gin.Engine {
 		api.GET("/filters/blogs", handlers.GetBlogFiltersHandler(filtersSvc))
 
 		api.GET("/auth/google/login", handlers.GoogleLoginHandler(authSvc))
-		api.GET("/auth/google/callback", handlers.GoogleCallbackHandler(authSvc))
+		api.GET("/auth/google/callback", handlers.GoogleCallbackHandler(authSvc, userSvc))
 		api.POST("/auth/session/exchange", handlers.SessionExchangeHandler(authSvc))
-		api.GET("/users/profile", handlers.GetUserProfileHandler(authSvc))
-		api.DELETE("/users/me", handlers.DeleteCurrentUserHandler(authSvc))
 
+		// User Handlers (UserService 주입)
+		api.GET("/users/profile", handlers.GetUserProfileHandler(authSvc, userSvc))
+		api.DELETE("/users/me", handlers.DeleteCurrentUserHandler(authSvc, userSvc))
+
+		// Chatbot Handlers
 		api.POST("/chatbot/chat", handlers.ChatbotChatHandler(chatbotSvc, authSvc))
+
+		// Chat Session Handlers
+		api.GET("/chatbot/sessions", handlers.ListSessionsHandler(authSvc, userSvc))
+		api.POST("/chatbot/sessions", handlers.CreateSessionHandler(authSvc, userSvc))
+		api.GET("/chatbot/sessions/:id", handlers.GetSessionHandler(authSvc, userSvc))
+		api.DELETE("/chatbot/sessions/:id", handlers.DeleteSessionHandler(authSvc, userSvc))
 
 		// Admin Routes
 		admin := api.Group("/admin")

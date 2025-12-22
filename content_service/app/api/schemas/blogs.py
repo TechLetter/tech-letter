@@ -22,6 +22,4 @@ class BlogResponse(BaseModel):
         return cls.model_validate(blog.model_dump())
 
 
-class ListBlogsResponse(BaseModel):
-    total: int
-    items: list[BlogResponse]
+# ListBlogsResponse 대신 common.schemas.pagination.PaginatedResponse[BlogResponse] 사용

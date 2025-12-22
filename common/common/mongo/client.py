@@ -175,3 +175,17 @@ def _ensure_indexes(db: Database) -> None:
         name="ttl_login_session_expires_at",
         expireAfterSeconds=0,
     )
+
+    # credits: TTL 인덱스 (expired_at 기준 즉시 삭제) + 조회용 복합 인덱스
+    credits = db["credits"]
+
+    credits.create_index(
+        [("expired_at", 1)],
+        name="ttl_expired_at",
+        expireAfterSeconds=0,
+    )
+
+    credits.create_index(
+        [("user_code", 1), ("expired_at", 1)],
+        name="idx_user_expired",
+    )

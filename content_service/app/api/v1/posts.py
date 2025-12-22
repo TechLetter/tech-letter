@@ -3,37 +3,38 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, HttpUrl
+
+from common.models.post import ListPostsFilter
 
 from ...services.posts_service import PostsService, get_posts_service
-
 from ..schemas.posts import (
-    ListPostsResponse,
-    PostPlainTextResponse,
-    PostResponse,
-    ListPostsResponse,
     PostPlainTextResponse,
     PostResponse,
     PostsBatchRequest,
 )
-from pydantic import BaseModel, HttpUrl
+
 
 class CreatePostRequest(BaseModel):
     title: str
     link: HttpUrl
     blog_id: str
 
+
 class CreatePostResponse(BaseModel):
     id: str
     title: str
-from common.models.post import ListPostsFilter
 
 
 router = APIRouter()
 
 
+from common.schemas.pagination import PaginatedResponse
+
+
 @router.get(
     "",
-    response_model=ListPostsResponse,
+    response_model=PaginatedResponse[PostResponse],
     summary="포스트 목록 조회",
     description=(
         "카테고리/태그/블로그 기준으로 필터링된 포스트 목록을 "
@@ -73,7 +74,7 @@ def list_posts(
         description="임베딩 완료 여부 필터링",
     ),
     service: PostsService = Depends(get_posts_service),
-) -> ListPostsResponse:
+) -> PaginatedResponse[PostResponse]:
     flt = ListPostsFilter(
         page=page,
         page_size=page_size,
@@ -86,7 +87,9 @@ def list_posts(
     )
     items, total = service.list_posts(flt)
     dto_items = [PostResponse.from_domain(post) for post in items]
-    return ListPostsResponse(total=total, items=dto_items)
+    return PaginatedResponse(
+        total=total, items=dto_items, page=page, page_size=page_size
+    )
 
 
 @router.get(
@@ -142,17 +145,22 @@ def increment_post_view(
 
 @router.post(
     "/batch",
-    response_model=ListPostsResponse,
+    response_model=PaginatedResponse[PostResponse],
     summary="포스트 일괄 조회",
-    description="post_id 목록으로 여러 포스트를 한 번에 조회한다.",
+    description="post_id 목록으로 여러 포스트를 한 번에 조회한다. (페이지네이션 미지원, page=1 고정)",
 )
 def get_posts_batch(
     body: PostsBatchRequest,
     service: PostsService = Depends(get_posts_service),
-) -> ListPostsResponse:
+) -> PaginatedResponse[PostResponse]:
     posts = service.list_by_ids(body.ids)
     dto_items = [PostResponse.from_domain(post) for post in posts]
-    return ListPostsResponse(total=len(dto_items), items=dto_items)
+    return PaginatedResponse(
+        total=len(dto_items),
+        items=dto_items,
+        page=1,
+        page_size=len(dto_items),
+    )
 
 
 @router.post("", response_model=CreatePostResponse, summary="포스트 수동 생성")
@@ -166,6 +174,8 @@ def create_post(
             link=str(body.link),
             blog_id=body.blog_id,
         )
+        if post.id is None:
+            raise HTTPException(status_code=500, detail="failed to create post")
         return CreatePostResponse(id=post.id, title=post.title)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

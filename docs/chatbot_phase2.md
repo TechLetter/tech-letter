@@ -2,8 +2,8 @@
 
 이 문서는 Tech-Letter 챗봇 기능의 **Phase 2 설계 및 구현 계획**을 정리한다.
 
-- **Phase 2-A**: 크레딧 시스템 (사용량 제한)
-- **Phase 2-B**: 대화 세션 (대화 내역 저장)
+- **Phase 2-A**: 크레딧 시스템 (사용량 제한) ✅ 구현 완료
+- **Phase 2-B**: 대화 세션 (대화 내역 저장) ✅ 구현 완료
 
 ---
 
@@ -561,13 +561,45 @@ def generate_title(query: str) -> str:
 
 ## B.4 세션 API
 
-| Method   | Endpoint                            | 설명      |
-| -------- | ----------------------------------- | --------- |
-| `GET`    | `/api/v1/chatbot/sessions`          | 세션 목록 |
-| `POST`   | `/api/v1/chatbot/sessions`          | 새 세션   |
-| `GET`    | `/api/v1/chatbot/sessions/:id`      | 세션 상세 |
-| `DELETE` | `/api/v1/chatbot/sessions/:id`      | 세션 삭제 |
-| `POST`   | `/api/v1/chatbot/sessions/:id/chat` | 채팅      |
+| Method   | Endpoint                       | 설명      |
+| -------- | ------------------------------ | --------- |
+| `GET`    | `/api/v1/chatbot/sessions`     | 세션 목록 |
+| `POST`   | `/api/v1/chatbot/sessions`     | 새 세션   |
+| `GET`    | `/api/v1/chatbot/sessions/:id` | 세션 상세 |
+| `DELETE` | `/api/v1/chatbot/sessions/:id` | 세션 삭제 |
+
+### 채팅 API
+
+| Method | Endpoint               | 설명               |
+| ------ | ---------------------- | ------------------ |
+| `POST` | `/api/v1/chatbot/chat` | 채팅 (크레딧 차감) |
+
+#### 채팅 요청 (ChatbotChatRequestDTO)
+
+```json
+{
+  "query": "React 성능 최적화 방법은?",
+  "session_id": "67890abc-def0-4123-4567-89abcdef0123" // 선택 (제공 시 유효성 검증)
+}
+```
+
+#### 채팅 응답 (ChatbotChatResponseDTO)
+
+```json
+{
+  "answer": "React 성능 최적화를 위해...",
+  "consumed_credits": 1,
+  "remaining_credits": 7
+}
+```
+
+#### 에러 응답
+
+| 상황              | 상태 코드 | 응답                                |
+| ----------------- | --------- | ----------------------------------- |
+| 잘못된 session_id | 400       | `{"error": "invalid_session_id"}`   |
+| 크레딧 부족       | 402       | `{"error": "insufficient_credits"}` |
+| 챗봇 장애         | 503       | `{"error": "chatbot_unavailable"}`  |
 
 ---
 
@@ -582,11 +614,18 @@ sequenceDiagram
     participant ChatbotService
     participant EventHandler
 
-    Client->>Gateway: POST /chatbot/sessions/:id/chat
+    Client->>Gateway: POST /chatbot/chat {query, session_id?}
     Note over Gateway: JWT 검증
 
-    Gateway->>UserService: POST /internal/credits/consume
+    opt session_id 제공됨
+        Gateway->>UserService: GET /chatbot/sessions/:id (검증)
+        alt 세션 없음
+            UserService-->>Gateway: 404
+            Gateway-->>Client: 400 invalid_session_id
+        end
+    end
 
+    Gateway->>UserService: POST /credits/consume
     alt 크레딧 부족
         UserService-->>Gateway: 402
         Gateway-->>Client: 402 Payment Required
@@ -596,20 +635,19 @@ sequenceDiagram
 
         alt 채팅 성공
             ChatbotService-->>Gateway: 200 { answer }
-            Gateway->>Kafka: credit.consumed
-            Gateway->>Kafka: chat.completed
-            Gateway-->>Client: 200 { answer, remaining_credits }
+            Gateway->>UserService: POST /credits/log-completed
+            Gateway-->>Client: 200 { answer, consumed_credits, remaining_credits }
         else 채팅 실패
             ChatbotService-->>Gateway: 5xx
-            Gateway->>Kafka: chat.failed
+            Gateway->>UserService: POST /credits/log-failed (환불)
             Gateway-->>Client: 503 Service Unavailable
         end
     end
 
-    Note over Kafka,EventHandler: 비동기 처리
-    EventHandler->>EventHandler: 트랜잭션 로그 기록
-    EventHandler->>EventHandler: 세션 메시지 추가
-    EventHandler->>EventHandler: 실패 시 환불
+    Note over UserService,EventHandler: 비동기 처리 (Kafka)
+    UserService->>Kafka: chat.completed 또는 chat.failed 발행
+    Kafka->>EventHandler: 이벤트 소비
+    EventHandler->>EventHandler: 세션 메시지 추가 / 환불 처리
 ```
 
 ---
@@ -665,27 +703,27 @@ class ChatEventHandler:
 
 ### Phase 2-A: 크레딧 시스템 (~3일)
 
-| #   | 작업                   | 파일                                           |
-| --- | ---------------------- | ---------------------------------------------- |
-| 1   | 새 토픽 추가           | `topics.py`, `topics.go`                       |
-| 2   | 이벤트 정의            | `events/credit.py`, `events/chat.py`           |
-| 3   | 크레딧 모델/레포지토리 | `models/credit.py`, `repositories/credit_*.py` |
-| 4   | 크레딧 서비스          | `services/credit_service.py`                   |
-| 5   | 크레딧 API             | `api/credits.py`                               |
-| 6   | 이벤트 핸들러          | `event_handlers/credit_handler.py`             |
-| 7   | Gateway 연동           | `handlers/chatbot_handlers.go`                 |
-| 8   | 관리자 API             | `handlers/admin_handlers.go`                   |
+| #   | 작업                   | 파일                                           | 상태 |
+| --- | ---------------------- | ---------------------------------------------- | ---- |
+| 1   | 새 토픽 추가           | `topics.py`, `topics.go`                       | ✅   |
+| 2   | 이벤트 정의            | `events/credit.py`, `events/chat.py`           | ✅   |
+| 3   | 크레딧 모델/레포지토리 | `models/credit.py`, `repositories/credit_*.py` | ✅   |
+| 4   | 크레딧 서비스          | `services/credit_service.py`                   | ✅   |
+| 5   | 크레딧 API             | `api/credits.py`                               | ✅   |
+| 6   | 이벤트 핸들러          | `event_handlers/credit_handler.py`             | ✅   |
+| 7   | Gateway 연동           | `handlers/chatbot_handlers.go`                 | ✅   |
+| 8   | 관리자 API             | `handlers/admin_handlers.go`                   | ✅   |
 
 ### Phase 2-B: 대화 세션 (~3일)
 
-| #   | 작업                 | 파일                                                       |
-| --- | -------------------- | ---------------------------------------------------------- |
-| 1   | 세션 모델/레포지토리 | `models/chat_session.py`, `repositories/chat_session_*.py` |
-| 2   | 세션 서비스          | `services/chat_session_service.py`                         |
-| 3   | 세션 API             | `api/chat_sessions.py`                                     |
-| 4   | 이벤트 핸들러        | `event_handlers/chat_handler.py`                           |
-| 5   | Gateway 핸들러       | `handlers/session_handlers.go`                             |
-| 6   | 라우터 등록          | `router/router.go`                                         |
+| #   | 작업                 | 파일                                                       | 상태 |
+| --- | -------------------- | ---------------------------------------------------------- | ---- |
+| 1   | 세션 모델/레포지토리 | `models/chat_session.py`, `repositories/chat_session_*.py` | ✅   |
+| 2   | 세션 서비스          | `services/chat_session_service.py`                         | ✅   |
+| 3   | 세션 API             | `api/chat_sessions.py`                                     | ✅   |
+| 4   | 이벤트 핸들러        | `event_handlers/chat_handler.py`                           | ✅   |
+| 5   | Gateway 핸들러       | `handlers/session_handlers.go`                             | ✅   |
+| 6   | 라우터 등록          | `router/router.go`                                         | ✅   |
 
 ---
 

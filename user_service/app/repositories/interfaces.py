@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Protocol
+from datetime import datetime
+from typing import TYPE_CHECKING, Protocol
 
 from common.models.user import User
 from ..models.bookmark import Bookmark
 from ..models.login_session import LoginSession
+
+if TYPE_CHECKING:
+    from ..models.credit import Credit, CreditSummary, CreditTransaction
 
 
 class UserRepositoryInterface(Protocol):
@@ -93,4 +97,60 @@ class LoginSessionRepositoryInterface(Protocol):
     def delete_by_session_id(
         self, session_id: str
     ) -> LoginSession | None:  # pragma: no cover - Protocol
+        ...
+
+
+class CreditRepositoryInterface(Protocol):
+    """CreditRepository가 따라야 할 최소한의 계약 (1:N 모델).
+
+    - 크레딧 집계 조회, FIFO 차감, 일일 지급, 환불을 처리한다.
+    """
+
+    def get_summary(
+        self, user_code: str
+    ) -> "CreditSummary":  # pragma: no cover - Protocol
+        """유저의 유효한 크레딧 합계 및 목록 조회."""
+        ...
+
+    def grant_daily(
+        self, user_code: str
+    ) -> "Credit | None":  # pragma: no cover - Protocol
+        """일일 크레딧 지급. 이미 지급된 경우 None."""
+        ...
+
+    def grant(
+        self,
+        user_code: str,
+        amount: int,
+        source: str,
+        reason: str,
+        expired_at: "datetime",
+    ) -> "Credit":  # pragma: no cover - Protocol
+        """크레딧 부여 (이벤트, 관리자 등)."""
+        ...
+
+    def consume(
+        self, user_code: str, amount: int
+    ) -> tuple[list[str], int] | None:  # pragma: no cover - Protocol
+        """FIFO 크레딧 차감. 성공 시 (차감된 크레딧 ID 목록, 잔액) 반환, 실패 시 None."""
+        ...
+
+    def refund(
+        self, credit_id: str, amount: int
+    ) -> "Credit | None":  # pragma: no cover - Protocol
+        """특정 크레딧에 환불."""
+        ...
+
+
+class CreditTransactionRepositoryInterface(Protocol):
+    """CreditTransactionRepository가 따라야 할 최소한의 계약."""
+
+    def create(
+        self, tx: "CreditTransaction"
+    ) -> "CreditTransaction":  # pragma: no cover - Protocol
+        ...
+
+    def list_by_user(
+        self, user_code: str, page: int, page_size: int
+    ) -> tuple[list["CreditTransaction"], int]:  # pragma: no cover - Protocol
         ...
