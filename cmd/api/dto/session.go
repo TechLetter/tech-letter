@@ -10,11 +10,12 @@ type ChatMessage struct {
 }
 
 // ChatSession represents a chat session.
+// Messages는 nil일 경우 JSON에서 생략됨 (목록 조회 시).
 type ChatSession struct {
 	ID        string        `json:"id"`
 	UserCode  string        `json:"user_code"`
 	Title     string        `json:"title"`
-	Messages  []ChatMessage `json:"messages"`
+	Messages  []ChatMessage `json:"messages,omitempty"`
 	CreatedAt time.Time     `json:"created_at"`
 	UpdatedAt time.Time     `json:"updated_at"`
 }

@@ -50,6 +50,25 @@ class ChatSessionService:
     def add_message(
         self, session_id: str, role: ChatRole, content: str
     ) -> Optional[ChatSession]:
-        """세션에 메시지를 추가한다. (주로 이벤트 핸들러에서 사용)"""
+        """세션에 메시지를 추가한다.
+
+        첫 user 메시지이고 title이 'New Chat'인 경우 제목을 자동 생성한다.
+        """
+        # 현재 세션 조회
+        # Note: session_id만으로 조회 (user_code 검증은 이벤트 핸들러에서 신뢰)
+        current = self.repo.get_by_id_only(session_id)
+
+        if not current:
+            return None
+
+        # 첫 user 메시지이고 title이 "New Chat"인 경우 제목 자동 생성
+        if (
+            role == ChatRole.USER
+            and current.title == "New Chat"
+            and len(current.messages) == 0
+        ):
+            new_title = content[:30] + "..." if len(content) > 30 else content
+            self.repo.update_title(session_id, new_title)
+
         message = ChatMessage(role=role, content=content)
         return self.repo.add_message(session_id, message)
