@@ -92,8 +92,10 @@ type ListPostsParams struct {
 }
 
 type ListPostsResponse struct {
-	Total int        `json:"total"`
-	Items []PostItem `json:"items"`
+	Total    int        `json:"total"`
+	Items    []PostItem `json:"items"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"page_size"`
 }
 
 type PostItem struct {
@@ -221,8 +223,10 @@ type ListBlogsParams struct {
 }
 
 type ListBlogsResponse struct {
-	Total int        `json:"total"`
-	Items []BlogItem `json:"items"`
+	Total    int        `json:"total"`
+	Items    []BlogItem `json:"items"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"page_size"`
 }
 
 type BlogItem struct {

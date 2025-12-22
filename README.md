@@ -23,8 +23,9 @@
 
 - **API Gateway** (`cmd/api/main.go`)
   - 클라이언트 요청을 받는 단일 진입점
-  - Content Service / User Service 를 호출해 응답을 조합
+  - Content Service / User Service / Chatbot Service 를 호출해 응답을 조합
   - Google OAuth 기반 인증, JWT 발급/검증, 공통 에러 포맷, Swagger 문서 제공
+  - **채팅 API**: 크레딧 차감, session_id 유효성 검증, 응답에 소모/잔여 크레딧 정보 포함
 - **Content Service** (`content_service/app/main.py`)
   - 기술 블로그 포스트/블로그 메타데이터를 MongoDB 에 저장·조회
   - 요약 결과(요약문, 썸네일, 본문 텍스트 등)를 포스트에 반영
@@ -32,6 +33,8 @@
 - **User Service** (`user_service/app/main.py`)
   - OAuth 제공자 기준 유저 식별 정보(provider, provider_sub)를 기반으로 유저를 upsert
   - 내부 표준 유저 ID(`user_code`)를 관리하고, 북마크 데이터(users/bookmarks)를 담당
+  - **크레딧 시스템**: 일일 10개 자동 충전, 1채팅 = 1크레딧, 다음 날 미사용분 소멸
+  - **채팅 세션**: 대화 내역 저장/조회/삭제
 - **Summary Worker (Python)** (`summary_worker/app/main.py`)
   - `post.summary_requested` 이벤트를 구독해 HTML 렌더링 → 텍스트 파싱 → 썸네일 추출 → 구성된 LLM(Gemini / OpenAI / Ollama)으로 요약 수행
   - 결과를 담은 `post.summary_response` 이벤트를 발행
@@ -208,6 +211,53 @@ sequenceDiagram
     end
 ```
 
+### 채팅 API 플로우 (크레딧 & 세션)
+
+1. **세션 생성**: 클라이언트 → API Gateway → User Service → MongoDB (chat_sessions)
+2. **채팅 요청**:
+   - API Gateway에서 session_id 검증 (User Service 조회)
+   - 크레딧 차감 (User Service)
+   - RAG 질의 (Chatbot Service)
+   - 성공/실패에 따라 이벤트 발행
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant GW as API Gateway
+    participant US as User Service
+    participant CBS as Chatbot Service
+    participant EB as EventBus/Kafka
+    participant DB as MongoDB
+
+    Client->>GW: POST /chatbot/chat (query, session_id?)
+
+    opt session_id 제공
+        GW->>US: GET /chatbot/sessions/:id (검증)
+        US->>DB: 세션 조회
+        alt 세션 없음
+            US-->>GW: 404
+            GW-->>Client: 400 invalid_session_id
+        end
+    end
+
+    GW->>US: POST /credits/consume (1 크레딧)
+    US->>DB: credits.remaining -= 1 (atomic)
+    alt 크레딧 부족
+        US-->>GW: 402
+        GW-->>Client: 402 insufficient_credits
+    end
+    US-->>GW: 200 {consume_id, remaining}
+
+    GW->>CBS: POST /chat (query)
+    CBS-->>GW: 200 {answer}
+
+    GW->>US: POST /credits/log-completed (성공 로그)
+    US->>EB: chat.completed 이벤트 발행
+    EB->>US: 이벤트 소비 → 세션에 메시지 추가
+
+    GW-->>Client: 200 {answer, consumed_credits, remaining_credits}
+```
+
 ## 인증 및 프론트엔드 연동
 
 인증/인가 및 프론트 연동 플로우는 별도 문서에 정리되어 있다.
@@ -333,7 +383,9 @@ EMBEDDING_WORKER_LLM_API_KEY=your-openai-api-key
 
 - `tech-letter.post.summary`: 요약 파이프라인 이벤트 (`post.summary_requested`, `post.summary_response`)
 - `tech-letter.post.embedding`: 임베딩 파이프라인 이벤트 (`post.embedding_requested`, `post.embedding_response`)
-- `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 (Phase 2)
+- `tech-letter.credit`: 크레딧 관련 이벤트 (`credit.consumed`, `credit.granted`)
+- `tech-letter.chat`: 채팅 관련 이벤트 (`chat.completed`, `chat.failed`)
+- `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 (Phase 3)
 
 ## 서비스 포트
 

@@ -18,6 +18,11 @@ import (
 // @description     요약된 기술 블로그 포스트를 조회하고 사용자 인증/프로필을 관리하는 API입니다.
 // @BasePath        /api/v1
 
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT Bearer 토큰. 형식: "Bearer {token}"
+
 func main() {
 	// API 서버 로그 레벨은 환경변수 LOG_LEVEL 로 제어한다.
 	logger.InitFromEnv("LOG_LEVEL")

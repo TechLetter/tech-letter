@@ -7,7 +7,6 @@ from ..schemas.bookmarks import (
     BookmarkCheckResponse,
     BookmarkCreateRequest,
     BookmarkItem,
-    ListBookmarksResponse,
 )
 from ...services.bookmarks_service import BookmarksService, get_bookmarks_service
 
@@ -42,9 +41,12 @@ async def remove_bookmark(
     return {"message": "bookmark_deleted"}
 
 
+from common.schemas.pagination import PaginatedResponse
+
+
 @router.get(
     "",
-    response_model=ListBookmarksResponse,
+    response_model=PaginatedResponse[BookmarkItem],
     summary="유저 북마크 목록 조회",
 )
 async def list_bookmarks(
@@ -57,14 +59,16 @@ async def list_bookmarks(
         description="페이지당 아이템 개수 (1~100)",
     ),
     service: BookmarksService = Depends(get_bookmarks_service),
-) -> ListBookmarksResponse:
+) -> PaginatedResponse[BookmarkItem]:
     items, total = service.list_bookmarks(
         user_code=user_code, page=page, page_size=page_size
     )
     dto_items = [
         BookmarkItem(post_id=b.post_id, created_at=b.created_at) for b in items
     ]
-    return ListBookmarksResponse(total=total, items=dto_items)
+    return PaginatedResponse(
+        total=total, items=dto_items, page=page, page_size=page_size
+    )
 
 
 @router.post(

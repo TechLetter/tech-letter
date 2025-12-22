@@ -65,7 +65,7 @@ func AdminListPostsHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Accept json
 // @Produce json
 // @Param body body object true "Post creation request"
-// @Success 200 {object} contentclient.CreatePostResponse
+// @Success 200 {object} object
 // @Failure 400 {object} dto.ErrorResponseDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/posts [post]
@@ -154,7 +154,7 @@ func AdminTriggerEmbeddingHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} userclient.ListUsersResponse
+// @Success 200 {object} object
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/users [get]
 func AdminListUsersHandler(svc *services.AdminService) gin.HandlerFunc {
@@ -178,7 +178,7 @@ func AdminListUsersHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} contentclient.ListBlogsResponse
+// @Success 200 {object} object
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/blogs [get]
 func AdminListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {

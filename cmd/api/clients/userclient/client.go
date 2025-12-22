@@ -12,6 +12,7 @@ import (
 	"path"
 	"time"
 
+	"tech-letter/cmd/api/dto"
 	"tech-letter/cmd/api/httpclient"
 )
 
@@ -122,8 +123,10 @@ type BookmarkItem struct {
 }
 
 type ListBookmarksResponse struct {
-	Total int            `json:"total"`
-	Items []BookmarkItem `json:"items"`
+	Total    int            `json:"total"`
+	Items    []BookmarkItem `json:"items"`
+	Page     int            `json:"page"`
+	PageSize int            `json:"page_size"`
 }
 
 type BookmarkCheckRequest struct {
@@ -431,4 +434,406 @@ func (c *Client) ListUsers(ctx context.Context, page, pageSize int) (ListUsersRe
 		return ListUsersResponse{}, err
 	}
 	return out, nil
+}
+
+// -------------------- Credit DTOs --------------------
+
+// CreditResponse는 크레딧 조회/소비 응답.
+type CreditResponse struct {
+	Remaining int    `json:"remaining"`
+	Granted   int    `json:"granted,omitempty"`
+	ExpiredAt string `json:"expired_at"`
+}
+
+// CreditSummaryResponse는 1:N 크레딧 집계 응답.
+type CreditSummaryResponse struct {
+	TotalRemaining int          `json:"total_remaining"`
+	Credits        []CreditItem `json:"credits"`
+}
+
+// CreditItem은 개별 크레딧 정보.
+type CreditItem struct {
+	ID             string `json:"id"`
+	Amount         int    `json:"amount"`
+	OriginalAmount int    `json:"original_amount"`
+	Source         string `json:"source"`
+	Reason         string `json:"reason"`
+	ExpiredAt      string `json:"expired_at"`
+}
+
+// ConsumeCreditsRequest는 크레딧 소비 요청.
+type ConsumeCreditsRequest struct {
+	Amount int    `json:"amount"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// GrantDailyResponse는 일일 크레딧 지급 응답.
+type GrantDailyResponse struct {
+	Granted        int  `json:"granted"`
+	AlreadyGranted bool `json:"already_granted"`
+}
+
+// GrantCreditsRequest는 관리자 크레딧 부여 요청.
+type GrantCreditsRequest struct {
+	ExpiredAt string `json:"expired_at"`
+	Amount    int    `json:"amount"`
+	Source    string `json:"source"`
+	Reason    string `json:"reason"`
+}
+
+// ErrInsufficientCredits는 크레딧 부족 에러.
+var ErrInsufficientCredits = fmt.Errorf("insufficient credits")
+
+// -------------------- Credit Methods --------------------
+
+// GetCredits는 GET /api/v1/credits/{user_code} 를 호출해 유저의 크레딧 잔액을 조회한다.
+func (c *Client) GetCredits(ctx context.Context, userCode string) (CreditSummaryResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode)
+	req, err := c.base.NewRequest(ctx, http.MethodGet, relPath, nil, nil)
+	if err != nil {
+		return CreditSummaryResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return CreditSummaryResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return CreditSummaryResponse{}, fmt.Errorf("user-service GetCredits: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out CreditSummaryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return CreditSummaryResponse{}, err
+	}
+	return out, nil
+}
+
+// ConsumeCredits는 POST /api/v1/credits/{user_code}/consume 를 호출해 크레딧을 소비한다.
+// 크레딧 부족 시 ErrInsufficientCredits를 반환한다.
+func (c *Client) ConsumeCredits(ctx context.Context, userCode string, amount int) (CreditResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode, "consume")
+	body := ConsumeCreditsRequest{Amount: amount}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return CreditResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, bytes.NewReader(buf))
+	if err != nil {
+		return CreditResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return CreditResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var out CreditResponse
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return CreditResponse{}, err
+		}
+		return out, nil
+	case http.StatusPaymentRequired:
+		return CreditResponse{}, ErrInsufficientCredits
+	default:
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return CreditResponse{}, fmt.Errorf("user-service ConsumeCredits: status=%d body=%s", resp.StatusCode, string(b))
+	}
+}
+
+// GrantCredits는 POST /api/v1/credits/{user_code}/grant 를 호출해 크레딧을 부여한다.
+func (c *Client) GrantCredits(ctx context.Context, userCode string, amount int, source, reason, expiredAt string) (CreditSummaryResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode, "grant")
+
+	body := GrantCreditsRequest{
+		ExpiredAt: expiredAt,
+		Amount:    amount,
+		Source:    source,
+		Reason:    reason,
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return CreditSummaryResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, bytes.NewReader(buf))
+	if err != nil {
+		return CreditSummaryResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return CreditSummaryResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return CreditSummaryResponse{}, fmt.Errorf("user-service GrantCredits: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out CreditSummaryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return CreditSummaryResponse{}, err
+	}
+	return out, nil
+}
+
+// GrantDailyCredits는 POST /api/v1/credits/{user_code}/grant-daily 를 호출해 일일 크레딧을 지급한다.
+func (c *Client) GrantDailyCredits(ctx context.Context, userCode string) (GrantDailyResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode, "grant-daily")
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, nil)
+	if err != nil {
+		return GrantDailyResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return GrantDailyResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return GrantDailyResponse{}, fmt.Errorf("user-service GrantDailyCredits: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out GrantDailyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return GrantDailyResponse{}, err
+	}
+	return out, nil
+}
+
+// ConsumeCreditsResponse는 크레딧 소비 응답 (consume_id 포함).
+type ConsumeCreditsResponse struct {
+	Remaining         int      `json:"remaining"`
+	ConsumeID         string   `json:"consume_id"`
+	ConsumedCreditIDs []string `json:"consumed_credit_ids"`
+}
+
+// ConsumeCreditsWithID는 POST /api/v1/credits/{user_code}/consume 를 호출해 크레딧을 소비하고 consume_id를 반환한다.
+func (c *Client) ConsumeCreditsWithID(ctx context.Context, userCode string, amount int, reason string) (ConsumeCreditsResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode, "consume")
+	body := map[string]any{"amount": amount, "reason": reason}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return ConsumeCreditsResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, bytes.NewReader(buf))
+	if err != nil {
+		return ConsumeCreditsResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return ConsumeCreditsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var out ConsumeCreditsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return ConsumeCreditsResponse{}, err
+		}
+		return out, nil
+	case http.StatusPaymentRequired:
+		return ConsumeCreditsResponse{}, ErrInsufficientCredits
+	default:
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return ConsumeCreditsResponse{}, fmt.Errorf("user-service ConsumeCredits: status=%d body=%s", resp.StatusCode, string(b))
+	}
+}
+
+// LogChatRequest는 채팅 로그 요청.
+type LogChatRequest struct {
+	ConsumeID         string   `json:"consume_id"`
+	ConsumedCreditIDs []string `json:"consumed_credit_ids"`
+	Query             string   `json:"query"`
+	Success           bool     `json:"success"`
+	Answer            *string  `json:"answer,omitempty"`
+	ErrorCode         *string  `json:"error_code,omitempty"`
+	SessionID         *string  `json:"session_id,omitempty"`
+}
+
+// LogChatResponse는 채팅 로그 응답.
+type LogChatResponse struct {
+	EventID string `json:"event_id"`
+}
+
+// LogChatCompleted는 POST /api/v1/credits/{user_code}/log-chat 를 호출해 채팅 성공 이벤트를 발행한다.
+func (c *Client) LogChatCompleted(ctx context.Context, userCode, consumeID string, consumedCreditIDs []string, query, answer string, sessionID string) (LogChatResponse, error) {
+	req := LogChatRequest{
+		ConsumeID:         consumeID,
+		ConsumedCreditIDs: consumedCreditIDs,
+		Query:             query,
+		Success:           true,
+		Answer:            &answer,
+	}
+	if sessionID != "" {
+		req.SessionID = &sessionID
+	}
+	return c.logChat(ctx, userCode, req)
+}
+
+// LogChatFailed는 POST /api/v1/credits/{user_code}/log-chat 를 호출해 채팅 실패 이벤트를 발행하고 환불을 처리한다.
+func (c *Client) LogChatFailed(ctx context.Context, userCode, consumeID string, consumedCreditIDs []string, query, errorCode string, sessionID string) (LogChatResponse, error) {
+	req := LogChatRequest{
+		ConsumeID:         consumeID,
+		ConsumedCreditIDs: consumedCreditIDs,
+		Query:             query,
+		Success:           false,
+		ErrorCode:         &errorCode,
+	}
+	if sessionID != "" {
+		req.SessionID = &sessionID
+	}
+	return c.logChat(ctx, userCode, req)
+}
+
+func (c *Client) logChat(ctx context.Context, userCode string, body LogChatRequest) (LogChatResponse, error) {
+	relPath := path.Join("/api/v1/credits", userCode, "log-chat")
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return LogChatResponse{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, bytes.NewReader(buf))
+	if err != nil {
+		return LogChatResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return LogChatResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return LogChatResponse{}, fmt.Errorf("user-service LogChat: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var out LogChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return LogChatResponse{}, err
+	}
+	return out, nil
+}
+
+// -------------------- Chat Session Methods --------------------
+
+func (c *Client) ListSessions(ctx context.Context, userCode string, page, pageSize int) (*dto.ListSessionsResponse, error) {
+	query := url.Values{}
+	query.Set("user_code", userCode)
+	query.Set("page", fmt.Sprintf("%d", page))
+	query.Set("page_size", fmt.Sprintf("%d", pageSize))
+	req, err := c.base.NewRequest(ctx, "GET", "/api/v1/chatbot/sessions", query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to list sessions: status %d", resp.StatusCode)
+	}
+
+	var result dto.ListSessionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) GetSession(ctx context.Context, userCode, sessionID string) (*dto.ChatSession, error) {
+	query := url.Values{}
+	query.Set("user_code", userCode)
+	req, err := c.base.NewRequest(ctx, "GET", fmt.Sprintf("/api/v1/chatbot/sessions/%s", sessionID), query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get session: status %d", resp.StatusCode)
+	}
+
+	var result dto.ChatSession
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) CreateSession(ctx context.Context, userCode string) (*dto.ChatSession, error) {
+	query := url.Values{}
+	query.Set("user_code", userCode)
+	req, err := c.base.NewRequest(ctx, "POST", "/api/v1/chatbot/sessions", query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to create session: status %d", resp.StatusCode)
+	}
+
+	var result dto.ChatSession
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) DeleteSession(ctx context.Context, userCode, sessionID string) error {
+	query := url.Values{}
+	query.Set("user_code", userCode)
+	req, err := c.base.NewRequest(ctx, "DELETE", fmt.Sprintf("/api/v1/chatbot/sessions/%s", sessionID), query, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete session: status %d", resp.StatusCode)
+	}
+	return nil
 }
