@@ -30,18 +30,25 @@ class ChatSessionRepository:
     def list_sessions(
         self, user_code: str, page: int, page_size: int
     ) -> tuple[List[ChatSession], int]:
+        """세션 목록 조회. messages는 제외하고 메타데이터만 반환."""
         filter_query = {"user_code": user_code}
         skip = (page - 1) * page_size
 
         total = self.collection.count_documents(filter_query)
+
+        # messages 필드 제외, message_count 계산을 위해 size만 조회
         cursor = (
-            self.collection.find(filter_query)
-            .sort("updated_at", -1)  # 최근 수정된 순
+            self.collection.find(filter_query, {"messages": 0})  # messages 제외
+            .sort("updated_at", -1)
             .skip(skip)
             .limit(page_size)
         )
 
-        items = [ChatSessionDocument.model_validate(doc).to_domain() for doc in cursor]
+        items = []
+        for doc in cursor:
+            # messages가 없으므로 빈 리스트로 처리
+            doc["messages"] = []
+            items.append(ChatSessionDocument.model_validate(doc).to_domain())
         return items, total
 
     def add_message(
@@ -54,13 +61,32 @@ class ChatSessionRepository:
             created_at=message.created_at,
         )
 
-        # 메시지 추가 및 updated_at 갱신
         updated_doc = self.collection.find_one_and_update(
             {"_id": to_object_id(session_id)},
             {
                 "$push": {"messages": msg_doc.model_dump()},
                 "$set": {"updated_at": datetime.utcnow()},
             },
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if not updated_doc:
+            return None
+
+        return ChatSessionDocument.model_validate(updated_doc).to_domain()
+
+    def get_by_id_only(self, session_id: str) -> Optional[ChatSession]:
+        """session_id만으로 세션을 조회한다. (내부 이벤트 핸들러용)"""
+        doc_data = self.collection.find_one({"_id": to_object_id(session_id)})
+        if not doc_data:
+            return None
+        return ChatSessionDocument.model_validate(doc_data).to_domain()
+
+    def update_title(self, session_id: str, title: str) -> Optional[ChatSession]:
+        """세션 제목을 업데이트한다."""
+        updated_doc = self.collection.find_one_and_update(
+            {"_id": to_object_id(session_id)},
+            {"$set": {"title": title, "updated_at": datetime.utcnow()}},
             return_document=ReturnDocument.AFTER,
         )
 
