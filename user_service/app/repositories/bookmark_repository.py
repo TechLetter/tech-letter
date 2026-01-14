@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.database import Database
 
 from common.mongo.types import from_object_id, to_object_id
@@ -17,6 +18,19 @@ class BookmarkRepository(BookmarkRepositoryInterface):
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["bookmarks"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("user_code", ASCENDING), ("post_id", ASCENDING)],
+                    name="uniq_user_code_post_id",
+                    unique=True,
+                ),
+                IndexModel(
+                    [("user_code", ASCENDING), ("created_at", DESCENDING)],
+                    name="idx_user_code_created_at_desc",
+                ),
+            ]
+        )
 
     def create(self, user_code: str, post_id: str) -> Bookmark:
         now = datetime.now(timezone.utc)

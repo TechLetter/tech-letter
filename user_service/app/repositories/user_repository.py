@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pymongo import IndexModel, ASCENDING
 from pymongo.database import Database
 
 from common.models.user import User
@@ -16,6 +17,18 @@ class UserRepository(UserRepositoryInterface):
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["users"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("user_code", ASCENDING)], name="uniq_user_code", unique=True
+                ),
+                IndexModel(
+                    [("provider", ASCENDING), ("provider_sub", ASCENDING)],
+                    name="uniq_provider_provider_sub",
+                    unique=True,
+                ),
+            ]
+        )
 
     @staticmethod
     def _from_document(doc: dict) -> User:

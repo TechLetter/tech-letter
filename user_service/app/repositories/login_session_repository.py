@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pymongo import IndexModel, ASCENDING
 from pymongo.database import Database
 
 from common import logger
@@ -16,6 +17,20 @@ class LoginSessionRepository:
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["login_sessions"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("session_id", ASCENDING)],
+                    name="uniq_login_session_id",
+                    unique=True,
+                ),
+                IndexModel(
+                    [("expires_at", ASCENDING)],
+                    name="ttl_login_session_expires_at",
+                    expireAfterSeconds=0,
+                ),
+            ]
+        )
 
     def create(self, session: LoginSession) -> LoginSession:
         document = LoginSessionDocument.from_domain(session)

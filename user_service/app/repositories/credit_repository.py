@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from pymongo import IndexModel, ASCENDING
 from pymongo.database import Database
 
 from common.mongo.types import from_object_id, to_object_id
@@ -26,6 +27,19 @@ class CreditRepository(CreditRepositoryInterface):
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["credits"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("expired_at", ASCENDING)],
+                    name="ttl_expired_at",
+                    expireAfterSeconds=0,
+                ),
+                IndexModel(
+                    [("user_code", ASCENDING), ("expired_at", ASCENDING)],
+                    name="idx_user_expired",
+                ),
+            ]
+        )
 
     def get_summary(self, user_code: str) -> CreditSummary:
         """유저의 유효한 크레딧 합계 및 목록 조회 (FIFO 순)."""
