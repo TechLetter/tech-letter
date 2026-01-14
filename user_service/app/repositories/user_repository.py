@@ -22,6 +22,11 @@ class UserRepository(UserRepositoryInterface):
         document = UserDocument.model_validate(doc)
         return document.to_domain()
 
+    def delete(self, user_code: str) -> bool:
+        """유저 삭제."""
+        result = self._col.delete_one({"user_code": user_code})
+        return result.deleted_count > 0
+
     def find_by_provider_and_sub(self, provider: str, provider_sub: str) -> User | None:
         doc = self._col.find_one({"provider": provider, "provider_sub": provider_sub})
         if not doc:
@@ -41,21 +46,22 @@ class UserRepository(UserRepositoryInterface):
     def update_profile(
         self,
         user_code: str,
-        email: str,
-        name: str,
-        profile_image: str,
+        email: str | None = None,
+        name: str | None = None,
+        profile_image: str | None = None,
     ) -> User:
         now = datetime.now(timezone.utc)
+        update_fields: dict[str, object] = {"updated_at": now}
+        if email is not None:
+            update_fields["email"] = email
+        if name is not None:
+            update_fields["name"] = name
+        if profile_image is not None:
+            update_fields["profile_image"] = profile_image
+
         result = self._col.find_one_and_update(
             {"user_code": user_code},
-            {
-                "$set": {
-                    "email": email,
-                    "name": name,
-                    "profile_image": profile_image,
-                    "updated_at": now,
-                }
-            },
+            {"$set": update_fields},
             return_document=True,
         )
         if not result:
@@ -81,19 +87,16 @@ class UserRepository(UserRepositoryInterface):
             page = 1
         if page_size <= 0:
             page_size = 20
-        
+
         skip = (page - 1) * page_size
         total = self._col.count_documents({})
-        
+
         cursor = self._col.find(
-            {},
-            sort=[("created_at", -1)],
-            skip=skip,
-            limit=page_size
+            {}, sort=[("created_at", -1)], skip=skip, limit=page_size
         )
 
         users = []
         for doc in cursor:
             users.append(self._from_document(doc))
-        
+
         return users, total
