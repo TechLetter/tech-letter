@@ -49,5 +49,6 @@ class UserProfile(BaseModel):
     name: str
     profile_image: str
     role: str
+    credits: int = Field(default=0)
     created_at: datetime
     updated_at: datetime

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from pymongo import IndexModel, ASCENDING
 from pymongo.database import Database
 
 from common.mongo.types import from_object_id, to_object_id
@@ -26,6 +27,19 @@ class CreditRepository(CreditRepositoryInterface):
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["credits"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("expired_at", ASCENDING)],
+                    name="ttl_expired_at",
+                    expireAfterSeconds=0,
+                ),
+                IndexModel(
+                    [("user_code", ASCENDING), ("expired_at", ASCENDING)],
+                    name="idx_user_expired",
+                ),
+            ]
+        )
 
     def get_summary(self, user_code: str) -> CreditSummary:
         """유저의 유효한 크레딧 합계 및 목록 조회 (FIFO 순)."""
@@ -47,6 +61,41 @@ class CreditRepository(CreditRepositoryInterface):
             total_remaining=total,
             credits=credits,
         )
+
+    def get_summary_bulk(self, user_codes: list[str]) -> dict[str, int]:
+        """여러 유저의 크레딧 잔액을 한 번에 조회 (N+1 방지)."""
+        if not user_codes:
+            return {}
+
+        now = datetime.now(timezone.utc)
+        pipeline = [
+            {
+                "$match": {
+                    "user_code": {"$in": user_codes},
+                    "expired_at": {"$gt": now},
+                    "amount": {"$gt": 0},
+                }
+            },
+            {"$group": {"_id": "$user_code", "total": {"$sum": "$amount"}}},
+        ]
+
+        result = {}
+        for doc in self._col.aggregate(pipeline):
+            result[doc["_id"]] = doc["total"]
+
+        # 조회되지 않은 유저는 0으로 초기화
+        for user_code in user_codes:
+            if user_code not in result:
+                result[user_code] = 0
+
+        return result
+
+    def delete_by_user(self, user_code: str) -> bool:
+        """유저의 모든 크레딧 정보를 삭제."""
+        result = self._col.delete_many({"user_code": user_code})
+        # Note: 트랜잭션 로그는 보관할 수도 있지만, 개인정보 파기 원칙에 따라 삭제하는 것이 일반적
+        # 여기서는 Credit 문서만 삭제 (트랜잭션 로그는 별도 컬렉션이라면 그것도 삭제 고려)
+        return result.acknowledged
 
     def grant_daily(self, user_code: str) -> Credit | None:
         """일일 크레딧 지급. 오늘 이미 지급된 경우 None 반환."""

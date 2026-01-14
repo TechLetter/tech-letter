@@ -122,6 +122,18 @@ func (s *AdminService) ListUsers(ctx context.Context, page, pageSize int) (userc
 	return s.userClient.ListUsers(ctx, page, pageSize)
 }
 
+// GrantCredit grants credits to a user with admin defaults (source, reason hardcoded).
+func (s *AdminService) GrantCredit(ctx context.Context, userCode string, req *dto.GrantCreditRequestDTO) (*dto.GrantCreditResponseDTO, error) {
+	// 비즈니스 로직: 어드민 크레딧 지급 시 source, reason 자동 설정
+	internalReq := &dto.GrantCreditInternalRequest{
+		Amount:    req.Amount,
+		Source:    "admin",
+		Reason:    "어드민 수동 지급",
+		ExpiredAt: req.ExpiredAt,
+	}
+	return s.userClient.GrantCreditInternal(ctx, userCode, internalReq)
+}
+
 // -------------------- Blogs --------------------
 
 // ListBlogs retrieves a paginated list of blogs via content-service.

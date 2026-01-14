@@ -27,6 +27,7 @@ class UserProfileResponse(BaseModel):
     name: str
     profile_image: str
     role: str
+    credits: int
     created_at: UtcDateTime
     updated_at: UtcDateTime
 
@@ -40,10 +41,12 @@ class UserProfileResponse(BaseModel):
             name=user.name,
             profile_image=user.profile_image,
             role=user.role,
+            credits=user.credits,
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
-    
+
+
 class ListUsersResponse(BaseModel):
     total: int
     items: list[UserProfileResponse]

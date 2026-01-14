@@ -12,9 +12,13 @@ from common.mongo.client import get_database
 from ..repositories.interfaces import (
     UserRepositoryInterface,
     BookmarkRepositoryInterface,
+    CreditRepositoryInterface,
+    ChatSessionRepositoryInterface,
 )
 from ..repositories.user_repository import UserRepository
 from ..repositories.bookmark_repository import BookmarkRepository
+from ..repositories.credit_repository import CreditRepository
+from ..repositories.chat_session_repository import ChatSessionRepository
 
 
 class UsersService:
@@ -27,9 +31,13 @@ class UsersService:
         self,
         user_repo: UserRepositoryInterface,
         bookmark_repo: BookmarkRepositoryInterface,
+        credit_repo: CreditRepositoryInterface,
+        chat_session_repo: ChatSessionRepositoryInterface,
     ) -> None:
         self._user_repo = user_repo
         self._bookmark_repo = bookmark_repo
+        self._credit_repo = credit_repo
+        self._chat_session_repo = chat_session_repo
 
     def upsert_user(self, input_model: UserUpsertInput) -> UserProfile:
         existing = self._user_repo.find_by_provider_and_sub(
@@ -68,25 +76,39 @@ class UsersService:
         user = self._user_repo.find_by_user_code(user_code)
         if user is None:
             return None
-        return self._to_profile(user)
+        # 크레딧 정보 조회
+        credit_summary = self._credit_repo.get_summary(user_code)
+        return self._to_profile(user, credits=credit_summary.total_remaining)
+
+    def list_users(self, page: int, page_size: int) -> tuple[list[UserProfile], int]:
+        """유저 목록 조회. 크레딧 정보를 벌크 조회로 포함한다."""
+        users, total = self._user_repo.list(page, page_size)
+
+        # 크레딧 볼크 조회 (N+1 방지)
+        user_codes = [u.user_code for u in users]
+        credits_map = self._credit_repo.get_summary_bulk(user_codes)
+
+        profiles = [
+            self._to_profile(u, credits=credits_map.get(u.user_code, 0)) for u in users
+        ]
+        return profiles, total
 
     def delete_user(self, user_code: str) -> bool:
-        """유저와 해당 유저의 모든 북마크를 삭제한다.
+        """유저 삭제. 연관된 북마크, 크레딧, 채팅 세션도 함께 삭제한다."""
+        # 1. 북마크 삭제
+        self._bookmark_repo.delete_by_user(user_code)
 
-        - user 가 존재하지 않으면 False 를 반환한다.
-        - 존재하는 경우 북마크를 먼저 삭제하고, 이후 유저 도큐먼트를 삭제한다.
-        """
+        # 2. 크레딧 삭제
+        self._credit_repo.delete_by_user(user_code)
 
-        user = self._user_repo.find_by_user_code(user_code)
-        if user is None:
-            return False
+        # 3. 채팅 세션 삭제
+        self._chat_session_repo.delete_by_user(user_code)
 
-        # 북마크는 존재하지 않아도 delete_many 결과가 0 이므로 별도 체크는 하지 않는다.
-        self._bookmark_repo.delete_all_by_user_code(user_code)
-        return self._user_repo.delete_by_user_code(user_code)
+        # 4. 유저 프로필 삭제
+        return self._user_repo.delete(user_code)
 
     @staticmethod
-    def _to_profile(user: User) -> UserProfile:
+    def _to_profile(user: User, credits: int = 0) -> UserProfile:
         return UserProfile(
             user_code=user.user_code,
             provider=user.provider,
@@ -95,14 +117,10 @@ class UsersService:
             name=user.name,
             profile_image=user.profile_image,
             role=user.role,
+            credits=credits,
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
-
-    def list_users(self, page: int, page_size: int) -> tuple[list[UserProfile], int]:
-        users, total = self._user_repo.list(page, page_size)
-        profiles = [self._to_profile(u) for u in users]
-        return profiles, total
 
 
 def get_user_repository(
@@ -121,12 +139,37 @@ def get_bookmark_repository_for_users(
     return BookmarkRepository(db)
 
 
+def get_credit_repository_for_users(
+    db: Database = Depends(get_database),
+) -> CreditRepositoryInterface:
+    """UsersService에서 사용할 CreditRepository DI 팩토리."""
+
+    return CreditRepository(db)
+
+
+def get_chat_session_repository_for_users(
+    db: Database = Depends(get_database),
+) -> ChatSessionRepositoryInterface:
+    """UsersService에서 사용할 ChatSessionRepository DI 팩토리."""
+
+    return ChatSessionRepository(db)
+
+
 def get_users_service(
     user_repo: UserRepositoryInterface = Depends(get_user_repository),
     bookmark_repo: BookmarkRepositoryInterface = Depends(
         get_bookmark_repository_for_users
     ),
+    credit_repo: CreditRepositoryInterface = Depends(get_credit_repository_for_users),
+    chat_session_repo: ChatSessionRepositoryInterface = Depends(
+        get_chat_session_repository_for_users
+    ),
 ) -> UsersService:
     """FastAPI DI용 UsersService 팩토리."""
 
-    return UsersService(user_repo=user_repo, bookmark_repo=bookmark_repo)
+    return UsersService(
+        user_repo=user_repo,
+        bookmark_repo=bookmark_repo,
+        credit_repo=credit_repo,
+        chat_session_repo=chat_session_repo,
+    )

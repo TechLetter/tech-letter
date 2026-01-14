@@ -145,6 +145,13 @@ definitions:
       remaining_credits:
         type: integer
     type: object
+  dto.CreatePostResponseDTO:
+    properties:
+      message:
+        type: string
+      post_id:
+        type: string
+    type: object
   dto.ErrorResponseDTO:
     properties:
       error:
@@ -156,6 +163,27 @@ definitions:
       count:
         type: integer
       name:
+        type: string
+    type: object
+  dto.GrantCreditRequestDTO:
+    properties:
+      amount:
+        minimum: 1
+        type: integer
+      expired_at:
+        description: ISO8601 format
+        type: string
+    required:
+    - amount
+    - expired_at
+    type: object
+  dto.GrantCreditResponseDTO:
+    properties:
+      amount:
+        type: integer
+      expires_at:
+        type: string
+      user_code:
         type: string
     type: object
   dto.ListSessionsResponse:
@@ -187,6 +215,15 @@ definitions:
         type: integer
       page_size:
         type: integer
+      total:
+        type: integer
+    type: object
+  dto.PaginationAdminUserDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.UserProfileDTO'
+        type: array
       total:
         type: integer
     type: object
@@ -320,7 +357,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/dto.PaginationBlogDTO'
         "500":
           description: Internal Server Error
           schema:
@@ -387,7 +424,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/dto.CreatePostResponseDTO'
         "400":
           description: Bad Request
           schema:
@@ -472,7 +509,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all users with pagination
+      description: List all users with pagination and credit information
       parameters:
       - default: 1
         description: Page number
@@ -490,12 +527,47 @@ paths:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/dto.PaginationAdminUserDTO'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/dto.ErrorResponseDTO'
       summary: List users for admin
+      tags:
+      - admin
+  /api/v1/admin/users/{user_code}/credits:
+    post:
+      consumes:
+      - application/json
+      description: Manually grant credits to a specific user (admin only)
+      parameters:
+      - description: User Code
+        in: path
+        name: user_code
+        required: true
+        type: string
+      - description: Credit grant request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GrantCreditRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GrantCreditResponseDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Grant credits to a user
       tags:
       - admin
   /auth/google/callback:
