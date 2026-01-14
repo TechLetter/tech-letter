@@ -108,8 +108,14 @@ class CreditRepositoryInterface(Protocol):
 
     def get_summary(
         self, user_code: str
-    ) -> "CreditSummary":  # pragma: no cover - Protocol
+    ) -> CreditSummary:  # pragma: no cover - Protocol
         """유저의 유효한 크레딧 합계 및 목록 조회."""
+        ...
+
+    def get_summary_bulk(
+        self, user_codes: list[str]
+    ) -> dict[str, int]:  # pragma: no cover - Protocol
+        """여러 유저의 크레딧 잔액을 벌크 조회 (N+1 방지)."""
         ...
 
     def grant_daily(

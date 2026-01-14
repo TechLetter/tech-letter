@@ -48,6 +48,34 @@ class CreditRepository(CreditRepositoryInterface):
             credits=credits,
         )
 
+    def get_summary_bulk(self, user_codes: list[str]) -> dict[str, int]:
+        """여러 유저의 크레딧 잔액을 한 번에 조회 (N+1 방지)."""
+        if not user_codes:
+            return {}
+
+        now = datetime.now(timezone.utc)
+        pipeline = [
+            {
+                "$match": {
+                    "user_code": {"$in": user_codes},
+                    "expired_at": {"$gt": now},
+                    "amount": {"$gt": 0},
+                }
+            },
+            {"$group": {"_id": "$user_code", "total": {"$sum": "$amount"}}},
+        ]
+
+        result = {}
+        for doc in self._col.aggregate(pipeline):
+            result[doc["_id"]] = doc["total"]
+
+        # 조회되지 않은 유저는 0으로 초기화
+        for user_code in user_codes:
+            if user_code not in result:
+                result[user_code] = 0
+
+        return result
+
     def grant_daily(self, user_code: str) -> Credit | None:
         """일일 크레딧 지급. 오늘 이미 지급된 경우 None 반환."""
         now = datetime.now(timezone.utc)
