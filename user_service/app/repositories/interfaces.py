@@ -11,6 +11,24 @@ from ..models.login_session import LoginSession
 if TYPE_CHECKING:
     from ..models.credit import Credit, CreditSummary, CreditTransaction
     from app.models.chat_session import ChatMessage, ChatSession
+    from common.models.identity_policy import PolicyKey
+
+
+@runtime_checkable
+class IdentityPolicyRepositoryInterface(Protocol):
+    """IdentityPolicyRepository가 따라야 할 최소한의 계약."""
+
+    @abstractmethod
+    def try_use_policy(
+        self, identity_hash: str, policy_key: PolicyKey, window_hours: int = 24
+    ) -> bool:
+        """정책 사용 시도 (Atomic).
+
+        해당 identity+policy에 대해 window 시간 내에 사용 이력이 없으면
+        현재 시간으로 갱신하고 True를 반환한다.
+        이미 사용 이력이 있으면 False를 반환한다.
+        """
+        ...
 
 
 @runtime_checkable
