@@ -12,9 +12,11 @@ from common.mongo.client import get_database
 from ..repositories.interfaces import (
     UserRepositoryInterface,
     BookmarkRepositoryInterface,
+    CreditRepositoryInterface,
 )
 from ..repositories.user_repository import UserRepository
 from ..repositories.bookmark_repository import BookmarkRepository
+from ..repositories.credit_repository import CreditRepository
 
 
 class UsersService:
@@ -27,9 +29,11 @@ class UsersService:
         self,
         user_repo: UserRepositoryInterface,
         bookmark_repo: BookmarkRepositoryInterface,
+        credit_repo: CreditRepositoryInterface,
     ) -> None:
         self._user_repo = user_repo
         self._bookmark_repo = bookmark_repo
+        self._credit_repo = credit_repo
 
     def upsert_user(self, input_model: UserUpsertInput) -> UserProfile:
         existing = self._user_repo.find_by_provider_and_sub(
@@ -68,7 +72,9 @@ class UsersService:
         user = self._user_repo.find_by_user_code(user_code)
         if user is None:
             return None
-        return self._to_profile(user)
+        # 크레딧 정보 조회
+        credit_summary = self._credit_repo.get_summary(user_code)
+        return self._to_profile(user, credits=credit_summary.total_remaining)
 
     def delete_user(self, user_code: str) -> bool:
         """유저와 해당 유저의 모든 북마크를 삭제한다.
@@ -86,7 +92,7 @@ class UsersService:
         return self._user_repo.delete_by_user_code(user_code)
 
     @staticmethod
-    def _to_profile(user: User) -> UserProfile:
+    def _to_profile(user: User, credits: int = 0) -> UserProfile:
         return UserProfile(
             user_code=user.user_code,
             provider=user.provider,
@@ -95,13 +101,22 @@ class UsersService:
             name=user.name,
             profile_image=user.profile_image,
             role=user.role,
+            credits=credits,
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
 
     def list_users(self, page: int, page_size: int) -> tuple[list[UserProfile], int]:
+        """유저 목록 조회. 크레딧 정보를 벌크 조회로 포함한다."""
         users, total = self._user_repo.list(page, page_size)
-        profiles = [self._to_profile(u) for u in users]
+
+        # 크레딧 볼크 조회 (N+1 방지)
+        user_codes = [u.user_code for u in users]
+        credits_map = self._credit_repo.get_summary_bulk(user_codes)
+
+        profiles = [
+            self._to_profile(u, credits=credits_map.get(u.user_code, 0)) for u in users
+        ]
         return profiles, total
 
 
@@ -121,12 +136,22 @@ def get_bookmark_repository_for_users(
     return BookmarkRepository(db)
 
 
+def get_credit_repository_for_users(
+    db: Database = Depends(get_database),
+) -> CreditRepositoryInterface:
+    """UsersService에서 사용할 CreditRepository DI 팩토리."""
+    return CreditRepository(db)
+
+
 def get_users_service(
     user_repo: UserRepositoryInterface = Depends(get_user_repository),
     bookmark_repo: BookmarkRepositoryInterface = Depends(
         get_bookmark_repository_for_users
     ),
+    credit_repo: CreditRepositoryInterface = Depends(get_credit_repository_for_users),
 ) -> UsersService:
     """FastAPI DI용 UsersService 팩토리."""
 
-    return UsersService(user_repo=user_repo, bookmark_repo=bookmark_repo)
+    return UsersService(
+        user_repo=user_repo, bookmark_repo=bookmark_repo, credit_repo=credit_repo
+    )

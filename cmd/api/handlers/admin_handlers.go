@@ -65,7 +65,7 @@ func AdminListPostsHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Accept json
 // @Produce json
 // @Param body body object true "Post creation request"
-// @Success 200 {object} object
+// @Success 200 {object} dto.CreatePostResponseDTO
 // @Failure 400 {object} dto.ErrorResponseDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/posts [post]
@@ -148,13 +148,13 @@ func AdminTriggerEmbeddingHandler(svc *services.AdminService) gin.HandlerFunc {
 }
 
 // @Summary List users for admin
-// @Description List all users with pagination
+// @Description List all users with pagination and credit information
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} object
+// @Success 200 {object} dto.PaginationAdminUserDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/users [get]
 func AdminListUsersHandler(svc *services.AdminService) gin.HandlerFunc {
@@ -178,7 +178,7 @@ func AdminListUsersHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} object
+// @Success 200 {object} dto.PaginationBlogDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/blogs [get]
 func AdminListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
@@ -190,6 +190,35 @@ func AdminListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
 			Page:     page,
 			PageSize: pageSize,
 		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary Grant credits to a user
+// @Description Manually grant credits to a specific user (admin only)
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param user_code path string true "User Code"
+// @Param body body dto.GrantCreditRequestDTO true "Credit grant request"
+// @Success 200 {object} dto.GrantCreditResponseDTO
+// @Failure 400 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/users/{user_code}/credits [post]
+func AdminGrantCreditHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userCode := c.Param("user_code")
+		var req dto.GrantCreditRequestDTO
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+
+		resp, err := svc.GrantCredit(c.Request.Context(), userCode, &req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
 			return
