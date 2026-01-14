@@ -82,6 +82,9 @@ type UpsertResponse struct {
 	Role     string `json:"role"`
 }
 
+// UserProfileResponse는 dto.UserProfileDTO를 사용하여 중복을 제거.
+// 하지만 userclient는 dto를 import하면 순환참조 위험이 있으므로 별도 유지.
+// 대신 필드를 동일하게 유지하여 JSON 매핑 호환성 보장.
 type UserProfileResponse struct {
 	UserCode     string    `json:"user_code"`
 	Provider     string    `json:"provider"`
@@ -90,6 +93,7 @@ type UserProfileResponse struct {
 	Name         string    `json:"name"`
 	ProfileImage string    `json:"profile_image"`
 	Role         string    `json:"role"`
+	Credits      int       `json:"credits"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -836,4 +840,35 @@ func (c *Client) DeleteSession(ctx context.Context, userCode, sessionID string) 
 		return fmt.Errorf("failed to delete session: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// GrantCreditInternal grants credits using internal request format (includes source/reason).
+func (c *Client) GrantCreditInternal(ctx context.Context, userCode string, req *dto.GrantCreditInternalRequest) (*dto.GrantCreditResponseDTO, error) {
+	relPath := fmt.Sprintf("/api/v1/credits/%s/grant", userCode)
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := c.base.NewRequest(ctx, http.MethodPost, relPath, nil, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := c.base.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("grant credit failed: %s", httpResp.Status)
+	}
+
+	var result dto.GrantCreditResponseDTO
+	if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

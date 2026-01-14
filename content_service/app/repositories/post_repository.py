@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import re
 from typing import Iterable
 
+from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.database import Database
 
 from .documents.post_document import PostDocument
@@ -23,6 +24,27 @@ class PostRepository(PostRepositoryInterface):
 
         self._db = database
         self._col = database["posts"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("published_at", DESCENDING), ("_id", DESCENDING)],
+                    name="idx_published_at_id_desc",
+                ),
+                IndexModel(
+                    [("aisummary.categories", ASCENDING)], name="idx_categories"
+                ),
+                IndexModel([("aisummary.tags", ASCENDING)], name="idx_tags"),
+                IndexModel(
+                    [("aisummary.tags", ASCENDING), ("published_at", DESCENDING)],
+                    name="idx_tags_published_at",
+                ),
+                IndexModel(
+                    [("aisummary.categories", ASCENDING), ("published_at", DESCENDING)],
+                    name="idx_categories_published_at",
+                ),
+                IndexModel([("link", ASCENDING)], name="uniq_link", unique=True),
+            ]
+        )
 
     # --- helpers -----------------------------------------------------------------
     @staticmethod
@@ -117,20 +139,24 @@ class PostRepository(PostRepositoryInterface):
             else:
                 # false이거나 필드가 없는 경우 모두 매칭
                 filter_doc["$and"] = filter_doc.get("$and", []) + [
-                    {"$or": [
-                        {"status.ai_summarized": False},
-                        {"status.ai_summarized": {"$exists": False}},
-                    ]}
+                    {
+                        "$or": [
+                            {"status.ai_summarized": False},
+                            {"status.ai_summarized": {"$exists": False}},
+                        ]
+                    }
                 ]
         if flt.status_embedded is not None:
             if flt.status_embedded:
                 filter_doc["status.embedded"] = True
             else:
                 filter_doc["$and"] = filter_doc.get("$and", []) + [
-                    {"$or": [
-                        {"status.embedded": False},
-                        {"status.embedded": {"$exists": False}},
-                    ]}
+                    {
+                        "$or": [
+                            {"status.embedded": False},
+                            {"status.embedded": {"$exists": False}},
+                        ]
+                    }
                 ]
 
         page = flt.page if flt.page > 0 else 1

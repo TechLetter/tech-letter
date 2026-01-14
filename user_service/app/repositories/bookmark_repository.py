@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.database import Database
 
 from common.mongo.types import from_object_id, to_object_id
@@ -17,6 +18,19 @@ class BookmarkRepository(BookmarkRepositoryInterface):
     def __init__(self, database: Database) -> None:
         self._db = database
         self._col = database["bookmarks"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("user_code", ASCENDING), ("post_id", ASCENDING)],
+                    name="uniq_user_code_post_id",
+                    unique=True,
+                ),
+                IndexModel(
+                    [("user_code", ASCENDING), ("created_at", DESCENDING)],
+                    name="idx_user_code_created_at_desc",
+                ),
+            ]
+        )
 
     def create(self, user_code: str, post_id: str) -> Bookmark:
         now = datetime.now(timezone.utc)
@@ -42,6 +56,16 @@ class BookmarkRepository(BookmarkRepositoryInterface):
     def delete(self, user_code: str, post_id: str) -> bool:
         result = self._col.delete_one({"user_code": user_code, "post_id": post_id})
         return result.deleted_count > 0
+
+    def exists(self, user_code: str, post_id: str) -> bool:
+        """북마크 존재 여부 확인."""
+        count = self._col.count_documents({"user_code": user_code, "post_id": post_id})
+        return count > 0
+
+    def delete_by_user(self, user_code: str) -> bool:
+        """유저의 모든 북마크 삭제."""
+        result = self._col.delete_many({"user_code": user_code})
+        return result.acknowledged
 
     def list_by_user(
         self, user_code: str, page: int, page_size: int

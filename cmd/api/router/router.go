@@ -99,6 +99,7 @@ func New() *gin.Engine {
 			admin.POST("/posts/:id/summarize", handlers.AdminTriggerSummaryHandler(adminSvc))
 			admin.POST("/posts/:id/embed", handlers.AdminTriggerEmbeddingHandler(adminSvc))
 			admin.GET("/users", handlers.AdminListUsersHandler(adminSvc))
+			admin.POST("/users/:user_code/credits", handlers.AdminGrantCreditHandler(adminSvc))
 		}
 	}
 

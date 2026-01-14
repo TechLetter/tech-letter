@@ -48,7 +48,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/dto.PaginationBlogDTO"
                         }
                     },
                     "500": {
@@ -149,7 +149,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/dto.CreatePostResponseDTO"
                         }
                     },
                     "400": {
@@ -274,7 +274,7 @@ const docTemplate = `{
         },
         "/api/v1/admin/users": {
             "get": {
-                "description": "List all users with pagination",
+                "description": "List all users with pagination and credit information",
                 "consumes": [
                     "application/json"
                 ],
@@ -305,7 +305,60 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/dto.PaginationAdminUserDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/users/{user_code}/credits": {
+            "post": {
+                "description": "Manually grant credits to a specific user (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Grant credits to a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User Code",
+                        "name": "user_code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Credit grant request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GrantCreditRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GrantCreditResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
                         }
                     },
                     "500": {
@@ -1374,6 +1427,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreatePostResponseDTO": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "post_id": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ErrorResponseDTO": {
             "type": "object",
             "properties": {
@@ -1390,6 +1454,37 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.GrantCreditRequestDTO": {
+            "type": "object",
+            "required": [
+                "amount",
+                "expired_at"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "expired_at": {
+                    "description": "ISO8601 format",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.GrantCreditResponseDTO": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "user_code": {
                     "type": "string"
                 }
             }
@@ -1437,6 +1532,20 @@ const docTemplate = `{
                 },
                 "page_size": {
                     "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.PaginationAdminUserDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UserProfileDTO"
+                    }
                 },
                 "total": {
                     "type": "integer"
