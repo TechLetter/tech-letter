@@ -76,6 +76,13 @@ class CreditRepository(CreditRepositoryInterface):
 
         return result
 
+    def delete_by_user(self, user_code: str) -> bool:
+        """유저의 모든 크레딧 정보를 삭제."""
+        result = self._col.delete_many({"user_code": user_code})
+        # Note: 트랜잭션 로그는 보관할 수도 있지만, 개인정보 파기 원칙에 따라 삭제하는 것이 일반적
+        # 여기서는 Credit 문서만 삭제 (트랜잭션 로그는 별도 컬렉션이라면 그것도 삭제 고려)
+        return result.acknowledged
+
     def grant_daily(self, user_code: str) -> Credit | None:
         """일일 크레딧 지급. 오늘 이미 지급된 경우 None 반환."""
         now = datetime.now(timezone.utc)

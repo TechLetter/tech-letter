@@ -100,3 +100,8 @@ class ChatSessionRepository:
             {"_id": to_object_id(session_id), "user_code": user_code}
         )
         return result.deleted_count > 0
+
+    def delete_by_user(self, user_code: str) -> bool:
+        """유저의 모든 채팅 세션을 삭제."""
+        result = self.collection.delete_many({"user_code": user_code})
+        return result.acknowledged
