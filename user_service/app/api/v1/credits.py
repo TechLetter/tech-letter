@@ -5,6 +5,7 @@ Gateway에서 호출하는 내부 API.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -22,7 +23,9 @@ from common.events.credit import CreditEventType, CreditConsumedEvent
 from common.events.chat import ChatEventType, ChatCompletedEvent, ChatFailedEvent
 from common.schemas.pagination import PaginatedResponse
 
-from ...services.credit_service import CreditService
+from ...services.credit_service import CreditService, get_credit_service
+from ...repositories.user_repository import UserRepository
+from ...repositories.interfaces import UserRepositoryInterface
 from ...repositories.credit_repository import (
     CreditRepository,
     CreditTransactionRepository,
@@ -35,11 +38,11 @@ router = APIRouter(prefix="/credits", tags=["credits"])
 # -------- Dependencies --------
 
 
-def get_credit_service(db: Database = Depends(get_database)) -> CreditService:
-    """FastAPI DI용 CreditService 팩토리."""
-    credit_repo = CreditRepository(db)
-    transaction_repo = CreditTransactionRepository(db)
-    return CreditService(credit_repo, transaction_repo)
+def get_user_repository(
+    db: Database = Depends(get_database),
+) -> UserRepositoryInterface:
+    """FastAPI DI용 UserRepository 팩토리."""
+    return UserRepository(db)
 
 
 # -------- Request / Response Schemas --------
@@ -154,9 +157,21 @@ def get_credits(
 def grant_daily_credits(
     user_code: str,
     credit_service: Annotated[CreditService, Depends(get_credit_service)],
+    user_repo: Annotated[UserRepositoryInterface, Depends(get_user_repository)],
 ) -> GrantDailyResponse:
     """일일 크레딧 지급 (로그인 시 호출)."""
-    granted = credit_service.grant_daily(user_code)
+    user = user_repo.find_by_user_code(user_code)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Identity Hash 생성 (SHA256(provider:sub))
+    raw_id = f"{user.provider}:{user.provider_sub}"
+    identity_hash = hashlib.sha256(raw_id.encode()).hexdigest()
+
+    granted = credit_service.grant_daily(user_code, identity_hash)
     return GrantDailyResponse(
         granted=granted,
         already_granted=(granted == 0),
