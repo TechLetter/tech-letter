@@ -17,12 +17,4 @@ dependencies = [
 summary-worker = "app.main:main"
 
 [tool.pytest.ini_options]
-testpaths = [
-  "tests",
-]
-python_files = [
-  "test_*.py",
-]
-pythonpath = [
-  "..",
-]
+pythonpath = [".."]
