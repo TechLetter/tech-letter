@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from content_service.app.rss.feeder import RssFeedItem, fetch_rss_feeds
+
+
+logger = logging.getLogger(__name__)
 
 
 TEST_RSS_URLS = [
@@ -26,6 +31,10 @@ TEST_RSS_URLS = [
     "https://tech.inflab.com/rss.xml",
     "https://medium.com/feed/yanoljacloud-tech",
     "https://techblog.yogiyo.co.kr/feed",
+    "https://blog-ko.allganize.ai/rss",
+    "https://techblog.samsung.com/rss",
+    "https://hyper-accel.github.io/index.xml",
+    "https://hyperconnect.github.io/feed.xml",
 ]
 
 
@@ -35,6 +44,8 @@ def test_fetch_rss_feeds_returns_items(rss_url: str) -> None:
 
     assert isinstance(items, list)
     assert len(items) > 0
+
+    logger.info("[TEST] URL=%s, posts_count=%d", rss_url, len(items))
 
     for item in items:
         assert isinstance(item, RssFeedItem)

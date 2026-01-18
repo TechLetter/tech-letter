@@ -106,7 +106,28 @@ content_service:
         url: https://aws.amazon.com/ko/blogs/tech
         rss_url: https://aws.amazon.com/ko/blogs/tech/feed
         blog_type: company
+
       - name: 요기요
         url: https://techblog.yogiyo.co.kr/
         rss_url: https://techblog.yogiyo.co.kr/feed
+        blog_type: company
+
+      - name: 하이퍼엑셀
+        url: https://hyper-accel.github.io
+        rss_url: https://hyper-accel.github.io/index.xml
+        blog_type: company
+
+      - name: 하이퍼커넥트
+        url: https://hyperconnect.github.io
+        rss_url: https://hyperconnect.github.io/feed.xml
+        blog_type: company
+
+      - name: 올거나이즈코리아
+        url: https://blog-ko.allganize.ai/
+        rss_url: https://blog-ko.allganize.ai/rss
+        blog_type: company
+
+      - name: 삼성
+        url: https://techblog.samsung.com
+        rss_url: https://techblog.samsung.com/rss
         blog_type: company
