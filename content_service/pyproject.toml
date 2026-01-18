@@ -14,3 +14,6 @@ dependencies = [
 
 [project.scripts]
 content-service = "app.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = [".."]
