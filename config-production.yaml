@@ -127,7 +127,12 @@ content_service:
         rss_url: https://blog-ko.allganize.ai/rss
         blog_type: company
 
-      - name: 삼성
-        url: https://techblog.samsung.com
-        rss_url: https://techblog.samsung.com/rss
+      - name: 뱅크샐러드
+        url: https://blog.banksalad.com/
+        rss_url: https://blog.banksalad.com/rss.xml
+        blog_type: company
+
+      - name: 올리브영
+        url: https://oliveyoung.tech/
+        rss_url: https://oliveyoung.tech/rss.xml
         blog_type: company
