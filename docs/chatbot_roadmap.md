@@ -1,7 +1,9 @@
 # 챗봇 기능 명세 및 로드맵
 
-이 문서는 Tech-Letter 챗봇 기능의 **Phase 1(현재)** 범위와 구현 내용을 정리하고,
-**Phase 2 / Phase 3**에서 진행할 작업 계획의 초석을 정의한다.
+이 문서는 Tech-Letter 챗봇 기능의 현재 구현 상태와 다음 단계 계획을 정리한다.
+
+- 기준일: **2026-02-16**
+- 현재 상태: **Phase 1 완료 + Phase 2 핵심 기능 구현 완료**
 
 ---
 
@@ -20,8 +22,7 @@
   - API Gateway: `POST /api/v1/chatbot/chat`
   - 내부 호출: `chatbot_service POST /api/v1/chat`
 - **사용 조건**
-  - Phase 1에서는 **로그인된 사용자(JWT 유효)** 인지만 확인한다.
-  - 크레딧/쿼터/요금제는 Phase 2에서 도입한다.
+  - 로그인된 사용자(JWT 유효)만 호출 가능하다.
 
 ### 1.2 응답 포맷 정책
 
@@ -29,7 +30,10 @@
   - `pagination`
   - `error` (`{"error": "..."}`)
   - `message` (`{"message": "..."}`)
-- 챗봇 성공 응답은 **외부 공개 정책상 sources를 노출하지 않고** `answer`만 반환한다.
+- 챗봇 성공 응답은 `sources`를 외부로 노출하지 않으며 다음 필드를 반환한다.
+  - `answer`
+  - `consumed_credits`
+  - `remaining_credits`
 
 ### 1.3 에러 코드 정책 (API Gateway)
 
@@ -43,10 +47,10 @@
 
 ### 1.4 Phase 1 체크리스트
 
-- [ ] API Gateway에서 로그인 사용자(JWT) 검증 후 챗봇 호출
-- [ ] `chatbot_service` 헬스체크 확인 (`GET /health`)
-- [ ] 429/503 에러가 Gateway에서 `{error: ...}` 형식으로 내려오는지 확인
-- [ ] `docker-compose.dev.yml`에서 gateway↔chatbot 네트워크 통신 확인
+- [x] API Gateway에서 로그인 사용자(JWT) 검증 후 챗봇 호출
+- [x] `chatbot_service` 헬스체크 확인 (`GET /health`)
+- [x] 429/503 에러를 Gateway에서 `{error: ...}` 형식으로 정규화
+- [x] `docker-compose.dev.yml` 기준 gateway↔chatbot 내부 네트워크 통신 구성
 
 ---
 
@@ -91,23 +95,31 @@
 
 ---
 
-## 3. Phase 2 계획(유저 기능/비용 통제)
+## 3. Phase 2 구현 현황 (유저 기능/비용 통제)
 
-이벤트 드리븐 아키텍처 기반 구조로 작업
+이벤트 드리븐 아키텍처 기반 구조로 구현되었다.
 
-### 3.1 크레딧/쿼터 도입
+### 3.1 크레딧/비용 통제 (구현 완료)
 
-- 사용자별 크레딧 차감 정책 정의
-  - 요청 1회당 비용
-  - 모델별 비용 가중치(선택)
-- Gateway 레벨 rate limit + quota 체크
-- 남은 크레딧 조회 API
+- 요청 1회당 1크레딧 차감(`POST /api/v1/credits/{user_code}/consume`)
+- 채팅 실패 시 환불 처리(`POST /api/v1/credits/{user_code}/log-chat`, `success=false`)
+- 채팅 성공/실패 이벤트 발행(`tech-letter.chat`)
+- 관리자 크레딧 수동 지급(`POST /api/v1/admin/users/:user_code/credits`)
+- 로그인 시 일일 크레딧 지급(`POST /api/v1/credits/{user_code}/grant-daily`)
 
-### 3.2 대화 내역(History/Library)
+### 3.2 대화 세션 관리 (구현 완료)
 
-- `GET /api/v1/chatbot/history` 또는 `GET /api/v1/chatbot/library` 추가
-- 저장 스키마(초안)
-  - `user_code`, `query`, `answer`, `sources`, `created_at`
+- `GET /api/v1/chatbot/sessions`: 세션 목록 조회
+- `POST /api/v1/chatbot/sessions`: 세션 생성
+- `GET /api/v1/chatbot/sessions/:id`: 세션 상세 조회
+- `DELETE /api/v1/chatbot/sessions/:id`: 세션 삭제
+- `chat.completed` 이벤트 소비를 통해 사용자/어시스턴트 메시지를 세션에 적재
+
+### 3.3 Phase 2 잔여 작업 (미구현)
+
+- Gateway 레벨 전역 rate limit/quota 정책
+- 별도 `history/library` API 명칭으로의 정리(현재는 `sessions` API 사용)
+- 비용/사용량 대시보드 및 운영 지표 자동화
 
 ---
 
