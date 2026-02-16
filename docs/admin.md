@@ -198,6 +198,33 @@
   }
   ```
 
+#### 5.3.2. 사용자 크레딧 수동 지급
+
+관리자가 특정 사용자에게 크레딧을 수동 지급합니다.
+
+- **Method**: `POST /api/v1/admin/users/:user_code/credits`
+- **Path Parameters**:
+  - `user_code`: 사용자 코드 (예: `google:abc123`)
+- **Request Body**:
+  ```json
+  {
+    "amount": 30,
+    "expired_at": "2026-03-01T00:00:00Z"
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "user_code": "google:abc123",
+    "amount": 30,
+    "expires_at": "2026-03-01T00:00:00Z"
+  }
+  ```
+- **필드명 주의**:
+  - 요청 본문은 `expired_at`을 사용합니다. (`dto.GrantCreditRequestDTO`)
+  - 응답 본문은 `expires_at`을 사용합니다. (`dto.GrantCreditResponseDTO`)
+  - 현재 구현 계약과의 호환성을 유지하기 위한 형태입니다.
+
 ## 6. 구현 상세 (Microservices)
 
 ### 6.1. API Gateway (Go)
@@ -223,7 +250,18 @@
 - `app/services/users_service.py`: `list_users` 메서드 추가 (Pagination 지원).
 - `app/repositories/user_repository.py`: `list` 메서드 추가.
 
-## 7. Frontend (예정)
+## 7. Frontend (구현 완료)
 
-- 별도의 Admin Web App 또는 기존 프론트엔드 내 `/admin` 라우트에서 위 API들을 사용.
-- 구글 로그인 후, `role`이 `admin`인 계정만 접근 가능하도록 처리 필요.
+현재 프론트엔드(`tech-letter_ui`)에 관리자 화면이 통합되어 있으며, `/admin` 라우트에서 동작합니다.
+
+- 라우팅/권한
+  - `/admin` 라우트 제공
+  - `AdminRouteProvider`로 `isAuthenticated && isAdmin` 조건을 검사하여 접근 제어
+- 화면 구성
+  - Posts 탭: 목록 조회, 수동 생성, 삭제, 요약 트리거, 임베딩 트리거
+  - Blogs 탭: 목록 조회
+  - Users 탭: 목록 조회, 크레딧 수동 지급
+- API 연동
+  - `src/api/adminApi.js`에서 `/api/v1/admin/*` 엔드포인트를 중앙화해 호출
+
+추가로 별도 Admin 전용 앱을 분리하는 방향은 선택 가능하나, 현재 기준으로 운영 기능은 기존 프론트엔드에 구현되어 있습니다.

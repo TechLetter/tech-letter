@@ -391,11 +391,11 @@ EMBEDDING_WORKER_LLM_API_KEY=your-openai-api-key
 
 ### Kafka 토픽
 
-- `tech-letter.post.summary`: 요약 파이프라인 이벤트 (`post.summary_requested`, `post.summary_response`)
-- `tech-letter.post.embedding`: 임베딩 파이프라인 이벤트 (`post.embedding_requested`, `post.embedding_response`)
-- `tech-letter.credit`: 크레딧 관련 이벤트 (`credit.consumed`, `credit.granted`)
-- `tech-letter.chat`: 채팅 관련 이벤트 (`chat.completed`, `chat.failed`)
-- `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 (Phase 3)
+- `tech-letter.post.summary`: 요약 파이프라인 이벤트 (`post.summary_requested`, `post.summary_response`) - **운영 중**
+- `tech-letter.post.embedding`: 임베딩 파이프라인 이벤트 (`post.embedding_requested`, `post.embedding_response`) - **운영 중**
+- `tech-letter.credit`: 크레딧 관련 이벤트 (`credit.consumed`, `credit.granted`) - **운영 중**
+- `tech-letter.chat`: 채팅 관련 이벤트 (`chat.completed`, `chat.failed`) - **운영 중**
+- `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 - **Phase 3 예정(현재 코드 미구현)**
 
 ## 서비스 포트
 
