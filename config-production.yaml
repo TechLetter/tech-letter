@@ -136,3 +136,158 @@ content_service:
         url: https://oliveyoung.tech/
         rss_url: https://oliveyoung.tech/rss.xml
         blog_type: company
+
+      - name: Google DeepMind
+        url: https://deepmind.google/blog
+        rss_url: https://deepmind.google/blog/rss.xml
+        blog_type: company
+
+      - name: Apple ML
+        url: https://machinelearning.apple.com
+        rss_url: https://machinelearning.apple.com/rss.xml
+        blog_type: company
+
+      - name: IBM Research
+        url: https://research.ibm.com
+        rss_url: https://research.ibm.com/rss
+        blog_type: company
+
+      - name: NVIDIA
+        url: https://blogs.nvidia.com
+        rss_url: https://blogs.nvidia.com/feed/
+        blog_type: company
+
+      - name: Hugging Face
+        url: https://huggingface.co/blog
+        rss_url: https://huggingface.co/blog/feed.xml
+        blog_type: company
+
+      - name: Salesforce AI Research
+        url: https://www.salesforce.com/blog/category/ai-research/
+        rss_url: https://www.salesforce.com/blog/category/ai-research/feed/
+        blog_type: company
+
+      - name: Spotify Engineering
+        url: https://engineering.atspotify.com
+        rss_url: https://engineering.atspotify.com/feed
+        blog_type: company
+
+      - name: Databricks
+        url: https://www.databricks.com/blog
+        rss_url: https://www.databricks.com/blog/feed.xml
+        blog_type: company
+
+      - name: LangChain
+        url: https://blog.langchain.com
+        rss_url: https://blog.langchain.com/rss/
+        blog_type: company
+
+      - name: Together AI
+        url: https://www.together.ai/blog
+        rss_url: https://www.together.ai/blog/rss.xml
+        blog_type: company
+
+      - name: Qdrant
+        url: https://qdrant.tech
+        rss_url: https://qdrant.tech/blog/index.xml
+        blog_type: company
+
+      - name: Replicate
+        url: https://replicate.com/blog
+        rss_url: https://replicate.com/blog/rss
+        blog_type: company
+
+      - name: Modular
+        url: https://www.modular.com/blog
+        rss_url: https://www.modular.com/blog/rss.xml
+        blog_type: company
+
+      - name: Weights & Biases
+        url: https://wandb.ai/fully-connected
+        rss_url: https://wandb.ai/fully-connected/rss.xml
+        blog_type: company
+
+      - name: Modal
+        url: https://modal.com/blog
+        rss_url: https://modal.com/blog/atom.xml
+        blog_type: company
+
+      - name: Comet ML
+        url: https://www.comet.com/site/blog
+        rss_url: https://www.comet.com/site/blog/feed/
+        blog_type: company
+
+      - name: DataRobot
+        url: https://www.datarobot.com/blog/
+        rss_url: https://www.datarobot.com/blog/feed/
+        blog_type: company
+
+      - name: Clarifai
+        url: https://www.clarifai.com/blog
+        rss_url: https://www.clarifai.com/blog/rss.xml
+        blog_type: company
+
+      - name: Kore.ai
+        url: https://blog.kore.ai
+        rss_url: https://blog.kore.ai/rss.xml
+        blog_type: company
+
+      - name: BAIR
+        url: https://bair.berkeley.edu/blog/
+        rss_url: https://bair.berkeley.edu/blog/feed.xml
+        blog_type: company
+
+      - name: Stanford AI Lab
+        url: https://ai.stanford.edu/blog/
+        rss_url: https://ai.stanford.edu/blog/feed.xml
+        blog_type: company
+
+      - name: MIT CSAIL
+        url: https://www.csail.mit.edu
+        rss_url: https://www.csail.mit.edu/rss.xml
+        blog_type: company
+
+      - name: CMU ML
+        url: https://www.ml.cmu.edu/news
+        rss_url: https://www.ml.cmu.edu/news/feed
+        blog_type: company
+
+      - name: Jay Alammar
+        url: http://jalammar.github.io
+        rss_url: http://jalammar.github.io/feed.xml
+        blog_type: creator
+
+      - name: Chip Huyen
+        url: https://huyenchip.com
+        rss_url: https://huyenchip.com/feed.xml
+        blog_type: creator
+
+      - name: Eugene Yan
+        url: https://eugeneyan.com
+        rss_url: https://eugeneyan.com/rss/
+        blog_type: creator
+
+      - name: Vicki Boykis
+        url: https://vickiboykis.com
+        rss_url: https://vickiboykis.com/index.xml
+        blog_type: creator
+
+      - name: Towards Data Science
+        url: https://towardsdatascience.com
+        rss_url: https://towardsdatascience.com/feed
+        blog_type: company
+
+      - name: TechCrunch AI
+        url: https://techcrunch.com/category/artificial-intelligence/
+        rss_url: https://techcrunch.com/category/artificial-intelligence/feed/
+        blog_type: company
+
+      - name: AI Summer
+        url: https://theaisummer.com
+        rss_url: https://theaisummer.com/feed.xml
+        blog_type: company
+
+      - name: Artificial Lawyer
+        url: https://www.artificiallawyer.com
+        rss_url: https://www.artificiallawyer.com/feed/
+        blog_type: company
