@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Literal
 
 from common.llm.factory import ChatModelConfig, LlmProvider
 
@@ -13,18 +14,26 @@ SUMMARY_WORKER_LLM_TEMPERATURE = "SUMMARY_WORKER_LLM_TEMPERATURE"
 SUMMARY_WORKER_LLM_BASE_URL = "SUMMARY_WORKER_LLM_BASE_URL"
 SUMMARY_WORKER_LLM_MAX_RETRIES = "SUMMARY_WORKER_LLM_MAX_RETRIES"
 
+RendererStrategy = Literal["playwright", "scraperapi"]
+_VALID_STRATEGIES: set[str] = {"playwright", "scraperapi"}
+
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class AppConfig:
-    """summary-worker 전체 설정 루트.
-
-    - 현재는 LLM 설정만 포함하지만, 추후 YAML 기반 설정 등이 추가될 수 있다.
-    """
+    """summary-worker 전체 설정 루트."""
 
     llm: ChatModelConfig
+    renderer_strategy: RendererStrategy
+    scraperapi_key: str | None
 
 
-def load_chat_model_config() -> ChatModelConfig:
+def _load_chat_model_config() -> ChatModelConfig:
+    """LLM 관련 환경변수를 읽어 ChatModelConfig 를 반환한다."""
+
     provider_raw = os.getenv(SUMMARY_WORKER_LLM_PROVIDER) or "google"
     provider = LlmProvider.from_str(provider_raw)
 
@@ -70,5 +79,17 @@ def load_chat_model_config() -> ChatModelConfig:
 def load_config() -> AppConfig:
     """summary-worker 설정을 로드하여 AppConfig 로 반환한다."""
 
-    llm_config = load_chat_model_config()
-    return AppConfig(llm=llm_config)
+    raw_strategy = os.getenv("RENDERER_STRATEGY", "playwright")
+    if raw_strategy not in _VALID_STRATEGIES:
+        _logger.warning(
+            "RENDERER_STRATEGY=%r is not valid (%s). Falling back to 'playwright'.",
+            raw_strategy,
+            _VALID_STRATEGIES,
+        )
+        raw_strategy = "playwright"
+
+    return AppConfig(
+        llm=_load_chat_model_config(),
+        renderer_strategy=raw_strategy,  # type: ignore[arg-type]
+        scraperapi_key=os.getenv("SCRAPERAPI_KEY"),
+    )

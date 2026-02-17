@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
+from typing import Generator
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -17,7 +19,7 @@ from common.events.post import (
 )
 
 from ..parser import extract_plain_text, extract_thumbnail
-from ..renderer import render_html
+from ..renderer import BaseRenderer
 from ..summarizer import summarize_post
 from ..validator import validate_plain_text
 
@@ -25,11 +27,31 @@ from ..validator import validate_plain_text
 logger = logging.getLogger(__name__)
 
 
+@contextmanager
+def _log_step(
+    step_name: str,
+    requested: PostSummaryRequestedEvent,
+) -> Generator[None, None, None]:
+    """파이프라인 단계별 예외를 일관되게 로깅하는 컨텍스트 매니저."""
+    try:
+        yield
+    except Exception:
+        logger.exception(
+            "failed at %s for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
+            step_name,
+            requested.id,
+            requested.post_id,
+            requested.link,
+        )
+        raise
+
+
 def handle_post_summary_requested_event(
     requested: PostSummaryRequestedEvent,
     *,
     bus: KafkaEventBus,
     chat_model: BaseChatModel,
+    renderer: BaseRenderer,
 ) -> None:
     """PostSummaryRequestedEvent 에 대한 전체 파이프라인을 처리한다.
 
@@ -48,64 +70,33 @@ def handle_post_summary_requested_event(
     )
 
     # 1. HTML 렌더링
-    try:
-        rendered_html = render_html(requested.link)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed at render_html for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
-            requested.id,
-            requested.post_id,
-            requested.link,
-        )
-        raise
+    with _log_step("renderer.render", requested):
+        rendered_html = renderer.render(requested.link)
 
     # 2. 본문 텍스트 추출
-    try:
+    with _log_step("extract_plain_text", requested):
         plain_text = extract_plain_text(rendered_html)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed at extract_plain_text for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
-            requested.id,
-            requested.post_id,
-            requested.link,
-        )
-        raise
 
     # 3. 본문 텍스트 검증
-    try:
+    with _log_step("validate_plain_text", requested):
         validate_plain_text(plain_text)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed at validate_plain_text for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
-            requested.id,
-            requested.post_id,
-            requested.link,
-        )
-        raise
 
-    # 4. 썸네일 URL 추출
+    # 4. 썸네일 URL 추출 (실패해도 파이프라인 중단하지 않음)
+    thumbnail_url = ""
     try:
         thumbnail_url = extract_thumbnail(rendered_html, requested.link)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed at extract_thumbnail for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
+    except Exception:
+        logger.warning(
+            "extract_thumbnail failed for PostSummaryRequestedEvent id=%s post_id=%s link=%s — proceeding with empty thumbnail",
             requested.id,
             requested.post_id,
             requested.link,
+            exc_info=True,
         )
-        raise
 
     # 5. AI 요약
-    try:
+    with _log_step("summarize_post", requested):
         summary_result = summarize_post(chat_model=chat_model, plain_text=plain_text)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed at summarize_post for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
-            requested.id,
-            requested.post_id,
-            requested.link,
-        )
-        raise
 
     # 6. PostSummaryResponse 이벤트 구성 및 publish
     now = datetime.now(timezone.utc).isoformat()
@@ -127,20 +118,12 @@ def handle_post_summary_requested_event(
         or getattr(chat_model, "model", "unknown"),
     )
 
-    try:
+    with _log_step("publish_event", requested):
         out_evt = new_json_event(
             payload=asdict(succeeded_event),
             event_id=succeeded_event_id,
         )
         bus.publish(TOPIC_POST_SUMMARY.base, out_evt)
-    except Exception:  # noqa: BLE001
-        logger.exception(
-            "failed to publish PostSummaryResponseEvent for request id=%s post_id=%s link=%s",
-            requested.id,
-            requested.post_id,
-            requested.link,
-        )
-        raise
 
     logger.info(
         "successfully processed PostSummaryRequestedEvent id=%s post_id=%s link=%s summary_len=%d categories=%s tags=%s model_name=%s",
