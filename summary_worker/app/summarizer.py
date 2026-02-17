@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 # Go cmd/processor/summarizer.SYSTEM_INSTRUCTION과 동일한 역할을 하는 시스템 프롬프트.
-SYSTEM_INSTRUCTION = """
+SYSTEM_INSTRUCTION = """\
 You are a content summarization assistant for technical blog posts.
 Your task is to analyze the provided text and produce a structured summary.
 The response MUST be a valid JSON object with five keys:
@@ -28,9 +28,9 @@ The response MUST be a valid JSON object with five keys:
    - Tags MUST be concrete and reusable English terms (e.g., "Hadoop", "React", "Kubernetes").
    - Do NOT include generic concepts (e.g., "AI development", "storage cost") or long phrases.
    - Remove duplicates.
-4. error: An optional string field. If the input text contains bot-verification messages 
-or HTTP error indicators such as "I'm not a robot", "verify you are human", "bot check", "404 not found", "403 forbidden", "500 internal server error", "bad request", "gateway timeout", 
-or any similar access-error content, or if the blog content cannot be determined due to missing, empty, or invalid text, 
+4. error: An optional string field. If the input text contains bot-verification messages \
+or HTTP error indicators such as "I'm not a robot", "verify you are human", "bot check", "404 not found", "403 forbidden", "500 internal server error", "bad request", "gateway timeout", \
+or any similar access-error content, or if the blog content cannot be determined due to missing, empty, or invalid text, \
 set this field to a short descriptive Korean error message. Otherwise, set it to null.
 
 
@@ -50,23 +50,19 @@ class SummarizeResult(BaseModel):
     error: str | None = None
 
 
+# ── 모듈 레벨에서 한 번만 생성 (불변 객체) ──────────────────────────
+_parser = PydanticOutputParser(pydantic_object=SummarizeResult)
+_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", SYSTEM_INSTRUCTION + "\n\n{format_instructions}"),
+        ("human", "{text}"),
+    ]
+).partial(format_instructions=_parser.get_format_instructions())
+
+
 def _call_llm(chat_model: BaseChatModel, text: str) -> SummarizeResult:
     """Go SummarizeText(text string)와 동일하게 동작하도록 LLM을 호출한다."""
-    parser = PydanticOutputParser(pydantic_object=SummarizeResult)
-
-    # format_instructions 안에 JSON 예시 등 중괄호가 포함되므로,
-    # 이를 직접 문자열 결합해 템플릿에 넣으면 ChatPromptTemplate이
-    # 잘못된 변수({"foo"}, {"properties"} 등)로 해석한다.
-    # 따라서 별도 변수로 두고 partial()로 고정 주입한다.
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_INSTRUCTION + "\n\n{format_instructions}"),
-            ("human", "{text}"),
-        ]
-    ).partial(format_instructions=parser.get_format_instructions())
-
-    chain = prompt | chat_model | parser
+    chain = _prompt | chat_model | _parser
     return chain.invoke({"text": text})
 
 

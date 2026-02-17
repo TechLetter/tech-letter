@@ -24,29 +24,28 @@ from dotenv import load_dotenv
 
 from common.llm.factory import create_chat_model
 
-from summary_worker.app.config import load_chat_model_config
+from summary_worker.app.config import load_config
 from summary_worker.app.parser import extract_plain_text, extract_thumbnail
-from summary_worker.app.renderer import render_html
+from summary_worker.app.renderer import get_renderer
 from summary_worker.app.summarizer import summarize_post
 
 
 logger = logging.getLogger(__name__)
 
 
-def _run_single_url(url: str, *, idx: int, chat_model) -> None:
+def _run_single_url(url: str, *, idx: int, chat_model, renderer) -> None:
     logger.info("=== Testing URL #%d: %s ===", idx, url)
 
     try:
-        html = render_html(url)
-        logger.info("[OK] render_html len=%d", len(html))
+        html = renderer.render(url)
+        logger.info("[OK] renderer.render len=%d", len(html))
     except Exception as exc:  # noqa: BLE001
-        logger.error("[FAIL] render_html: %s", exc)
+        logger.error("[FAIL] renderer.render: %s", exc)
         return
 
     try:
         text = extract_plain_text(html)
         logger.info("[OK] extract_plain_text len=%d", len(text))
-        # logger.info("[OK] extract_plain_text text=%s", text)
     except Exception as exc:  # noqa: BLE001
         logger.error("[FAIL] extract_plain_text: %s", exc)
         return
@@ -90,11 +89,12 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     load_dotenv()
 
-    chat_cfg = load_chat_model_config()
-    chat_model = create_chat_model(chat_cfg)
+    app_cfg = load_config()
+    chat_model = create_chat_model(app_cfg.llm)
+    renderer = get_renderer(app_cfg)
 
     for idx, url in enumerate(argv, start=1):
-        _run_single_url(url, idx=idx, chat_model=chat_model)
+        _run_single_url(url, idx=idx, chat_model=chat_model, renderer=renderer)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -54,8 +54,8 @@ COPY --from=playwright-base /root/.cache/ms-playwright /root/.cache/ms-playwrigh
 COPY --from=playwright-base /usr/lib /usr/lib
 COPY --from=playwright-base /usr/share/fonts /usr/share/fonts
 
-# uv 설치 (빠른 Python 패키지 매니저)
-RUN pip install --no-cache-dir uv
+# uv 설치 (빠른 Python 패키지 매니저, 버전 고정)
+RUN pip install --no-cache-dir uv==0.6.6
 
 # 의존성 파일 복사
 COPY pyproject.toml uv.lock ./
