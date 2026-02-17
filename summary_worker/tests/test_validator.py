@@ -1,5 +1,6 @@
 import pytest
-from summary_worker.app.validator import validate_plain_text, ContentValidationError
+from summary_worker.app.validator import validate_plain_text
+from summary_worker.app.exceptions import ValidationError
 
 
 def test_validate_plain_text_valid():
@@ -12,17 +13,17 @@ def test_validate_plain_text_valid():
 
 def test_validate_plain_text_empty():
     """빈 텍스트는 에러를 발생시켜야 한다."""
-    with pytest.raises(ContentValidationError, match="content_empty"):
+    with pytest.raises(ValidationError, match="content_empty"):
         validate_plain_text("")
 
-    with pytest.raises(ContentValidationError, match="content_empty"):
+    with pytest.raises(ValidationError, match="content_empty"):
         validate_plain_text("   ")
 
 
 def test_validate_plain_text_too_short():
     """너무 짧은 텍스트(50자 미만)는 에러를 발생시켜야 한다."""
     text = "Too short"
-    with pytest.raises(ContentValidationError, match="content_too_short"):
+    with pytest.raises(ValidationError, match="content_too_short"):
         validate_plain_text(text)
 
 
@@ -38,7 +39,7 @@ def test_validate_plain_text_strong_block():
     for kw in keywords:
         text = f"Please {kw} to continue...".ljust(60, ".")
 
-        with pytest.raises(ContentValidationError, match=f"strong_block:{kw}"):
+        with pytest.raises(ValidationError, match=f"strong_block:{kw}"):
             validate_plain_text(text)
 
 
@@ -53,7 +54,7 @@ def test_validate_plain_text_strong_block_always_for_cloudflare_like_pages():
 
     assert len(text) < 1000
     with pytest.raises(
-        ContentValidationError,
+        ValidationError,
         match="strong_block:verify you are human|strong_block:cloudflare|strong_block:challenges.cloudflare.com",
     ):
         validate_plain_text(text)
@@ -67,7 +68,7 @@ def test_validate_plain_text_unknown_content():
         text = f"Please wait, {kw}".ljust(60, ".")
         assert len(text) < 1000
 
-        with pytest.raises(ContentValidationError, match=f"unknown_content:{kw}"):
+        with pytest.raises(ValidationError, match=f"unknown_content:{kw}"):
             validate_plain_text(text)
 
 
@@ -85,7 +86,7 @@ def test_validate_plain_text_soft_block():
         text = f"Error occurred: {kw}".ljust(60, ".")
         assert len(text) < 500
 
-        with pytest.raises(ContentValidationError, match=f"soft_block:{kw}"):
+        with pytest.raises(ValidationError, match=f"soft_block:{kw}"):
             validate_plain_text(text)
 
 

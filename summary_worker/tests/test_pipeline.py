@@ -4,7 +4,8 @@ import pytest
 
 from summary_worker.app.parser import extract_plain_text, extract_thumbnail
 from summary_worker.app.renderer import PlaywrightRenderer
-from summary_worker.app.validator import validate_plain_text, ContentValidationError
+from summary_worker.app.validator import validate_plain_text
+from summary_worker.app.exceptions import ValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def test_validate_not_found_error_pipeline():
         == plain_text
     )
 
-    with pytest.raises(ContentValidationError, match="soft_block:not found"):
+    with pytest.raises(ValidationError, match="soft_block:not found"):
         validate_plain_text(plain_text)
 
 
@@ -77,7 +78,7 @@ def test_validate_short_SPA_error_pipeline():
     assert "Enable JavaScript and cookies to continue" == plain_text
 
     with pytest.raises(
-        ContentValidationError,
+        ValidationError,
         match="content_too_short",
     ):
         validate_plain_text(plain_text)

@@ -24,6 +24,9 @@ from ..summarizer import summarize_post
 from ..validator import validate_plain_text
 
 
+from ..exceptions import SummaryWorkerError
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,12 +35,26 @@ def _log_step(
     step_name: str,
     requested: PostSummaryRequestedEvent,
 ) -> Generator[None, None, None]:
-    """파이프라인 단계별 예외를 일관되게 로깅하는 컨텍스트 매니저."""
+    """파이프라인 단계별 예외를 일관되게 로깅하는 컨텍스트 매니저.
+
+    비즈니스 로직상 예상 가능한 실패(SummaryWorkerError)는 스택 트레이스 없이 로그만 남기고,
+    그 외 예상치 못한 예외는 스택 트레이스를 포함한다.
+    """
     try:
         yield
+    except SummaryWorkerError as exc:
+        logger.error(
+            "failed at %s for PostSummaryRequestedEvent id=%s post_id=%s link=%s: %s",
+            step_name,
+            requested.id,
+            requested.post_id,
+            requested.link,
+            exc,
+        )
+        raise
     except Exception:
         logger.exception(
-            "failed at %s for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
+            "unexpected error at %s for PostSummaryRequestedEvent id=%s post_id=%s link=%s",
             step_name,
             requested.id,
             requested.post_id,

@@ -45,3 +45,5 @@ RETRY_MARKERS: frozenset[str] = frozenset({
     "needs to review the security of your connection before proceeding",
     "Out of nothing, something.",
 })
+
+MIN_TEXT_LENGTH: int = 50

@@ -5,6 +5,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
+from .exceptions import SummarizationError
+
 
 # Go cmd/processor/summarizer.SYSTEM_INSTRUCTION과 동일한 역할을 하는 시스템 프롬프트.
 SYSTEM_INSTRUCTION = """\
@@ -71,7 +73,7 @@ def summarize_post(*, chat_model: BaseChatModel, plain_text: str) -> SummarizeRe
 
     if result.error:
         # Go 구현과 마찬가지로 error 필드가 설정된 경우에는 실패로 간주하고 예외를 던진다.
-        raise RuntimeError(
+        raise SummarizationError(
             f"ai judged that this content is not summarizable: {result.error}",
         )
     return result
