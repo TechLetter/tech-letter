@@ -137,6 +137,16 @@ content_service:
         rss_url: https://oliveyoung.tech/rss.xml
         blog_type: company
 
+      - name: 우아한형제들
+        url: https://techblog.woowahan.com/
+        rss_url: https://techblog.woowahan.com/feed
+        blog_type: company
+      
+      - name: 삼성
+        url: https://techblog.samsung.com/
+        rss_url: https://techblog.samsung.com/rss
+        blog_type: company
+      
       - name: Google DeepMind
         url: https://deepmind.google/blog
         rss_url: https://deepmind.google/blog/rss.xml
