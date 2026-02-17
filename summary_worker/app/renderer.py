@@ -16,7 +16,7 @@ RETRY_MARKERS = [
     "enable javascript and cookies to continue",
     "just a moment",
     "verifying you are human",
-    # "challenges.cloudflare.com",  # Common in normal pages (Turnstile), removed to prevent false positives
+
     "needs to review the security of your connection before proceeding",
     "Out of nothing, something.",
 ]
