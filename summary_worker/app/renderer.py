@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from playwright.sync_api import sync_playwright
 
 from .constants import RETRY_MARKERS
+from .exceptions import RenderingError
 
 if TYPE_CHECKING:
     from summary_worker.app.config import AppConfig
@@ -52,8 +53,9 @@ class ScraperApiRenderer(BaseRenderer):
             return response.text
         except httpx.HTTPError as exc:
             # API 키가 URL에 포함되므로, 로그에 원본 URL 대신 대상 URL만 출력
-            logger.error("ScraperAPI failed for %s: %s", url, type(exc).__name__)
-            raise
+            error_msg = f"ScraperAPI failed for {url}: {type(exc).__name__}"
+            logger.error(error_msg)
+            raise RenderingError(error_msg) from exc
 
 
 class PlaywrightRenderer(BaseRenderer):
@@ -159,8 +161,9 @@ class PlaywrightRenderer(BaseRenderer):
                     browser.close()
 
         except Exception as exc:
-            logger.error("failed to render HTML via Chrome for %s: %s", url, exc)
-            raise
+            error_msg = f"failed to render HTML via Chrome for {url}: {exc}"
+            logger.error(error_msg)
+            raise RenderingError(error_msg) from exc
 
         return last_html
 

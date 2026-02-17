@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 from PIL import Image
 import trafilatura
 
+from .exceptions import ExtractionError
+
 
 MIN_THUMBNAIL_WIDTH = 300
 MIN_THUMBNAIL_HEIGHT = 300
@@ -23,7 +25,7 @@ def extract_plain_text(html: str) -> str:
     """
     text = trafilatura.extract(html, include_comments=False, output_format="txt")
     if not text:
-        raise ValueError("failed to extract main text from HTML")
+        raise ExtractionError("failed to extract main text from HTML")
     return text.strip()
 
 
