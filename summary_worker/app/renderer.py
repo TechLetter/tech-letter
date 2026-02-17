@@ -97,7 +97,7 @@ def render_html(url: str) -> str:
 
                     page.goto(
                         target_url,
-                        wait_until="load",
+                        wait_until="domcontentloaded",
                         timeout=30_000,
                     )
                     page.wait_for_selector("body", timeout=30_000)
