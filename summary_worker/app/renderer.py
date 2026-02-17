@@ -16,7 +16,7 @@ RETRY_MARKERS = [
     "enable javascript and cookies to continue",
     "just a moment",
     "verifying you are human",
-    "challenges.cloudflare.com",
+    # "challenges.cloudflare.com",  # Common in normal pages (Turnstile), removed to prevent false positives
     "needs to review the security of your connection before proceeding",
     "Out of nothing, something.",
 ]
@@ -63,6 +63,11 @@ def _default_headers() -> dict[str, str]:
 
 
 def _needs_retry(html: str) -> bool:
+    # Safety Check: If content is large enough, assume it's valid content
+    # regardless of markers (which might be in scripts/embedded frames).
+    if len(html) > 50000:
+        return False
+
     lower = html.lower()
     return any(marker in lower for marker in RETRY_MARKERS)
 
