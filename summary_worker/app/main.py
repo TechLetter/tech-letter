@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import signal
+from functools import partial
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -11,16 +12,23 @@ from common.eventbus.kafka import KafkaEventBus
 from common.eventbus.topics import TOPIC_POST_SUMMARY
 from common.events.post import EventType, PostSummaryRequestedEvent
 from common.llm.factory import create_chat_model
+from common.logger import setup_logger
 
 from .config import load_config
+from .renderer import BaseRenderer, get_renderer
 from .services.pipeline_service import handle_post_summary_requested_event
-from common.logger import setup_logger
 
 
 logger = logging.getLogger(__name__)
 
 
-def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: BaseChatModel) -> None:
+def _handle_event(
+    evt: Event,
+    *,
+    bus: KafkaEventBus,
+    chat_model: BaseChatModel,
+    renderer: BaseRenderer,
+) -> None:
     payload = evt.payload
     if not isinstance(payload, dict):
         logger.error("unexpected payload type for event %s: %r", evt.id, type(payload))
@@ -45,6 +53,7 @@ def _handle_event(evt: Event, *, bus: KafkaEventBus, chat_model: BaseChatModel) 
         requested=requested,
         bus=bus,
         chat_model=chat_model,
+        renderer=renderer,
     )
 
 
@@ -59,6 +68,9 @@ def main() -> None:
 
     app_cfg = load_config()
     chat_model = create_chat_model(app_cfg.llm)
+    renderer = get_renderer(app_cfg)
+
+    logger.info("renderer strategy: %s", app_cfg.renderer_strategy)
 
     stop_flag = [False]
 
@@ -69,11 +81,15 @@ def main() -> None:
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
+    handler = partial(
+        _handle_event, bus=bus, chat_model=chat_model, renderer=renderer,
+    )
+
     try:
         bus.subscribe(
             group_id=group_id,
             topic=TOPIC_POST_SUMMARY,
-            handler=lambda evt: _handle_event(evt, bus=bus, chat_model=chat_model),
+            handler=handler,
             stop_flag=stop_flag,
         )
     finally:
