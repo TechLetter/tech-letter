@@ -157,6 +157,8 @@ services:
       KAFKA_MAX_POLL_INTERVAL_MS: 3200000
       LOG_LEVEL: INFO
       SERVICE_NAME: summary-worker
+      SCRAPERAPI_KEY: ${SCRAPERAPI_KEY}
+      RENDERER_STRATEGY: scraperapi # [playwright, scraperapi]
     networks:
       - tech-letter_default
     deploy:
