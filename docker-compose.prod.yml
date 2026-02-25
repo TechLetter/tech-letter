@@ -147,7 +147,7 @@ services:
     environment:
       SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
       SUMMARY_WORKER_LLM_PROVIDER: google
-      SUMMARY_WORKER_LLM_MODEL_NAME: gemini-3-flash
+      SUMMARY_WORKER_LLM_MODEL_NAME: gemini-3-flash-preview
       SUMMARY_WORKER_LLM_TEMPERATURE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
