@@ -146,10 +146,8 @@ services:
       - .env
     environment:
       SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY}
-      # SUMMARY_WORKER_LLM_PROVIDER: google
-      # SUMMARY_WORKER_LLM_MODEL_NAME: gemini-2.5-flash
-      SUMMARY_WORKER_LLM_PROVIDER: openrouter
-      SUMMARY_WORKER_LLM_MODEL_NAME: google/gemma-3-4b-it:free
+      SUMMARY_WORKER_LLM_PROVIDER: google
+      SUMMARY_WORKER_LLM_MODEL_NAME: gemini-3-flash
       SUMMARY_WORKER_LLM_TEMPERATURE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_GROUP_ID: tech-letter-summary-worker
@@ -212,7 +210,7 @@ services:
     environment:
       CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY}
       # CHATBOT_LLM_PROVIDER: google
-      # CHATBOT_LLM_MODEL_NAME: gemini-2.5-flash
+      # CHATBOT_LLM_MODEL_NAME: gemini-3-flash
       CHATBOT_LLM_PROVIDER: openrouter
       CHATBOT_LLM_MODEL_NAME: upstage/solar-pro-3:free
       CHATBOT_LLM_TEMPERATURE: 0.7
