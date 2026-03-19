@@ -212,7 +212,7 @@ services:
       # CHATBOT_LLM_PROVIDER: google
       # CHATBOT_LLM_MODEL_NAME: gemini-3-flash
       CHATBOT_LLM_PROVIDER: openrouter
-      CHATBOT_LLM_MODEL_NAME: nvidia/nemotron-3-nano-30b-a3b:free
+      CHATBOT_LLM_MODEL_NAME: z-ai/glm-4.5-air:free
       CHATBOT_LLM_TEMPERATURE: 0.7
       CHATBOT_LLM_MAX_RETRIES: 0
       CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY}
