@@ -47,8 +47,6 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
     env_file:
       - .env
     environment:
@@ -58,6 +56,7 @@ services:
       KAFKA_GROUP_ID: tech-letter-content-service
       KAFKA_MESSAGE_MAX_BYTES: 10485760
       KAFKA_MAX_POLL_INTERVAL_MS: 900000
+      CONTENT_BLOG_FETCH_BATCH_SIZE: ${CONTENT_BLOG_FETCH_BATCH_SIZE:-10}
       CONTENT_SERVICE_PORT: 8001
       LOG_LEVEL: INFO
       SERVICE_NAME: content-service

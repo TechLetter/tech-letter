@@ -25,8 +25,8 @@ jobs:
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
         run: |
-          cp config-production.yaml ./config.yaml
           touch .env
           docker-compose -f docker-compose.prod.yml down
           docker-compose -f docker-compose.prod.yml up -d --build

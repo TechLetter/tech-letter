@@ -1,8 +1,0 @@
-content_service:
-  aggregate:
-    blog_fetch_batch_size: 10
-    blogs:
-      - name: Example Blog
-        url: https://example.com
-        rss_url: https://example.com/feed
-        blog_type: company
