@@ -1,69 +1,51 @@
 from __future__ import annotations
 
-from pathlib import Path
+import os
 
-import yaml
 from pydantic import BaseModel, Field
 
 
-DEFAULT_CONFIG_FILE_NAME = "config.yaml"
-
-
-class BlogSourceConfig(BaseModel):
-    name: str
-    url: str
-    rss_url: str
-    blog_type: str = Field(default="company", alias="blog_type")
+BLOG_FETCH_BATCH_SIZE_ENV = "CONTENT_BLOG_FETCH_BATCH_SIZE"
 
 
 class AggregateConfig(BaseModel):
     blog_fetch_batch_size: int = Field(default=10)
-    blogs: list[BlogSourceConfig] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):
     """content-service 전체 설정 루트.
 
-    - 현재는 aggregate 섹션만 사용하지만, 추후 api/logging 등의 서브 설정을 추가할 수 있다.
+    - 수집 대상 블로그는 MongoDB blogs 컬렉션에서 관리한다.
+    - 런타임 설정은 환경변수에서 읽는다.
     """
 
     aggregate: AggregateConfig
 
 
-def _find_config_path() -> Path:
-    """현재 작업 디렉토리 기준으로 상위로 올라가며 config.yaml 을 찾는다.
+def _get_positive_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
 
-    Go `config.GetBasePath` 와 동일한 의도를 유지하되, Python 쪽에서는
-    content-service 가 레포지토리 루트에서 실행된다는 전제를 사용한다.
-    """
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a positive integer; got {raw_value!r}") from exc
 
-    current = Path.cwd()
-    for directory in (current, *current.parents):
-        candidate = directory / DEFAULT_CONFIG_FILE_NAME
-        if candidate.is_file():
-            return candidate
+    if value <= 0:
+        raise RuntimeError(f"{name} must be a positive integer; got {raw_value!r}")
 
-    raise RuntimeError(
-        f"{DEFAULT_CONFIG_FILE_NAME} not found. Place config.yaml in project root.",
-    )
+    return value
 
 
 def load_config() -> AppConfig:
-    """content-service 설정을 로드하여 AppConfig 로 반환한다."""
+    """content-service 설정을 환경변수에서 로드한다."""
 
-    path = _find_config_path()
-    with path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    content_service = data.get("content_service")
-    if not isinstance(content_service, dict):
-        raise RuntimeError(
-            f"config.yaml must contain 'content_service' mapping; got: {type(content_service).__name__}",
-        )
-
-    try:
-        return AppConfig.model_validate(content_service)
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(
-            f"failed to validate content_service config at {path}: {exc}",
-        ) from exc
+    return AppConfig(
+        aggregate=AggregateConfig(
+            blog_fetch_batch_size=_get_positive_int_env(
+                BLOG_FETCH_BATCH_SIZE_ENV,
+                10,
+            ),
+        ),
+    )

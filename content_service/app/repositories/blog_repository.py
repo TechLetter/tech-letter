@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pymongo import ASCENDING, IndexModel
 from pymongo.database import Database
 
 from .documents.blog_document import BlogDocument
@@ -21,69 +22,85 @@ class BlogRepository(BlogRepositoryInterface):
 
         self._db = database
         self._col = database["blogs"]
+        self._col.create_indexes(
+            [
+                IndexModel(
+                    [("rss_url", ASCENDING)],
+                    name="uniq_rss_url",
+                    unique=True,
+                ),
+                IndexModel([("name", ASCENDING)], name="idx_blog_name"),
+                IndexModel([("is_active", ASCENDING)], name="idx_blog_is_active"),
+            ]
+        )
 
-    def upsert_by_rss_url(self, blog: Blog) -> str:
+    @staticmethod
+    def _from_document(raw: dict) -> Blog:
+        doc = BlogDocument.model_validate(raw)
+        return Blog(
+            id=from_object_id(doc.id),
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+            name=doc.name,
+            url=doc.url,
+            rss_url=doc.rss_url,
+            blog_type=doc.blog_type,
+            is_active=doc.is_active,
+            last_fetched_at=doc.last_fetched_at,
+            last_fetch_error=doc.last_fetch_error,
+        )
+
+    def create(self, blog: Blog) -> str:
         now = datetime.now(timezone.utc)
+        blog.created_at = now
         blog.updated_at = now
 
-        # 도메인 -> Document 변환을 통해 Mongo 스키마를 일관되게 유지한다.
         doc = BlogDocument.from_domain(blog)
-        # BaseDocument.to_mongo_record() 를 통해 Mongo-safe 직렬화를 일관되게 사용한다.
         payload = doc.to_mongo_record()
+        result = self._col.insert_one(payload)
+        return str(result.inserted_id)
 
-        filter_doc = {"rss_url": payload["rss_url"]}
+    def update(self, id_value: str, blog: Blog) -> bool:
+        now = datetime.now(timezone.utc)
+        doc = BlogDocument.from_domain(blog)
+        payload = doc.to_mongo_record()
         update_doc = {
-            "$setOnInsert": {"created_at": payload["created_at"]},
-            "$set": {
-                "updated_at": payload["updated_at"],
-                "name": payload["name"],
-                "url": payload["url"],
-                "rss_url": payload["rss_url"],
-                "blog_type": payload["blog_type"],
-            },
+            "updated_at": now,
+            "name": payload["name"],
+            "url": payload["url"],
+            "rss_url": payload["rss_url"],
+            "blog_type": payload["blog_type"],
+            "is_active": payload.get("is_active", True),
         }
+        result = self._col.update_one(
+            {"_id": to_object_id(id_value)},
+            {"$set": update_doc},
+        )
+        return result.matched_count > 0
 
-        result = self._col.update_one(filter_doc, update_doc, upsert=True)
-        if result.upserted_id is not None:
-            return str(result.upserted_id)
-
-        existing = self._col.find_one(filter_doc, {"_id": 1})
-        if not existing:
-            raise RuntimeError(
-                "upsert_by_rss_url failed: document not found after update"
-            )
-        return str(existing["_id"])
+    def delete_by_id(self, id_value: str) -> bool:
+        result = self._col.delete_one({"_id": to_object_id(id_value)})
+        return result.deleted_count > 0
 
     def get_by_rss_url(self, rss_url: str) -> Blog | None:
         raw = self._col.find_one({"rss_url": rss_url})
         if not raw:
             return None
 
-        doc = BlogDocument.model_validate(raw)
-        return Blog(
-            id=from_object_id(doc.id),
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            name=doc.name,
-            url=doc.url,
-            rss_url=doc.rss_url,
-            blog_type=doc.blog_type,
-        )
+        return self._from_document(raw)
+
+    def get_by_url(self, url: str) -> Blog | None:
+        raw = self._col.find_one({"url": url})
+        if not raw:
+            return None
+
+        return self._from_document(raw)
 
     def find_by_id(self, id_value: str) -> Blog | None:
         raw = self._col.find_one({"_id": to_object_id(id_value)})
         if not raw:
             return None
-        doc = BlogDocument.model_validate(raw)
-        return Blog(
-            id=from_object_id(doc.id),
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            name=doc.name,
-            url=doc.url,
-            rss_url=doc.rss_url,
-            blog_type=doc.blog_type,
-        )
+        return self._from_document(raw)
 
     def list(self, flt: ListBlogsFilter) -> tuple[list[Blog], int]:
         page = flt.page if flt.page > 0 else 1
@@ -94,6 +111,9 @@ class BlogRepository(BlogRepositoryInterface):
         skip = (page - 1) * page_size
 
         filter_doc: dict = {}
+        if not flt.include_inactive:
+            filter_doc["is_active"] = {"$ne": False}
+
         total = self._col.count_documents(filter_doc)
 
         cursor = self._col.find(
@@ -105,17 +125,25 @@ class BlogRepository(BlogRepositoryInterface):
 
         items: list[Blog] = []
         for raw in cursor:
-            doc = BlogDocument.model_validate(raw)
-            items.append(
-                Blog(
-                    id=from_object_id(doc.id),
-                    created_at=doc.created_at,
-                    updated_at=doc.updated_at,
-                    name=doc.name,
-                    url=doc.url,
-                    rss_url=doc.rss_url,
-                    blog_type=doc.blog_type,
-                )
-            )
+            items.append(self._from_document(raw))
 
         return items, total
+
+    def list_active_sources(self) -> list[Blog]:
+        cursor = self._col.find(
+            {"is_active": {"$ne": False}},
+            sort=[("name", 1)],
+        )
+        return [self._from_document(raw) for raw in cursor]
+
+    def update_fetch_result(self, id_value: str, error: str | None) -> None:
+        now = datetime.now(timezone.utc)
+        updates: dict = {
+            "updated_at": now,
+            "last_fetched_at": now,
+            "last_fetch_error": error,
+        }
+        self._col.update_one(
+            {"_id": to_object_id(id_value)},
+            {"$set": updates},
+        )
