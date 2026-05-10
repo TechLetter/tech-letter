@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+BlogType = Literal["company", "creator"]
 
 
 class Blog(BaseModel):
@@ -12,7 +15,11 @@ class Blog(BaseModel):
     name: str
     url: str
     rss_url: str = Field(alias="rss_url")
-    blog_type: str = Field(alias="blog_type")
+    blog_type: BlogType = Field(alias="blog_type")
+    is_active: bool = Field(default=True, alias="is_active")
+    last_fetched_at: datetime | None = Field(default=None, alias="last_fetched_at")
+    last_fetch_error: str | None = Field(default=None, alias="last_fetch_error")
+    post_count: int = Field(default=0, alias="post_count")
 
 
 class ListBlogsFilter(BaseModel):
@@ -20,3 +27,4 @@ class ListBlogsFilter(BaseModel):
 
     page: int = 1
     page_size: int = 20
+    include_inactive: bool = False

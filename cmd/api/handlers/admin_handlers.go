@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/dto"
 	"tech-letter/cmd/api/services"
 
@@ -181,20 +182,111 @@ func AdminListUsersHandler(svc *services.AdminService) gin.HandlerFunc {
 // @Success 200 {object} dto.PaginationBlogDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /api/v1/admin/blogs [get]
-func AdminListBlogsHandler(svc *services.BlogService) gin.HandlerFunc {
+func AdminListBlogsHandler(svc *services.AdminService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-		resp, err := svc.List(c.Request.Context(), services.ListBlogsInput{
-			Page:     page,
-			PageSize: pageSize,
-		})
+		resp, err := svc.ListBlogs(c.Request.Context(), page, pageSize)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary Create blog for admin
+// @Description Create a blog source used by RSS collection
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param body body dto.BlogMutationRequestDTO true "Blog create request"
+// @Success 201 {object} dto.AdminBlogDTO
+// @Failure 400 {object} dto.ErrorResponseDTO
+// @Failure 409 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/blogs [post]
+func AdminCreateBlogHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req dto.BlogMutationRequestDTO
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+
+		resp, err := svc.CreateBlog(c.Request.Context(), req)
+		if err != nil {
+			writeAdminContentError(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, resp)
+	}
+}
+
+// @Summary Update blog for admin
+// @Description Update a blog source used by RSS collection
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param id path string true "Blog ID"
+// @Param body body dto.BlogMutationRequestDTO true "Blog update request"
+// @Success 200 {object} dto.AdminBlogDTO
+// @Failure 400 {object} dto.ErrorResponseDTO
+// @Failure 404 {object} dto.ErrorResponseDTO
+// @Failure 409 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/blogs/{id} [put]
+func AdminUpdateBlogHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req dto.BlogMutationRequestDTO
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+
+		resp, err := svc.UpdateBlog(c.Request.Context(), c.Param("id"), req)
+		if err != nil {
+			writeAdminContentError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary Delete blog for admin
+// @Description Delete a blog source and optionally delete all posts under that blog
+// @Tags admin
+// @Produce json
+// @Param id path string true "Blog ID"
+// @Param delete_posts query bool false "Delete all posts for this blog"
+// @Success 200 {object} dto.DeleteBlogResponseDTO
+// @Failure 404 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/blogs/{id} [delete]
+func AdminDeleteBlogHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		deletePosts, _ := strconv.ParseBool(c.DefaultQuery("delete_posts", "false"))
+
+		resp, err := svc.DeleteBlog(c.Request.Context(), c.Param("id"), deletePosts)
+		if err != nil {
+			writeAdminContentError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+func writeAdminContentError(c *gin.Context, err error) {
+	switch {
+	case contentclient.IsStatus(err, http.StatusBadRequest):
+		c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+	case contentclient.IsStatus(err, http.StatusNotFound):
+		c.JSON(http.StatusNotFound, dto.ErrorResponseDTO{Error: err.Error()})
+	case contentclient.IsStatus(err, http.StatusConflict):
+		c.JSON(http.StatusConflict, dto.ErrorResponseDTO{Error: err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
 	}
 }
 

@@ -65,6 +65,14 @@ class PostRepositoryInterface(Protocol):
     def delete_by_id(self, id_value: str) -> bool:  # pragma: no cover - Protocol
         ...
 
+    def delete_by_blog_id(self, blog_id: str) -> int:  # pragma: no cover - Protocol
+        ...
+
+    def count_by_blog_ids(
+        self, blog_ids: list[str]
+    ) -> dict[str, int]:  # pragma: no cover - Protocol
+        ...
+
 
 class BlogRepositoryInterface(Protocol):
     """BlogRepository가 따라야 할 최소한의 계약."""
@@ -74,7 +82,13 @@ class BlogRepositoryInterface(Protocol):
     ) -> tuple[list[Blog], int]:  # pragma: no cover - Protocol
         ...
 
-    def upsert_by_rss_url(self, blog: Blog) -> str:  # pragma: no cover - Protocol
+    def create(self, blog: Blog) -> str:  # pragma: no cover - Protocol
+        ...
+
+    def update(self, id_value: str, blog: Blog) -> bool:  # pragma: no cover - Protocol
+        ...
+
+    def delete_by_id(self, id_value: str) -> bool:  # pragma: no cover - Protocol
         ...
 
     def get_by_rss_url(
@@ -82,5 +96,16 @@ class BlogRepositoryInterface(Protocol):
     ) -> Blog | None:  # pragma: no cover - Protocol
         ...
 
+    def get_by_url(self, url: str) -> Blog | None:  # pragma: no cover - Protocol
+        ...
+
     def find_by_id(self, id_value: str) -> Blog | None:  # pragma: no cover - Protocol
+        ...
+
+    def list_active_sources(self) -> list[Blog]:  # pragma: no cover - Protocol
+        ...
+
+    def update_fetch_result(
+        self, id_value: str, error: str | None
+    ) -> None:  # pragma: no cover - Protocol
         ...

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from common.models.blog import Blog
-from common.mongo.types import BaseDocument
+from common.models.blog import Blog, BlogType
+from common.mongo.types import BaseDocument, MongoDateTime
 
 
 class BlogDocument(BaseDocument):
@@ -10,7 +10,10 @@ class BlogDocument(BaseDocument):
     name: str
     url: str
     rss_url: str
-    blog_type: str
+    blog_type: BlogType
+    is_active: bool = True
+    last_fetched_at: MongoDateTime | None = None
+    last_fetch_error: str | None = None
 
     @classmethod
     def from_domain(cls, blog: Blog) -> "BlogDocument":

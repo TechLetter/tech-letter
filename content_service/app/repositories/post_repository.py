@@ -255,6 +255,27 @@ class PostRepository(PostRepositoryInterface):
         result = self._col.delete_one({"_id": to_object_id(id_value)})
         return result.deleted_count > 0
 
+    def delete_by_blog_id(self, blog_id: str) -> int:
+        result = self._col.delete_many({"blog_id": to_object_id(blog_id)})
+        return int(result.deleted_count)
+
+    def count_by_blog_ids(self, blog_ids: list[str]) -> dict[str, int]:
+        if not blog_ids:
+            return {}
+
+        object_ids = [to_object_id(blog_id) for blog_id in blog_ids]
+        pipeline = [
+            {"$match": {"blog_id": {"$in": object_ids}}},
+            {"$group": {"_id": "$blog_id", "count": {"$sum": 1}}},
+        ]
+
+        counts: dict[str, int] = {}
+        for doc in self._col.aggregate(pipeline):
+            blog_id = from_object_id(doc["_id"])
+            if blog_id is not None:
+                counts[blog_id] = int(doc["count"])
+        return counts
+
     def get_category_stats(
         self, blog_id: str | None, tags: list[str]
     ) -> dict[str, int]:

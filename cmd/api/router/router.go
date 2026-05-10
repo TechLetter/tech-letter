@@ -91,8 +91,10 @@ func New() *gin.Engine {
 		admin := api.Group("/admin")
 		admin.Use(middleware.AdminAuthMiddleware(authSvc))
 		{
-			// TODO: Implement Admin Handlers
-			admin.GET("/blogs", handlers.AdminListBlogsHandler(blogsSvc))
+			admin.GET("/blogs", handlers.AdminListBlogsHandler(adminSvc))
+			admin.POST("/blogs", handlers.AdminCreateBlogHandler(adminSvc))
+			admin.PUT("/blogs/:id", handlers.AdminUpdateBlogHandler(adminSvc))
+			admin.DELETE("/blogs/:id", handlers.AdminDeleteBlogHandler(adminSvc))
 			admin.GET("/posts", handlers.AdminListPostsHandler(adminSvc))
 			admin.POST("/posts", handlers.AdminCreatePostHandler(adminSvc))
 			admin.DELETE("/posts/:id", handlers.AdminDeletePostHandler(adminSvc))

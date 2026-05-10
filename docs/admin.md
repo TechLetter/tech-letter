@@ -157,17 +157,61 @@
 - **Query Parameters**:
   - `page`: 페이지 번호
   - `page_size`: 페이지 크기
-- **Response**: `dto.Pagination[dto.BlogDTO]`
+- **Response**: `dto.Pagination[dto.AdminBlogDTO]`
   ```json
   {
     "total": 5,
-    "items": [
+    "data": [
       {
         "id": "...",
         "name": "Tech Blog",
-        "url": "https://blog.example.com"
+        "url": "https://blog.example.com",
+        "rss_url": "https://blog.example.com/feed.xml",
+        "blog_type": "company",
+        "is_active": true,
+        "last_fetched_at": "2026-05-09T01:00:00Z",
+        "last_fetch_error": null,
+        "post_count": 42
       }
     ]
+  }
+  ```
+
+#### 5.2.2. 블로그 생성
+
+- **Method**: `POST /api/v1/admin/blogs`
+- **Request Body**:
+  ```json
+  {
+    "name": "Tech Blog",
+    "url": "https://blog.example.com",
+    "rss_url": "https://blog.example.com/feed.xml",
+    "blog_type": "company",
+    "is_active": true
+  }
+  ```
+- **`blog_type`**: `company` 또는 `creator`
+- **중복 검증**:
+  - `rss_url` 중복 시 `409 Conflict`
+  - `url` 중복 시 `409 Conflict`
+
+#### 5.2.3. 블로그 수정
+
+- **Method**: `PUT /api/v1/admin/blogs/:id`
+- **Request Body**: 블로그 생성과 동일
+- **중복 검증**:
+  - 자기 자신을 제외하고 `rss_url`, `url` 중복 시 `409 Conflict`
+
+#### 5.2.4. 블로그 삭제
+
+- **Method**: `DELETE /api/v1/admin/blogs/:id`
+- **Query Parameters**:
+  - `delete_posts`: `true`이면 해당 블로그의 모든 포스트도 함께 삭제
+- **Response**:
+  ```json
+  {
+    "message": "blog deleted successfully",
+    "deleted_posts": 0
   }
   ```
 

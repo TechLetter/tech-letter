@@ -66,6 +66,30 @@ func (c *Client) GetPostsBatch(ctx context.Context, ids []string) (ListPostsResp
 
 var ErrNotFound = errors.New("resource not found")
 
+type HTTPError struct {
+	Operation  string
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("%s: status=%d body=%s", e.Operation, e.StatusCode, e.Body)
+}
+
+func IsStatus(err error, statusCode int) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == statusCode
+}
+
+func newHTTPError(operation string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	return &HTTPError{
+		Operation:  operation,
+		StatusCode: resp.StatusCode,
+		Body:       string(body),
+	}
+}
+
 func New() *Client {
 	base := os.Getenv("CONTENT_SERVICE_BASE_URL")
 	if base == "" {
@@ -218,8 +242,9 @@ func (c *Client) GetPost(ctx context.Context, id string) (PostItem, error) {
 // -------------------- Blogs --------------------
 
 type ListBlogsParams struct {
-	Page     int
-	PageSize int
+	Page            int
+	PageSize        int
+	IncludeInactive bool
 }
 
 type ListBlogsResponse struct {
@@ -230,9 +255,17 @@ type ListBlogsResponse struct {
 }
 
 type BlogItem struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	ID             string     `json:"id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	Name           string     `json:"name"`
+	URL            string     `json:"url"`
+	RSSURL         string     `json:"rss_url"`
+	BlogType       string     `json:"blog_type"`
+	IsActive       bool       `json:"is_active"`
+	LastFetchedAt  *time.Time `json:"last_fetched_at"`
+	LastFetchError *string    `json:"last_fetch_error"`
+	PostCount      int        `json:"post_count"`
 }
 
 func (c *Client) ListBlogs(ctx context.Context, params ListBlogsParams) (ListBlogsResponse, error) {
@@ -242,6 +275,9 @@ func (c *Client) ListBlogs(ctx context.Context, params ListBlogsParams) (ListBlo
 	}
 	if params.PageSize > 0 {
 		q.Set("page_size", strconv.Itoa(params.PageSize))
+	}
+	if params.IncludeInactive {
+		q.Set("include_inactive", "true")
 	}
 	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/blogs", q, nil)
 	if err != nil {
@@ -262,6 +298,105 @@ func (c *Client) ListBlogs(ctx context.Context, params ListBlogsParams) (ListBlo
 	var out ListBlogsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return ListBlogsResponse{}, err
+	}
+	return out, nil
+}
+
+type BlogMutationRequest struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	RSSURL   string `json:"rss_url"`
+	BlogType string `json:"blog_type"`
+	IsActive bool   `json:"is_active"`
+}
+
+type DeleteBlogResponse struct {
+	OK           bool `json:"ok"`
+	DeletedPosts int  `json:"deleted_posts"`
+}
+
+func (c *Client) CreateBlog(ctx context.Context, body BlogMutationRequest) (BlogItem, error) {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return BlogItem{}, err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/blogs", nil, bytes.NewReader(buf))
+	if err != nil {
+		return BlogItem{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return BlogItem{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return BlogItem{}, newHTTPError("content-service CreateBlog", resp)
+	}
+
+	var out BlogItem
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return BlogItem{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) UpdateBlog(ctx context.Context, id string, body BlogMutationRequest) (BlogItem, error) {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return BlogItem{}, err
+	}
+
+	relPath := path.Join("/api/v1/blogs", id)
+	req, err := c.base.NewRequest(ctx, http.MethodPut, relPath, nil, bytes.NewReader(buf))
+	if err != nil {
+		return BlogItem{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return BlogItem{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return BlogItem{}, newHTTPError("content-service UpdateBlog", resp)
+	}
+
+	var out BlogItem
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return BlogItem{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) DeleteBlog(ctx context.Context, id string, deletePosts bool) (DeleteBlogResponse, error) {
+	q := url.Values{}
+	q.Set("delete_posts", strconv.FormatBool(deletePosts))
+
+	relPath := path.Join("/api/v1/blogs", id)
+	req, err := c.base.NewRequest(ctx, http.MethodDelete, relPath, q, nil)
+	if err != nil {
+		return DeleteBlogResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return DeleteBlogResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return DeleteBlogResponse{}, newHTTPError("content-service DeleteBlog", resp)
+	}
+
+	var out DeleteBlogResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return DeleteBlogResponse{}, err
 	}
 	return out, nil
 }
