@@ -308,14 +308,12 @@ class VectorStore:
         try:
             collections = self._client.get_collections().collections
         except Exception as list_error:
-            logger.warning(
-                "failed to list qdrant collections; skipping delete. post_id=%s error=%s",
-                post_id,
-                list_error,
-            )
-            return
+            raise RuntimeError(
+                f"failed to list qdrant collections for post_id={post_id}"
+            ) from list_error
 
         target_collections = [c.name for c in collections if c.name.startswith(prefix)]
+        failed_collections: list[str] = []
 
         for collection_name in target_collections:
             try:
@@ -337,6 +335,13 @@ class VectorStore:
                     collection_name,
                     delete_error,
                 )
+                failed_collections.append(collection_name)
+
+        if failed_collections:
+            raise RuntimeError(
+                "failed to delete post embeddings from qdrant collections: "
+                + ", ".join(failed_collections)
+            )
 
         logger.info(
             "deleted chunks for post_id=%s collections=%d",

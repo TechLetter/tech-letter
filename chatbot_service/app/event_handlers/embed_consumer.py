@@ -14,6 +14,7 @@ from common.events.post import (
     EventType,
     PostEmbedResponseEvent,
     PostEmbeddingAppliedEvent,
+    PostEmbeddingDeleteRequestedEvent,
 )
 
 from ..vector_store import VectorStore
@@ -29,6 +30,10 @@ def _handle_event(evt: Event, *, vector_store: VectorStore, bus: KafkaEventBus) 
         return
 
     event_type = str(payload.get("type", ""))
+    if event_type == EventType.POST_EMBEDDING_DELETE_REQUESTED:
+        _handle_embedding_delete_requested(payload, vector_store=vector_store)
+        return
+
     if event_type != EventType.POST_EMBEDDING_RESPONSE:
         # 다른 타입의 이벤트는 이 핸들러의 책임이 아니므로 무시한다.
         logger.debug(
@@ -36,9 +41,15 @@ def _handle_event(evt: Event, *, vector_store: VectorStore, bus: KafkaEventBus) 
         )
         return
 
+    _handle_embedding_response(payload, vector_store=vector_store, bus=bus)
+
+
+def _handle_embedding_response(
+    payload: dict, *, vector_store: VectorStore, bus: KafkaEventBus
+) -> None:
     logger.info(
         "received PostEmbedResponseEvent id=%s post_id=%s",
-        evt.id,
+        payload.get("id"),
         payload.get("post_id"),
     )
 
@@ -85,6 +96,35 @@ def _handle_event(evt: Event, *, vector_store: VectorStore, bus: KafkaEventBus) 
         logger.exception(
             "failed to upsert embeddings for post_id=%s",
             embed_response.post_id,
+        )
+        raise
+
+
+def _handle_embedding_delete_requested(
+    payload: dict, *, vector_store: VectorStore
+) -> None:
+    logger.info(
+        "received PostEmbeddingDeleteRequestedEvent id=%s post_id=%s",
+        payload.get("id"),
+        payload.get("post_id"),
+    )
+
+    try:
+        delete_request = PostEmbeddingDeleteRequestedEvent.from_dict(payload)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "failed to decode PostEmbeddingDeleteRequestedEvent id=%s payload=%r",
+            payload.get("id"),
+            payload,
+        )
+        raise
+
+    try:
+        vector_store.delete_by_post_id(delete_request.post_id)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "failed to delete embeddings for post_id=%s",
+            delete_request.post_id,
         )
         raise
 
