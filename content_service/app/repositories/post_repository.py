@@ -259,6 +259,14 @@ class PostRepository(PostRepositoryInterface):
         result = self._col.delete_many({"blog_id": to_object_id(blog_id)})
         return int(result.deleted_count)
 
+    def list_ids_by_blog_id(self, blog_id: str) -> list[str]:
+        cursor = self._col.find({"blog_id": to_object_id(blog_id)}, {"_id": 1})
+        return [
+            id_value
+            for doc in cursor
+            if (id_value := from_object_id(doc.get("_id"))) is not None
+        ]
+
     def count_by_blog_ids(self, blog_ids: list[str]) -> dict[str, int]:
         if not blog_ids:
             return {}

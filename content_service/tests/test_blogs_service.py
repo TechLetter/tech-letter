@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.events.post import EventType
 from common.models.blog import Blog, ListBlogsFilter
 from content_service.app.services.blogs_service import (
     BlogNotFoundError,
@@ -77,10 +79,14 @@ class FakePostRepository:
     def __init__(self) -> None:
         self.deleted_blog_ids: list[str] = []
         self.counts_by_blog_id: dict[str, int] = {}
+        self.ids_by_blog_id: dict[str, list[str]] = {}
 
     def delete_by_blog_id(self, blog_id: str) -> int:
         self.deleted_blog_ids.append(blog_id)
         return 3
+
+    def list_ids_by_blog_id(self, blog_id: str) -> list[str]:
+        return self.ids_by_blog_id.get(blog_id, [])
 
     def count_by_blog_ids(self, blog_ids: list[str]) -> dict[str, int]:
         return {
@@ -89,13 +95,33 @@ class FakePostRepository:
         }
 
 
+class FakeEventBus:
+    def __init__(self) -> None:
+        self.published: list[tuple[str, object]] = []
+
+    def publish(self, topic: str, event: object) -> None:
+        self.published.append((topic, event))
+
+
+def _service(
+    blog_repo: FakeBlogRepository | None = None,
+    post_repo: FakePostRepository | None = None,
+    event_bus: FakeEventBus | None = None,
+) -> BlogsService:
+    return BlogsService(
+        blog_repo or FakeBlogRepository(),
+        post_repo or FakePostRepository(),
+        event_bus or FakeEventBus(),
+    )
+
+
 def test_list_blogs_includes_post_count() -> None:
     blog_repo = FakeBlogRepository()
     post_repo = FakePostRepository()
     blog_repo.items["1"] = _blog("1", name="One")
     blog_repo.items["2"] = _blog("2", name="Two")
     post_repo.counts_by_blog_id = {"1": 7}
-    service = BlogsService(blog_repo, post_repo)
+    service = _service(blog_repo, post_repo)
 
     blogs, total = service.list_blogs(ListBlogsFilter())
 
@@ -106,7 +132,7 @@ def test_list_blogs_includes_post_count() -> None:
 def test_create_blog_rejects_duplicate_rss_url() -> None:
     blog_repo = FakeBlogRepository()
     blog_repo.items["existing"] = _blog("existing")
-    service = BlogsService(blog_repo, FakePostRepository())
+    service = _service(blog_repo)
 
     with pytest.raises(DuplicateBlogError, match="rss_url already exists"):
         service.create_blog(
@@ -124,7 +150,7 @@ def test_create_blog_rejects_duplicate_rss_url_with_trailing_slash_variant() -> 
         "existing",
         rss_url="https://example.com/feed.xml/",
     )
-    service = BlogsService(blog_repo, FakePostRepository())
+    service = _service(blog_repo)
 
     with pytest.raises(DuplicateBlogError, match="rss_url already exists"):
         service.create_blog(
@@ -137,7 +163,7 @@ def test_create_blog_rejects_duplicate_rss_url_with_trailing_slash_variant() -> 
 
 
 def test_create_blog_rejects_invalid_blog_type() -> None:
-    service = BlogsService(FakeBlogRepository(), FakePostRepository())
+    service = _service()
 
     with pytest.raises(InvalidBlogTypeError, match="blog_type must be one of"):
         service.create_blog(
@@ -153,7 +179,7 @@ def test_update_blog_allows_own_urls_but_rejects_other_blog_url() -> None:
     blog_repo = FakeBlogRepository()
     blog_repo.items["1"] = _blog("1", url="https://one.example.com", rss_url="https://one.example.com/feed.xml")
     blog_repo.items["2"] = _blog("2", url="https://two.example.com", rss_url="https://two.example.com/feed.xml")
-    service = BlogsService(blog_repo, FakePostRepository())
+    service = _service(blog_repo)
 
     updated = service.update_blog(
         "1",
@@ -182,24 +208,39 @@ def test_update_blog_allows_own_urls_but_rejects_other_blog_url() -> None:
 def test_delete_blog_deletes_posts_only_when_requested() -> None:
     blog_repo = FakeBlogRepository()
     post_repo = FakePostRepository()
+    event_bus = FakeEventBus()
     blog_repo.items["1"] = _blog("1")
-    service = BlogsService(blog_repo, post_repo)
+    service = _service(blog_repo, post_repo, event_bus)
 
     deleted_posts = service.delete_blog("1", delete_posts=False)
 
     assert deleted_posts == 0
     assert post_repo.deleted_blog_ids == []
+    assert event_bus.published == []
     assert blog_repo.find_by_id("1") is None
 
     blog_repo.items["2"] = _blog("2")
+    post_repo.ids_by_blog_id["2"] = ["post-1", "post-2"]
     deleted_posts = service.delete_blog("2", delete_posts=True)
 
     assert deleted_posts == 3
     assert post_repo.deleted_blog_ids == ["2"]
+    assert [topic for topic, _ in event_bus.published] == [
+        TOPIC_POST_EMBEDDING.base,
+        TOPIC_POST_EMBEDDING.base,
+    ]
+    assert [event.payload["type"] for _, event in event_bus.published] == [
+        EventType.POST_EMBEDDING_DELETE_REQUESTED,
+        EventType.POST_EMBEDDING_DELETE_REQUESTED,
+    ]
+    assert [event.payload["post_id"] for _, event in event_bus.published] == [
+        "post-1",
+        "post-2",
+    ]
 
 
 def test_delete_blog_raises_when_blog_does_not_exist() -> None:
-    service = BlogsService(FakeBlogRepository(), FakePostRepository())
+    service = _service()
 
     with pytest.raises(BlogNotFoundError):
         service.delete_blog("missing", delete_posts=True)

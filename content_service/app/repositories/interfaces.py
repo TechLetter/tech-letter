@@ -68,6 +68,11 @@ class PostRepositoryInterface(Protocol):
     def delete_by_blog_id(self, blog_id: str) -> int:  # pragma: no cover - Protocol
         ...
 
+    def list_ids_by_blog_id(
+        self, blog_id: str
+    ) -> list[str]:  # pragma: no cover - Protocol
+        ...
+
     def count_by_blog_ids(
         self, blog_ids: list[str]
     ) -> dict[str, int]:  # pragma: no cover - Protocol

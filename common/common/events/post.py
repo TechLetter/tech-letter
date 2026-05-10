@@ -10,6 +10,7 @@ class EventType:
     POST_EMBEDDING_REQUESTED = "post.embedding_requested"
     POST_EMBEDDING_RESPONSE = "post.embedding_response"
     POST_EMBEDDING_APPLIED = "post.embedding_applied"
+    POST_EMBEDDING_DELETE_REQUESTED = "post.embedding_delete_requested"
 
 
 @dataclass(slots=True)
@@ -206,4 +207,27 @@ class PostEmbeddingAppliedEvent:
             collection_name=str(data.get("collection_name", "")),
             vector_dimension=int(data.get("vector_dimension", 0)),
             chunk_count=int(data["chunk_count"]),
+        )
+
+
+@dataclass(slots=True)
+class PostEmbeddingDeleteRequestedEvent:
+    """포스트 삭제 후 Vector DB 청크 삭제를 요청하는 이벤트."""
+
+    id: str
+    type: str
+    timestamp: str
+    source: str
+    version: str
+    post_id: str
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+        return cls(
+            id=str(data["id"]),
+            type=str(data["type"]),
+            timestamp=str(data["timestamp"]),
+            source=str(data["source"]),
+            version=str(data.get("version", "1.0")),
+            post_id=str(data["post_id"]),
         )

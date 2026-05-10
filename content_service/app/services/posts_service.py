@@ -25,6 +25,7 @@ from ..repositories.interfaces import (
 )
 from ..repositories.blog_repository import BlogRepository
 from ..repositories.post_repository import PostRepository
+from .post_embedding_events import publish_post_embedding_delete_requested
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,10 @@ class PostsService:
         return post
 
     def delete_post(self, post_id: str) -> bool:
-        return self._post_repo.delete_by_id(post_id)
+        deleted = self._post_repo.delete_by_id(post_id)
+        if deleted:
+            publish_post_embedding_delete_requested(self._event_bus, post_id=post_id)
+        return deleted
 
     def trigger_summary(self, post_id: str) -> bool:
         post = self._post_repo.find_by_id(post_id)

@@ -7,12 +7,14 @@ from fastapi import Depends
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
+from common.eventbus.kafka import KafkaEventBus, get_kafka_event_bus
 from common.mongo.client import get_database
 from common.models.blog import Blog, BlogType, ListBlogsFilter
 from ..repositories.blog_repository import BlogRepository
 from ..repositories.interfaces import BlogRepositoryInterface
 from ..repositories.interfaces import PostRepositoryInterface
 from ..repositories.post_repository import PostRepository
+from .post_embedding_events import publish_post_embedding_delete_requested
 
 
 class BlogNotFoundError(ValueError):
@@ -53,9 +55,11 @@ class BlogsService:
         self,
         blog_repo: BlogRepositoryInterface,
         post_repo: PostRepositoryInterface,
+        event_bus: KafkaEventBus,
     ) -> None:
         self._blog_repo = blog_repo
         self._post_repo = post_repo
+        self._event_bus = event_bus
 
     def list_blogs(self, filter_: ListBlogsFilter) -> tuple[list[Blog], int]:
         blogs, total = self._blog_repo.list(filter_)
@@ -149,12 +153,21 @@ class BlogsService:
             raise BlogNotFoundError(f"blog not found: {blog_id}")
 
         deleted_posts = 0
+        deleted_post_ids: list[str] = []
         if delete_posts:
+            deleted_post_ids = self._post_repo.list_ids_by_blog_id(blog_id)
             deleted_posts = self._post_repo.delete_by_blog_id(blog_id)
 
         ok = self._blog_repo.delete_by_id(blog_id)
         if not ok:
             raise BlogNotFoundError(f"blog not found: {blog_id}")
+
+        if delete_posts:
+            for post_id in deleted_post_ids:
+                publish_post_embedding_delete_requested(
+                    self._event_bus,
+                    post_id=post_id,
+                )
         return deleted_posts
 
     def _ensure_unique(
@@ -198,7 +211,8 @@ def get_blog_repository(
 def get_blogs_service(
     repo: BlogRepository = Depends(get_blog_repository),
     db: Database = Depends(get_database),
+    event_bus: KafkaEventBus = Depends(get_kafka_event_bus),
 ) -> BlogsService:
     """FastAPI DI용 BlogsService 팩토리."""
 
-    return BlogsService(repo, PostRepository(db))
+    return BlogsService(repo, PostRepository(db), event_bus)
