@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 
 	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/clients/userclient"
@@ -136,10 +137,88 @@ func (s *AdminService) GrantCredit(ctx context.Context, userCode string, req *dt
 
 // -------------------- Blogs --------------------
 
-// ListBlogs retrieves a paginated list of blogs via content-service.
-// Although generic logic handles this, we can wrap it here if admin needs specific logic in future.
-// For now, handlers can use BlogService directly, or we can mirror it here.
-// Given the plan says "Update handlers to use AdminService", we should likely stick to
-// moving ONLY explicitly admin things. Blog listing is used by public too?
-// Actually ListBlogs in services is currently only in BlogService.
-// Let's stick strictly to what was in PostService/AuthService for Admin.
+func (s *AdminService) ListBlogs(ctx context.Context, page, pageSize int) (dto.Pagination[dto.AdminBlogDTO], error) {
+	resp, err := s.contentClient.ListBlogs(ctx, contentclient.ListBlogsParams{
+		Page:            page,
+		PageSize:        pageSize,
+		IncludeInactive: true,
+	})
+	if err != nil {
+		return dto.Pagination[dto.AdminBlogDTO]{}, err
+	}
+
+	out := make([]dto.AdminBlogDTO, 0, len(resp.Items))
+	for _, b := range resp.Items {
+		out = append(out, mapAdminBlogFromContentService(b))
+	}
+
+	return dto.Pagination[dto.AdminBlogDTO]{
+		Data:     out,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    int64(resp.Total),
+	}, nil
+}
+
+func (s *AdminService) CreateBlog(ctx context.Context, req dto.BlogMutationRequestDTO) (dto.AdminBlogDTO, error) {
+	blog, err := s.contentClient.CreateBlog(ctx, toContentBlogMutationRequest(req))
+	if err != nil {
+		return dto.AdminBlogDTO{}, err
+	}
+	return mapAdminBlogFromContentService(blog), nil
+}
+
+func (s *AdminService) UpdateBlog(ctx context.Context, id string, req dto.BlogMutationRequestDTO) (dto.AdminBlogDTO, error) {
+	blog, err := s.contentClient.UpdateBlog(ctx, id, toContentBlogMutationRequest(req))
+	if err != nil {
+		return dto.AdminBlogDTO{}, err
+	}
+	return mapAdminBlogFromContentService(blog), nil
+}
+
+func (s *AdminService) DeleteBlog(ctx context.Context, id string, deletePosts bool) (dto.DeleteBlogResponseDTO, error) {
+	resp, err := s.contentClient.DeleteBlog(ctx, id, deletePosts)
+	if err != nil {
+		return dto.DeleteBlogResponseDTO{}, err
+	}
+
+	message := "blog deleted successfully"
+	if deletePosts {
+		message = "blog and posts deleted successfully"
+	}
+
+	return dto.DeleteBlogResponseDTO{
+		Message:      message,
+		DeletedPosts: resp.DeletedPosts,
+	}, nil
+}
+
+func toContentBlogMutationRequest(req dto.BlogMutationRequestDTO) contentclient.BlogMutationRequest {
+	blogType := strings.TrimSpace(req.BlogType)
+	if blogType == "" {
+		blogType = "company"
+	}
+	return contentclient.BlogMutationRequest{
+		Name:     strings.TrimSpace(req.Name),
+		URL:      strings.TrimSpace(req.URL),
+		RSSURL:   strings.TrimSpace(req.RSSURL),
+		BlogType: blogType,
+		IsActive: req.IsActive,
+	}
+}
+
+func mapAdminBlogFromContentService(b contentclient.BlogItem) dto.AdminBlogDTO {
+	return dto.AdminBlogDTO{
+		ID:             b.ID,
+		CreatedAt:      b.CreatedAt,
+		UpdatedAt:      b.UpdatedAt,
+		Name:           b.Name,
+		URL:            b.URL,
+		RSSURL:         b.RSSURL,
+		BlogType:       b.BlogType,
+		IsActive:       b.IsActive,
+		LastFetchedAt:  b.LastFetchedAt,
+		LastFetchError: b.LastFetchError,
+		PostCount:      b.PostCount,
+	}
+}
