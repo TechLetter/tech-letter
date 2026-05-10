@@ -25,13 +25,20 @@ class FakeVectorStore:
             vector_dimension=3,
         )
         self.raise_error: Exception | None = None
+        self.raise_delete_error: Exception | None = None
         self.received_events: list[PostEmbedResponseEvent] = []
+        self.deleted_post_ids: list[str] = []
 
     def upsert_post_embeddings(self, event: PostEmbedResponseEvent) -> FakeUpsertResult:
         if self.raise_error is not None:
             raise self.raise_error
         self.received_events.append(event)
         return self.upsert_result
+
+    def delete_by_post_id(self, post_id: str) -> None:
+        if self.raise_delete_error is not None:
+            raise self.raise_delete_error
+        self.deleted_post_ids.append(post_id)
 
 
 class FakeKafkaEventBus:
@@ -129,6 +136,17 @@ def _build_embed_response_payload(*, event_type: str) -> dict:
     }
 
 
+def _build_embedding_delete_requested_payload() -> dict:
+    return {
+        "id": "embedding-delete-1",
+        "type": EventType.POST_EMBEDDING_DELETE_REQUESTED,
+        "timestamp": "2026-02-16T00:00:00Z",
+        "source": "content-service",
+        "version": "1.0",
+        "post_id": "post-1",
+    }
+
+
 def test_run_embed_consumer_ignores_payload_that_is_not_dict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -178,6 +196,17 @@ def test_run_embed_consumer_publishes_applied_event_when_upsert_succeeds(
     assert bus.closed is True
 
 
+def test_run_embed_consumer_deletes_embeddings_when_delete_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = Event(id="evt-delete-1", payload=_build_embedding_delete_requested_payload())
+    vector_store, bus, _ = _run_consumer_once(monkeypatch, event=event)
+
+    assert vector_store.deleted_post_ids == ["post-1"]
+    assert vector_store.received_events == []
+    assert bus.published == []
+
+
 def test_run_embed_consumer_raises_when_payload_schema_is_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -205,6 +234,21 @@ def test_run_embed_consumer_raises_when_upsert_fails(
     _patch_consumer_dependencies(monkeypatch, event=event)
 
     with pytest.raises(RuntimeError, match="upsert failed"):
+        embed_consumer.run_embed_consumer([False], vector_store)
+
+    assert len(FakeKafkaEventBus.instances) == 1
+    assert FakeKafkaEventBus.instances[0].closed is True
+
+
+def test_run_embed_consumer_raises_when_delete_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = Event(id="evt-delete-2", payload=_build_embedding_delete_requested_payload())
+    vector_store = FakeVectorStore()
+    vector_store.raise_delete_error = RuntimeError("delete failed")
+    _patch_consumer_dependencies(monkeypatch, event=event)
+
+    with pytest.raises(RuntimeError, match="delete failed"):
         embed_consumer.run_embed_consumer([False], vector_store)
 
     assert len(FakeKafkaEventBus.instances) == 1
