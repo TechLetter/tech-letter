@@ -6,7 +6,10 @@ import pytest
 
 from chatbot_service.app.event_handlers import embed_consumer
 from common.eventbus.core import Event
-from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.eventbus.topics import (
+    TOPIC_POST_EMBEDDING,
+    TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
+)
 from common.events.post import EventType, PostEmbedResponseEvent
 
 
@@ -94,12 +97,16 @@ def _run_consumer_once(
     *,
     event: Event,
     vector_store: FakeVectorStore | None = None,
+    topic=None,
 ) -> tuple[FakeVectorStore, FakeKafkaEventBus, list[bool]]:
     local_vector_store = vector_store or FakeVectorStore()
     _patch_consumer_dependencies(monkeypatch, event=event)
 
     stop_flag = [False]
-    embed_consumer.run_embed_consumer(stop_flag, local_vector_store)
+    if topic is None:
+        embed_consumer.run_embed_consumer(stop_flag, local_vector_store)
+    else:
+        embed_consumer.run_embed_consumer(stop_flag, local_vector_store, topic)
 
     assert len(FakeKafkaEventBus.instances) == 1
     bus = FakeKafkaEventBus.instances[0]
@@ -200,11 +207,19 @@ def test_run_embed_consumer_deletes_embeddings_when_delete_requested(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event = Event(id="evt-delete-1", payload=_build_embedding_delete_requested_payload())
-    vector_store, bus, _ = _run_consumer_once(monkeypatch, event=event)
+    vector_store, bus, _ = _run_consumer_once(
+        monkeypatch,
+        event=event,
+        topic=TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
+    )
 
     assert vector_store.deleted_post_ids == ["post-1"]
     assert vector_store.received_events == []
     assert bus.published == []
+    assert (
+        bus.subscribe_calls[0]["topic"].base
+        == TOPIC_POST_EMBEDDING_DELETE_REQUESTED.base
+    )
 
 
 def test_run_embed_consumer_raises_when_payload_schema_is_invalid(
@@ -249,7 +264,11 @@ def test_run_embed_consumer_raises_when_delete_fails(
     _patch_consumer_dependencies(monkeypatch, event=event)
 
     with pytest.raises(RuntimeError, match="delete failed"):
-        embed_consumer.run_embed_consumer([False], vector_store)
+        embed_consumer.run_embed_consumer(
+            [False],
+            vector_store,
+            TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
+        )
 
     assert len(FakeKafkaEventBus.instances) == 1
     assert FakeKafkaEventBus.instances[0].closed is True
