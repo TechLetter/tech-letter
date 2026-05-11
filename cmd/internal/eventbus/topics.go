@@ -4,15 +4,17 @@ package eventbus
 // 필요시 환경설정으로 교체할 수 있도록 한 곳에서 관리합니다.
 
 var (
-	TopicPostSummary   = NewTopic("tech-letter.post.summary")
-	TopicPostEmbedding = NewTopic("tech-letter.post.embedding")
-	TopicCredit        = NewTopic("tech-letter.credit")
-	TopicChat          = NewTopic("tech-letter.chat")
+	TopicPostSummary                  = NewTopic("tech-letter.post.summary")
+	TopicPostEmbedding                = NewTopic("tech-letter.post.embedding")
+	TopicPostEmbeddingDeleteRequested = NewTopic("tech-letter.post.embedding_delete_requested")
+	TopicCredit                       = NewTopic("tech-letter.credit")
+	TopicChat                         = NewTopic("tech-letter.chat")
 )
 
 var AllTopics = []Topic{
 	TopicPostSummary,
 	TopicPostEmbedding,
+	TopicPostEmbeddingDeleteRequested,
 	TopicCredit,
 	TopicChat,
 }
