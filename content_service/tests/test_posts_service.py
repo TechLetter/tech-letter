@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.eventbus.topics import TOPIC_POST_EMBEDDING_DELETE_REQUESTED
 from common.events.post import EventType
 from content_service.app.services.posts_service import PostsService
 
@@ -36,7 +36,7 @@ def test_delete_post_publishes_embedding_delete_request_when_deleted() -> None:
     assert deleted is True
     assert len(event_bus.published) == 1
     topic, event = event_bus.published[0]
-    assert topic == TOPIC_POST_EMBEDDING.base
+    assert topic == TOPIC_POST_EMBEDDING_DELETE_REQUESTED.base
     assert event.payload["type"] == EventType.POST_EMBEDDING_DELETE_REQUESTED
     assert event.payload["post_id"] == "post-1"
 

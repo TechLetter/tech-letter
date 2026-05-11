@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.eventbus.topics import TOPIC_POST_EMBEDDING_DELETE_REQUESTED
 from common.events.post import EventType
 from common.models.blog import Blog, ListBlogsFilter
 from content_service.app.services.blogs_service import (
@@ -226,8 +226,8 @@ def test_delete_blog_deletes_posts_only_when_requested() -> None:
     assert deleted_posts == 3
     assert post_repo.deleted_blog_ids == ["2"]
     assert [topic for topic, _ in event_bus.published] == [
-        TOPIC_POST_EMBEDDING.base,
-        TOPIC_POST_EMBEDDING.base,
+        TOPIC_POST_EMBEDDING_DELETE_REQUESTED.base,
+        TOPIC_POST_EMBEDDING_DELETE_REQUESTED.base,
     ]
     assert [event.payload["type"] for _, event in event_bus.published] == [
         EventType.POST_EMBEDDING_DELETE_REQUESTED,
