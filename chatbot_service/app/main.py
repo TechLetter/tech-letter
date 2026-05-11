@@ -13,7 +13,10 @@ from common.middleware.request_trace import RequestTraceMiddleware
 
 from .api.chat import router as chat_router, set_rag_service
 from .config import load_config
-from .event_handlers.embed_consumer import run_embed_consumer
+from .event_handlers.embed_consumer import (
+    run_embed_consumer,
+    run_embedding_delete_consumer,
+)
 from .services.rag_service import RAGService
 from .vector_store import VectorStore
 
@@ -56,8 +59,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         daemon=True,
         name="embed-consumer",
     )
+    delete_consumer_thread = threading.Thread(
+        target=run_embedding_delete_consumer,
+        args=(stop_flag, vector_store),
+        daemon=True,
+        name="embedding-delete-consumer",
+    )
     consumer_thread.start()
-    logger.info("embed consumer thread started")
+    delete_consumer_thread.start()
+    logger.info("embed consumer threads started")
 
     yield
 
@@ -65,6 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("chatbot-service shutting down")
     stop_flag[0] = True
     consumer_thread.join(timeout=5.0)
+    delete_consumer_thread.join(timeout=5.0)
     logger.info("chatbot-service stopped")
 
 

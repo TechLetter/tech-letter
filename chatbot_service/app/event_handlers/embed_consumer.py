@@ -6,10 +6,13 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from common.eventbus.config import get_brokers, get_group_id
-from common.eventbus.core import Event
+from common.eventbus.core import Event, Topic
 from common.eventbus.helpers import new_json_event
 from common.eventbus.kafka import KafkaEventBus
-from common.eventbus.topics import TOPIC_POST_EMBEDDING
+from common.eventbus.topics import (
+    TOPIC_POST_EMBEDDING,
+    TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
+)
 from common.events.post import (
     EventType,
     PostEmbedResponseEvent,
@@ -129,7 +132,11 @@ def _handle_embedding_delete_requested(
         raise
 
 
-def run_embed_consumer(stop_flag: list[bool], vector_store: VectorStore) -> None:
+def run_embed_consumer(
+    stop_flag: list[bool],
+    vector_store: VectorStore,
+    topic: Topic = TOPIC_POST_EMBEDDING,
+) -> None:
     """PostEmbedResponseEvent를 소비하여 Vector DB에 upsert하는 구독 루프를 실행한다."""
 
     logger.info("embed-consumer starting up")
@@ -141,14 +148,25 @@ def run_embed_consumer(stop_flag: list[bool], vector_store: VectorStore) -> None
 
     try:
         logger.info(
-            "subscribing to topic=%s group_id=%s", TOPIC_POST_EMBEDDING.base, group_id
+            "subscribing to topic=%s group_id=%s", topic.base, group_id
         )
         bus.subscribe(
             group_id=group_id,
-            topic=TOPIC_POST_EMBEDDING,
+            topic=topic,
             handler=lambda evt: _handle_event(evt, vector_store=vector_store, bus=bus),
             stop_flag=stop_flag,
         )
     finally:
         bus.close()
         logger.info("embed-consumer stopped")
+
+
+def run_embedding_delete_consumer(
+    stop_flag: list[bool],
+    vector_store: VectorStore,
+) -> None:
+    run_embed_consumer(
+        stop_flag,
+        vector_store,
+        TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
+    )
