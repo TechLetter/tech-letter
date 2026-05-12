@@ -18,7 +18,23 @@ type Client struct {
 }
 
 type ChatRequest struct {
-	Query string `json:"query"`
+	Query     string        `json:"query"`
+	SessionID string        `json:"session_id,omitempty"`
+	Messages  []ChatMessage `json:"messages,omitempty"`
+	Memory    *ChatMemory   `json:"memory,omitempty"`
+}
+
+type ChatMessage struct {
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	CreatedAt time.Time              `json:"created_at"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type ChatMemory struct {
+	Summary             string `json:"summary"`
+	CoveredMessageCount int    `json:"covered_message_count"`
+	Status              string `json:"status"`
 }
 
 type SourceInfo struct {
@@ -29,8 +45,43 @@ type SourceInfo struct {
 }
 
 type ChatResponse struct {
-	Answer  string       `json:"answer"`
-	Sources []SourceInfo `json:"sources"`
+	Answer             string          `json:"answer"`
+	Sources            []SourceInfo    `json:"sources"`
+	Agent              *AgentMetadata  `json:"agent,omitempty"`
+	Guard              *GuardMetadata  `json:"guard,omitempty"`
+	Memory             *MemoryMetadata `json:"memory,omitempty"`
+	SuggestedQuestions []string        `json:"suggested_questions,omitempty"`
+}
+
+type AgentActivity struct {
+	Type   string `json:"type"`
+	Label  string `json:"label"`
+	Status string `json:"status"`
+}
+
+type AgentMetadata struct {
+	Mode       string          `json:"mode"`
+	Intent     string          `json:"intent"`
+	Activities []AgentActivity `json:"activities"`
+}
+
+type GuardMetadata struct {
+	Action    string   `json:"action"`
+	RiskLevel string   `json:"risk_level"`
+	Message   string   `json:"message,omitempty"`
+	Findings  []string `json:"findings,omitempty"`
+}
+
+type MemoryMetadata struct {
+	Used                bool   `json:"used"`
+	Compressed          bool   `json:"compressed"`
+	CompressionFailed   bool   `json:"compression_failed,omitempty"`
+	Strategy            string `json:"strategy"`
+	SummaryMessageCount int    `json:"summary_message_count"`
+	RecentMessageCount  int    `json:"recent_message_count"`
+	HistoryMessageCount int    `json:"history_message_count"`
+	Rewritten           bool   `json:"rewritten"`
+	Status              string `json:"status"`
 }
 
 type HTTPError struct {
@@ -52,8 +103,13 @@ func New() *Client {
 	return &Client{base: httpclient.NewBaseClientWithClient(httpClient, base)}
 }
 
-func (c *Client) Chat(ctx context.Context, query string) (ChatResponse, error) {
-	payload := ChatRequest{Query: query}
+func (c *Client) Chat(ctx context.Context, query, sessionID string, messages []ChatMessage, memory *ChatMemory) (ChatResponse, error) {
+	payload := ChatRequest{
+		Query:     query,
+		SessionID: sessionID,
+		Messages:  messages,
+		Memory:    memory,
+	}
 	buf, err := json.Marshal(payload)
 	if err != nil {
 		return ChatResponse{}, err

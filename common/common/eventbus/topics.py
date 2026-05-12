@@ -10,6 +10,7 @@ TOPIC_POST_EMBEDDING_DELETE_REQUESTED = Topic(
 )
 TOPIC_CREDIT = Topic("tech-letter.credit")
 TOPIC_CHAT = Topic("tech-letter.chat")
+TOPIC_CHAT_CONTEXT_COMPRESSION = Topic("tech-letter.chat.context_compression")
 
 ALL_TOPICS: list[Topic] = [
     TOPIC_POST_SUMMARY,
@@ -17,4 +18,5 @@ ALL_TOPICS: list[Topic] = [
     TOPIC_POST_EMBEDDING_DELETE_REQUESTED,
     TOPIC_CREDIT,
     TOPIC_CHAT,
+    TOPIC_CHAT_CONTEXT_COMPRESSION,
 ]

@@ -4,20 +4,31 @@ import "time"
 
 // ChatMessage represents a single message in a chat session.
 type ChatMessage struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	CreatedAt time.Time              `json:"created_at"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type ChatSessionMemory struct {
+	Summary             string     `json:"summary"`
+	CoveredMessageCount int        `json:"covered_message_count"`
+	Status              string     `json:"status"`
+	RequestedAt         *time.Time `json:"requested_at,omitempty"`
+	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
+	ErrorMessage        *string    `json:"error_message,omitempty"`
 }
 
 // ChatSession represents a chat session.
 // Messages는 nil일 경우 JSON에서 생략됨 (목록 조회 시).
 type ChatSession struct {
-	ID        string        `json:"id"`
-	UserCode  string        `json:"user_code"`
-	Title     string        `json:"title"`
-	Messages  []ChatMessage `json:"messages,omitempty"`
-	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	ID        string             `json:"id"`
+	UserCode  string             `json:"user_code"`
+	Title     string             `json:"title"`
+	Messages  []ChatMessage      `json:"messages,omitempty"`
+	Memory    *ChatSessionMemory `json:"memory,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // CreateSessionResponse is the response from creating a session.
