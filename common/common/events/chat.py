@@ -11,6 +11,7 @@ class ChatEventType:
 
     CHAT_COMPLETED = "chat.completed"
     CHAT_FAILED = "chat.failed"
+    CHAT_CONTEXT_COMPRESSION_REQUESTED = "chat.context_compression.requested"
 
 
 @dataclass(slots=True)
@@ -31,6 +32,7 @@ class ChatCompletedEvent:
     answer: str
     credit_consumed_id: str
     credit_expired_at: str
+    metadata: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
@@ -46,6 +48,7 @@ class ChatCompletedEvent:
             answer=str(data["answer"]),
             credit_consumed_id=str(data["credit_consumed_id"]),
             credit_expired_at=str(data["credit_expired_at"]),
+            metadata=data.get("metadata"),
         )
 
 
@@ -82,4 +85,33 @@ class ChatFailedEvent:
             error_code=str(data["error_code"]),
             credit_consumed_id=str(data["credit_consumed_id"]),
             credit_expired_at=str(data["credit_expired_at"]),
+        )
+
+
+@dataclass(slots=True)
+class ChatContextCompressionRequestedEvent:
+    """채팅 세션 컨텍스트 압축 요청 이벤트."""
+
+    id: str
+    type: str
+    timestamp: str
+    source: str
+    version: str
+    user_code: str
+    session_id: str
+    message_count: int
+    threshold: int
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+        return cls(
+            id=str(data["id"]),
+            type=str(data["type"]),
+            timestamp=str(data["timestamp"]),
+            source=str(data["source"]),
+            version=str(data.get("version", "1.0")),
+            user_code=str(data["user_code"]),
+            session_id=str(data["session_id"]),
+            message_count=int(data.get("message_count", 0)),
+            threshold=int(data.get("threshold", 0)),
         )

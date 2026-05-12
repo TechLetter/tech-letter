@@ -665,13 +665,14 @@ func (c *Client) ConsumeCreditsWithID(ctx context.Context, userCode string, amou
 
 // LogChatRequest는 채팅 로그 요청.
 type LogChatRequest struct {
-	ConsumeID         string   `json:"consume_id"`
-	ConsumedCreditIDs []string `json:"consumed_credit_ids"`
-	Query             string   `json:"query"`
-	Success           bool     `json:"success"`
-	Answer            *string  `json:"answer,omitempty"`
-	ErrorCode         *string  `json:"error_code,omitempty"`
-	SessionID         *string  `json:"session_id,omitempty"`
+	ConsumeID         string                 `json:"consume_id"`
+	ConsumedCreditIDs []string               `json:"consumed_credit_ids"`
+	Query             string                 `json:"query"`
+	Success           bool                   `json:"success"`
+	Answer            *string                `json:"answer,omitempty"`
+	ErrorCode         *string                `json:"error_code,omitempty"`
+	SessionID         *string                `json:"session_id,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // LogChatResponse는 채팅 로그 응답.
@@ -680,13 +681,14 @@ type LogChatResponse struct {
 }
 
 // LogChatCompleted는 POST /api/v1/credits/{user_code}/log-chat 를 호출해 채팅 성공 이벤트를 발행한다.
-func (c *Client) LogChatCompleted(ctx context.Context, userCode, consumeID string, consumedCreditIDs []string, query, answer string, sessionID string) (LogChatResponse, error) {
+func (c *Client) LogChatCompleted(ctx context.Context, userCode, consumeID string, consumedCreditIDs []string, query, answer string, sessionID string, metadata map[string]interface{}) (LogChatResponse, error) {
 	req := LogChatRequest{
 		ConsumeID:         consumeID,
 		ConsumedCreditIDs: consumedCreditIDs,
 		Query:             query,
 		Success:           true,
 		Answer:            &answer,
+		Metadata:          metadata,
 	}
 	if sessionID != "" {
 		req.SessionID = &sessionID

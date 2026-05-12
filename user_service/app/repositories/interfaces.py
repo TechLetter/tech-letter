@@ -219,6 +219,11 @@ class ChatSessionRepositoryInterface(Protocol):
     def update_title(self, session_id: str, title: str) -> "ChatSession | None": ...
 
     @abstractmethod
+    def update_memory(
+        self, session_id: str, user_code: str, memory: "ChatSessionMemory"
+    ) -> "ChatSession | None": ...
+
+    @abstractmethod
     def delete(self, session_id: str, user_code: str) -> bool: ...
 
     @abstractmethod

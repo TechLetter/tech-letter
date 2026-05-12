@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"tech-letter/cmd/api/clients/chatbotclient"
 	"tech-letter/cmd/api/dto"
 	"tech-letter/cmd/api/services"
 )
@@ -49,9 +50,75 @@ func ChatbotChatHandler(
 		}
 
 		c.JSON(http.StatusOK, dto.ChatbotChatResponseDTO{
-			Answer:           result.Answer,
-			ConsumedCredits:  result.ConsumedCredits,
-			RemainingCredits: result.RemainingCredits,
+			Answer:             result.Answer,
+			ConsumedCredits:    result.ConsumedCredits,
+			RemainingCredits:   result.RemainingCredits,
+			Sources:            mapChatbotSources(result.Sources),
+			Agent:              mapChatbotAgent(result.Agent),
+			Guard:              mapChatbotGuard(result.Guard),
+			Memory:             mapChatbotMemory(result.Memory),
+			SuggestedQuestions: result.SuggestedQuestions,
 		})
+	}
+}
+
+func mapChatbotSources(sources []chatbotclient.SourceInfo) []dto.ChatbotSourceInfoDTO {
+	out := make([]dto.ChatbotSourceInfoDTO, 0, len(sources))
+	for _, source := range sources {
+		out = append(out, dto.ChatbotSourceInfoDTO{
+			Title:    source.Title,
+			BlogName: source.BlogName,
+			Link:     source.Link,
+			Score:    source.Score,
+		})
+	}
+	return out
+}
+
+func mapChatbotAgent(agent *chatbotclient.AgentMetadata) *dto.ChatbotAgentMetadataDTO {
+	if agent == nil {
+		return nil
+	}
+	activities := make([]dto.ChatbotAgentActivityDTO, 0, len(agent.Activities))
+	for _, activity := range agent.Activities {
+		activities = append(activities, dto.ChatbotAgentActivityDTO{
+			Type:   activity.Type,
+			Label:  activity.Label,
+			Status: activity.Status,
+		})
+	}
+	return &dto.ChatbotAgentMetadataDTO{
+		Mode:       agent.Mode,
+		Intent:     agent.Intent,
+		Activities: activities,
+	}
+}
+
+func mapChatbotGuard(guard *chatbotclient.GuardMetadata) *dto.ChatbotGuardMetadataDTO {
+	if guard == nil {
+		return nil
+	}
+	return &dto.ChatbotGuardMetadataDTO{
+		Action:    guard.Action,
+		RiskLevel: guard.RiskLevel,
+		Message:   guard.Message,
+		Findings:  guard.Findings,
+	}
+}
+
+func mapChatbotMemory(memory *chatbotclient.MemoryMetadata) *dto.ChatbotMemoryMetadataDTO {
+	if memory == nil {
+		return nil
+	}
+	return &dto.ChatbotMemoryMetadataDTO{
+		Used:                memory.Used,
+		Compressed:          memory.Compressed,
+		CompressionFailed:   memory.CompressionFailed,
+		Strategy:            memory.Strategy,
+		SummaryMessageCount: memory.SummaryMessageCount,
+		RecentMessageCount:  memory.RecentMessageCount,
+		HistoryMessageCount: memory.HistoryMessageCount,
+		Rewritten:           memory.Rewritten,
+		Status:              memory.Status,
 	}
 }
