@@ -5,8 +5,12 @@ from common.mongo.types import to_object_id
 from pymongo import ReturnDocument
 from pymongo.database import Database
 
-from app.models.chat_session import ChatMessage, ChatSession
-from .documents.chat_session_document import ChatMessageDocument, ChatSessionDocument
+from ..models.chat_session import ChatMessage, ChatSession, ChatSessionMemory
+from .documents.chat_session_document import (
+    ChatMessageDocument,
+    ChatSessionDocument,
+    ChatSessionMemoryDocument,
+)
 
 
 class ChatSessionRepository:
@@ -59,6 +63,7 @@ class ChatSessionRepository:
             role=message.role,
             content=message.content,
             created_at=message.created_at,
+            metadata=message.metadata,
         )
 
         updated_doc = self.collection.find_one_and_update(
@@ -87,6 +92,37 @@ class ChatSessionRepository:
         updated_doc = self.collection.find_one_and_update(
             {"_id": to_object_id(session_id)},
             {"$set": {"title": title, "updated_at": datetime.utcnow()}},
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if not updated_doc:
+            return None
+
+        return ChatSessionDocument.model_validate(updated_doc).to_domain()
+
+    def update_memory(
+        self,
+        session_id: str,
+        user_code: str,
+        memory: ChatSessionMemory,
+    ) -> Optional[ChatSession]:
+        """세션 컨텍스트 압축 memory를 업데이트한다."""
+        memory_doc = ChatSessionMemoryDocument(
+            summary=memory.summary,
+            covered_message_count=memory.covered_message_count,
+            status=memory.status,
+            requested_at=memory.requested_at,
+            updated_at=memory.updated_at,
+            error_message=memory.error_message,
+        )
+        updated_doc = self.collection.find_one_and_update(
+            {"_id": to_object_id(session_id), "user_code": user_code},
+            {
+                "$set": {
+                    "memory": memory_doc.model_dump(),
+                    "updated_at": datetime.utcnow(),
+                }
+            },
             return_document=ReturnDocument.AFTER,
         )
 

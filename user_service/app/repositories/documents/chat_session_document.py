@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import Any, List
 
 from common.mongo.types import (
     BaseDocument,
@@ -11,7 +11,12 @@ from common.mongo.types import (
 )
 from pydantic import BaseModel
 
-from ...models.chat_session import ChatMessage, ChatSession, ChatRole
+from ...models.chat_session import (
+    ChatMessage,
+    ChatSession,
+    ChatSessionMemory,
+    ChatRole,
+)
 
 
 class ChatMessageDocument(BaseModel):
@@ -20,6 +25,16 @@ class ChatMessageDocument(BaseModel):
     role: str
     content: str
     created_at: MongoDateTime
+    metadata: dict[str, Any] | None = None
+
+
+class ChatSessionMemoryDocument(BaseModel):
+    summary: str = ""
+    covered_message_count: int = 0
+    status: str = "completed"
+    requested_at: MongoDateTime | None = None
+    updated_at: MongoDateTime | None = None
+    error_message: str | None = None
 
 
 class ChatSessionDocument(BaseDocument):
@@ -28,6 +43,7 @@ class ChatSessionDocument(BaseDocument):
     user_code: str
     title: str
     messages: List[ChatMessageDocument]
+    memory: ChatSessionMemoryDocument | None = None
 
     @classmethod
     def from_domain(cls, session: ChatSession) -> "ChatSessionDocument":
@@ -60,6 +76,7 @@ class ChatSessionDocument(BaseDocument):
                     role=ChatRole(msg.role),
                     content=msg.content,
                     created_at=msg_created_at,
+                    metadata=msg.metadata,
                 )
             )
 
@@ -68,6 +85,18 @@ class ChatSessionDocument(BaseDocument):
             user_code=self.user_code,
             title=self.title,
             messages=domain_messages,
+            memory=(
+                ChatSessionMemory(
+                    summary=self.memory.summary,
+                    covered_message_count=self.memory.covered_message_count,
+                    status=self.memory.status,
+                    requested_at=self.memory.requested_at,
+                    updated_at=self.memory.updated_at,
+                    error_message=self.memory.error_message,
+                )
+                if self.memory
+                else None
+            ),
             created_at=created_at,
             updated_at=updated_at,
         )

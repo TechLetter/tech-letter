@@ -9,6 +9,7 @@ var (
 	TopicPostEmbeddingDeleteRequested = NewTopic("tech-letter.post.embedding_delete_requested")
 	TopicCredit                       = NewTopic("tech-letter.credit")
 	TopicChat                         = NewTopic("tech-letter.chat")
+	TopicChatContextCompression       = NewTopic("tech-letter.chat.context_compression")
 )
 
 var AllTopics = []Topic{
@@ -17,4 +18,5 @@ var AllTopics = []Topic{
 	TopicPostEmbeddingDeleteRequested,
 	TopicCredit,
 	TopicChat,
+	TopicChatContextCompression,
 }

@@ -7,13 +7,19 @@ import (
 
 	"tech-letter/cmd/api/clients/chatbotclient"
 	"tech-letter/cmd/api/clients/userclient"
+	"tech-letter/cmd/api/dto"
 )
 
 // ChatResult는 채팅 요청의 통합 결과를 담는다.
 type ChatResult struct {
-	Answer           string
-	ConsumedCredits  int
-	RemainingCredits int
+	Answer             string
+	ConsumedCredits    int
+	RemainingCredits   int
+	Sources            []chatbotclient.SourceInfo
+	Agent              *chatbotclient.AgentMetadata
+	Guard              *chatbotclient.GuardMetadata
+	Memory             *chatbotclient.MemoryMetadata
+	SuggestedQuestions []string
 }
 
 type ChatbotService struct {
@@ -40,12 +46,24 @@ func NewChatbotService(chatbotClient *chatbotclient.Client, userClient *userclie
 
 // ChatWithCredits는 크레딧 차감, 채팅 요청, 로그 기록을 통합 처리한다.
 func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, sessionID string) (*ChatResult, *ChatbotChatError) {
+	guardResult := EvaluateChatbotPrompt(query)
+	if guardResult.Blocked {
+		statusCode := http.StatusForbidden
+		if guardResult.ErrorCode == "invalid_request" {
+			statusCode = http.StatusBadRequest
+		}
+		return nil, &ChatbotChatError{StatusCode: statusCode, ErrorCode: guardResult.ErrorCode}
+	}
+
+	var session *dto.ChatSession
+
 	// 1. session_id가 제공된 경우 유효성 검증
 	if sessionID != "" {
-		session, err := s.userClient.GetSession(ctx, userCode, sessionID)
-		if err != nil || session == nil {
+		currentSession, err := s.userClient.GetSession(ctx, userCode, sessionID)
+		if err != nil || currentSession == nil {
 			return nil, &ChatbotChatError{StatusCode: http.StatusBadRequest, ErrorCode: "invalid_session_id", Cause: err}
 		}
+		session = currentSession
 	}
 
 	// 2. 크레딧 차감
@@ -58,7 +76,13 @@ func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, s
 	}
 
 	// 3. 채팅 요청
-	resp, chatErr := s.chatbotClient.Chat(ctx, query)
+	resp, chatErr := s.chatbotClient.Chat(
+		ctx,
+		query,
+		sessionID,
+		buildChatbotHistory(session),
+		buildChatbotMemory(session),
+	)
 	if chatErr != nil {
 		var httpErr *chatbotclient.HTTPError
 		normalizedStatus, normalizedErrorCode := http.StatusInternalServerError, "chatbot_failed"
@@ -88,17 +112,25 @@ func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, s
 		query,
 		resp.Answer,
 		sessionID,
+		buildChatMetadata(resp),
 	)
 
 	return &ChatResult{
-		Answer:           resp.Answer,
-		ConsumedCredits:  1,
-		RemainingCredits: creditResp.Remaining,
+		Answer:             resp.Answer,
+		ConsumedCredits:    1,
+		RemainingCredits:   creditResp.Remaining,
+		Sources:            resp.Sources,
+		Agent:              resp.Agent,
+		Guard:              resp.Guard,
+		Memory:             resp.Memory,
+		SuggestedQuestions: resp.SuggestedQuestions,
 	}, nil
 }
 
 func normalizeChatbotStatus(statusCode int) (normalizedStatus int, errorCode string) {
 	switch statusCode {
+	case http.StatusForbidden:
+		return http.StatusForbidden, "policy_blocked"
 	case http.StatusTooManyRequests:
 		return http.StatusTooManyRequests, "rate_limited"
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
@@ -108,4 +140,64 @@ func normalizeChatbotStatus(statusCode int) (normalizedStatus int, errorCode str
 	default:
 		return http.StatusInternalServerError, "chatbot_failed"
 	}
+}
+
+func buildChatbotHistory(session *dto.ChatSession) []chatbotclient.ChatMessage {
+	if session == nil || len(session.Messages) == 0 {
+		return nil
+	}
+
+	const maxHistoryMessages = 60
+	messages := session.Messages
+	if len(messages) > maxHistoryMessages {
+		messages = messages[len(messages)-maxHistoryMessages:]
+	}
+
+	out := make([]chatbotclient.ChatMessage, 0, len(messages))
+	for _, message := range messages {
+		if message.Role != "user" && message.Role != "assistant" {
+			continue
+		}
+		out = append(out, chatbotclient.ChatMessage{
+			Role:      message.Role,
+			Content:   message.Content,
+			CreatedAt: message.CreatedAt,
+			Metadata:  message.Metadata,
+		})
+	}
+	return out
+}
+
+func buildChatbotMemory(session *dto.ChatSession) *chatbotclient.ChatMemory {
+	if session == nil || session.Memory == nil {
+		return nil
+	}
+	return &chatbotclient.ChatMemory{
+		Summary:             session.Memory.Summary,
+		CoveredMessageCount: session.Memory.CoveredMessageCount,
+		Status:              session.Memory.Status,
+	}
+}
+
+func buildChatMetadata(resp chatbotclient.ChatResponse) map[string]interface{} {
+	metadata := map[string]interface{}{}
+	if len(resp.Sources) > 0 {
+		metadata["sources"] = resp.Sources
+	}
+	if resp.Agent != nil {
+		metadata["agent"] = resp.Agent
+	}
+	if resp.Guard != nil {
+		metadata["guard"] = resp.Guard
+	}
+	if resp.Memory != nil {
+		metadata["memory"] = resp.Memory
+	}
+	if len(resp.SuggestedQuestions) > 0 {
+		metadata["suggested_questions"] = resp.SuggestedQuestions
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata
 }

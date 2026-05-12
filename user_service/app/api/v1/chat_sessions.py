@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from common.schemas.pagination import PaginatedResponse
 from app.models.chat_session import ChatSession
@@ -12,6 +13,13 @@ router = APIRouter()
 def get_chat_session_service(db=Depends(get_db)) -> ChatSessionService:
     repo = ChatSessionRepository(db)
     return ChatSessionService(repo)
+
+
+class UpdateSessionMemoryRequest(BaseModel):
+    summary: str = Field(default="", max_length=12000)
+    covered_message_count: int = Field(default=0, ge=0)
+    status: str = Field(default="completed")
+    error_message: str | None = None
 
 
 @router.get("", response_model=PaginatedResponse[ChatSession])
@@ -55,3 +63,23 @@ def delete_session(
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "deleted"}
+
+
+@router.put("/{session_id}/memory", response_model=ChatSession)
+def update_session_memory(
+    session_id: str,
+    body: UpdateSessionMemoryRequest,
+    user_code: str = Query(..., description="유저 코드"),
+    service: ChatSessionService = Depends(get_chat_session_service),
+):
+    session = service.update_memory(
+        session_id=session_id,
+        user_code=user_code,
+        summary=body.summary,
+        covered_message_count=body.covered_message_count,
+        status=body.status,
+        error_message=body.error_message,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
