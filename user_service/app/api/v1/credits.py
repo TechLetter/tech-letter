@@ -118,6 +118,7 @@ class LogChatRequest(BaseModel):
     answer: str | None = None
     error_code: str | None = None
     session_id: str | None = None
+    metadata: dict | None = None
 
 
 class LogChatResponse(BaseModel):
@@ -227,6 +228,7 @@ def log_chat(
             query=req.query,
             answer=req.answer or "",
             session_id=req.session_id,
+            metadata=req.metadata,
         )
     else:
         # 채팅 실패 시 환불 처리 (첫 번째 차감 크레딧에 환불)
@@ -346,6 +348,7 @@ def _publish_chat_completed_event(
     query: str,
     answer: str,
     session_id: str | None = None,
+    metadata: dict | None = None,
 ) -> str:
     """chat.completed 이벤트 발행."""
     event_id = str(uuid.uuid4())
@@ -362,6 +365,7 @@ def _publish_chat_completed_event(
         answer=answer,
         credit_consumed_id=consume_id,
         credit_expired_at="",
+        metadata=metadata,
     )
     wrapped = new_json_event(payload=asdict(event), event_id=event_id)
     bus = get_kafka_event_bus()

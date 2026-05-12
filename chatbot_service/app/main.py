@@ -13,6 +13,9 @@ from common.middleware.request_trace import RequestTraceMiddleware
 
 from .api.chat import router as chat_router, set_rag_service
 from .config import load_config
+from .event_handlers.context_compression_consumer import (
+    run_context_compression_consumer,
+)
 from .event_handlers.embed_consumer import (
     run_embed_consumer,
     run_embedding_delete_consumer,
@@ -65,9 +68,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         daemon=True,
         name="embedding-delete-consumer",
     )
+    context_compression_consumer_thread = threading.Thread(
+        target=run_context_compression_consumer,
+        args=(stop_flag, rag_service),
+        daemon=True,
+        name="context-compression-consumer",
+    )
     consumer_thread.start()
     delete_consumer_thread.start()
-    logger.info("embed consumer threads started")
+    context_compression_consumer_thread.start()
+    logger.info("chatbot consumer threads started")
 
     yield
 
@@ -76,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     stop_flag[0] = True
     consumer_thread.join(timeout=5.0)
     delete_consumer_thread.join(timeout=5.0)
+    context_compression_consumer_thread.join(timeout=5.0)
     logger.info("chatbot-service stopped")
 
 
