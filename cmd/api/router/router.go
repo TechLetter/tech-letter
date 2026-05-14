@@ -80,6 +80,7 @@ func New() *gin.Engine {
 
 		// Chatbot Handlers
 		api.POST("/chatbot/chat", handlers.ChatbotChatHandler(chatbotSvc, authSvc))
+		api.POST("/chatbot/chat/stream", handlers.ChatbotChatStreamHandler(chatbotSvc, authSvc))
 
 		// Chat Session Handlers
 		api.GET("/chatbot/sessions", handlers.ListSessionsHandler(authSvc, userSvc))

@@ -59,6 +59,8 @@ class ListPostsFilter(BaseModel):
     tags: list[str] = Field(default_factory=list)
     blog_id: str | None = None
     blog_name: str | None = None
+    published_from: datetime | None = None
+    published_to: datetime | None = None
 
     # Status Filters
     status_ai_summarized: bool | None = None
