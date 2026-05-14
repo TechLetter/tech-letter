@@ -58,6 +58,166 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "description": "Create a blog source used by RSS collection",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create blog for admin",
+                "parameters": [
+                    {
+                        "description": "Blog create request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.BlogMutationRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminBlogDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/blogs/{id}": {
+            "put": {
+                "description": "Update a blog source used by RSS collection",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update blog for admin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Blog ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Blog update request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.BlogMutationRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminBlogDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete a blog source and optionally delete all posts under that blog",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete blog for admin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Blog ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Delete all posts for this blog",
+                        "name": "delete_posts",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DeleteBlogResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ErrorResponseDTO"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/admin/posts": {
@@ -565,6 +725,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/chatbot/chat/stream": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "챗봇 처리 과정을 SSE로 먼저 전달하고, 최종 답변은 done 이벤트로 전달한다.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "chatbot"
+                ],
+                "summary": "챗봇 질의 스트림",
+                "parameters": [
+                    {
+                        "description": "chat request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChatbotChatRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/chatbot/sessions": {
             "get": {
                 "security": [
@@ -870,6 +1062,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "블로그 이름",
                         "name": "blog_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "발행일 시작 (RFC3339 또는 YYYY-MM-DD)",
+                        "name": "published_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "발행일 종료 (RFC3339 또는 YYYY-MM-DD)",
+                        "name": "published_to",
                         "in": "query"
                     },
                     {
@@ -1232,6 +1436,44 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AdminBlogDTO": {
+            "type": "object",
+            "properties": {
+                "blog_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_fetch_error": {
+                    "type": "string"
+                },
+                "last_fetched_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "post_count": {
+                    "type": "integer"
+                },
+                "rss_url": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AdminPostDTO": {
             "type": "object",
             "properties": {
@@ -1346,6 +1588,35 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.BlogMutationRequestDTO": {
+            "type": "object",
+            "required": [
+                "name",
+                "rss_url",
+                "url"
+            ],
+            "properties": {
+                "blog_type": {
+                    "type": "string",
+                    "enum": [
+                        "company",
+                        "creator"
+                    ]
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rss_url": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CategoryFilterDTO": {
             "type": "object",
             "properties": {
@@ -1366,6 +1637,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "role": {
                     "type": "string"
                 }
@@ -1380,6 +1655,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "memory": {
+                    "$ref": "#/definitions/dto.ChatSessionMemory"
+                },
                 "messages": {
                     "type": "array",
                     "items": {
@@ -1393,6 +1671,60 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ChatSessionMemory": {
+            "type": "object",
+            "properties": {
+                "covered_message_count": {
+                    "type": "integer"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "requested_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ChatbotAgentActivityDTO": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ChatbotAgentMetadataDTO": {
+            "type": "object",
+            "properties": {
+                "activities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ChatbotAgentActivityDTO"
+                    }
+                },
+                "intent": {
+                    "type": "string"
+                },
+                "mode": {
                     "type": "string"
                 }
             }
@@ -1416,14 +1748,98 @@ const docTemplate = `{
         "dto.ChatbotChatResponseDTO": {
             "type": "object",
             "properties": {
+                "agent": {
+                    "$ref": "#/definitions/dto.ChatbotAgentMetadataDTO"
+                },
                 "answer": {
                     "type": "string"
                 },
                 "consumed_credits": {
                     "type": "integer"
                 },
+                "guard": {
+                    "$ref": "#/definitions/dto.ChatbotGuardMetadataDTO"
+                },
+                "memory": {
+                    "$ref": "#/definitions/dto.ChatbotMemoryMetadataDTO"
+                },
                 "remaining_credits": {
                     "type": "integer"
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ChatbotSourceInfoDTO"
+                    }
+                }
+            }
+        },
+        "dto.ChatbotGuardMetadataDTO": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "findings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "risk_level": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ChatbotMemoryMetadataDTO": {
+            "type": "object",
+            "properties": {
+                "compressed": {
+                    "type": "boolean"
+                },
+                "compression_failed": {
+                    "type": "boolean"
+                },
+                "history_message_count": {
+                    "type": "integer"
+                },
+                "recent_message_count": {
+                    "type": "integer"
+                },
+                "rewritten": {
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "strategy": {
+                    "type": "string"
+                },
+                "summary_message_count": {
+                    "type": "integer"
+                },
+                "used": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.ChatbotSourceInfoDTO": {
+            "type": "object",
+            "properties": {
+                "blog_name": {
+                    "type": "string"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "score": {
+                    "type": "number"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -1434,6 +1850,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "post_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.DeleteBlogResponseDTO": {
+            "type": "object",
+            "properties": {
+                "deleted_posts": {
+                    "type": "integer"
+                },
+                "message": {
                     "type": "string"
                 }
             }

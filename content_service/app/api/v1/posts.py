@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -65,6 +66,14 @@ def list_posts(
         default=None,
         description="특정 블로그 이름으로 필터링 (정확 일치, 대소문자 무시)",
     ),
+    published_from: Optional[datetime] = Query(
+        default=None,
+        description="이 시각 이후 발행된 포스트만 조회 (ISO datetime)",
+    ),
+    published_to: Optional[datetime] = Query(
+        default=None,
+        description="이 시각 이전 발행된 포스트만 조회 (ISO datetime)",
+    ),
     status_ai_summarized: Optional[bool] = Query(
         default=None,
         description="AI 요약 완료 여부 필터링",
@@ -82,6 +91,8 @@ def list_posts(
         tags=tags,
         blog_id=blog_id,
         blog_name=blog_name,
+        published_from=published_from,
+        published_to=published_to,
         status_ai_summarized=status_ai_summarized,
         status_embedded=status_embedded,
     )

@@ -21,6 +21,14 @@ type ChatResult struct {
 	Memory           *chatbotclient.MemoryMetadata
 }
 
+type PreparedChat struct {
+	UserCode  string
+	Query     string
+	SessionID string
+	Session   *dto.ChatSession
+	Credit    userclient.ConsumeCreditsResponse
+}
+
 type ChatbotService struct {
 	chatbotClient *chatbotclient.Client
 	userClient    *userclient.Client
@@ -45,6 +53,28 @@ func NewChatbotService(chatbotClient *chatbotclient.Client, userClient *userclie
 
 // ChatWithCredits는 크레딧 차감, 채팅 요청, 로그 기록을 통합 처리한다.
 func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, sessionID string) (*ChatResult, *ChatbotChatError) {
+	prepared, prepareErr := s.PrepareChatWithCredits(ctx, userCode, query, sessionID)
+	if prepareErr != nil {
+		return nil, prepareErr
+	}
+
+	resp, chatErr := s.chatbotClient.Chat(
+		ctx,
+		query,
+		sessionID,
+		buildChatbotHistory(prepared.Session),
+		buildChatbotMemory(prepared.Session),
+	)
+	if chatErr != nil {
+		normalizedStatus, normalizedErrorCode := NormalizeChatbotError(chatErr)
+		s.FailPreparedChat(ctx, prepared, normalizedErrorCode)
+		return nil, &ChatbotChatError{StatusCode: normalizedStatus, ErrorCode: normalizedErrorCode, Cause: chatErr}
+	}
+
+	return s.CompletePreparedChat(ctx, prepared, resp), nil
+}
+
+func (s *ChatbotService) PrepareChatWithCredits(ctx context.Context, userCode, query, sessionID string) (*PreparedChat, *ChatbotChatError) {
 	guardResult := EvaluateChatbotPrompt(query)
 	if guardResult.Blocked {
 		statusCode := http.StatusForbidden
@@ -74,55 +104,71 @@ func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, s
 		return nil, &ChatbotChatError{StatusCode: http.StatusInternalServerError, ErrorCode: "credit_service_error", Cause: err}
 	}
 
-	// 3. 채팅 요청
-	resp, chatErr := s.chatbotClient.Chat(
+	return &PreparedChat{
+		UserCode:  userCode,
+		Query:     query,
+		SessionID: sessionID,
+		Session:   session,
+		Credit:    creditResp,
+	}, nil
+}
+
+func (s *ChatbotService) StreamPreparedChat(
+	ctx context.Context,
+	prepared *PreparedChat,
+	handleEvent func(chatbotclient.StreamEvent) error,
+) error {
+	return s.chatbotClient.StreamChat(
 		ctx,
-		query,
-		sessionID,
-		buildChatbotHistory(session),
-		buildChatbotMemory(session),
+		prepared.Query,
+		prepared.SessionID,
+		buildChatbotHistory(prepared.Session),
+		buildChatbotMemory(prepared.Session),
+		handleEvent,
 	)
-	if chatErr != nil {
-		var httpErr *chatbotclient.HTTPError
-		normalizedStatus, normalizedErrorCode := http.StatusInternalServerError, "chatbot_failed"
-		if errors.As(chatErr, &httpErr) {
-			normalizedStatus, normalizedErrorCode = normalizeChatbotStatus(httpErr.StatusCode)
-		}
+}
 
-		// 채팅 실패 시 환불 + 로그
-		_, _ = s.userClient.LogChatFailed(
-			ctx,
-			userCode,
-			creditResp.ConsumeID,
-			creditResp.ConsumedCreditIDs,
-			query,
-			normalizedErrorCode,
-			sessionID,
-		)
-		return nil, &ChatbotChatError{StatusCode: normalizedStatus, ErrorCode: normalizedErrorCode, Cause: chatErr}
-	}
-
-	// 4. 채팅 성공 시 로그
+func (s *ChatbotService) CompletePreparedChat(ctx context.Context, prepared *PreparedChat, resp chatbotclient.ChatResponse) *ChatResult {
 	_, _ = s.userClient.LogChatCompleted(
 		ctx,
-		userCode,
-		creditResp.ConsumeID,
-		creditResp.ConsumedCreditIDs,
-		query,
+		prepared.UserCode,
+		prepared.Credit.ConsumeID,
+		prepared.Credit.ConsumedCreditIDs,
+		prepared.Query,
 		resp.Answer,
-		sessionID,
+		prepared.SessionID,
 		buildChatMetadata(resp),
 	)
 
 	return &ChatResult{
 		Answer:           resp.Answer,
 		ConsumedCredits:  1,
-		RemainingCredits: creditResp.Remaining,
+		RemainingCredits: prepared.Credit.Remaining,
 		Sources:          resp.Sources,
 		Agent:            resp.Agent,
 		Guard:            resp.Guard,
 		Memory:           resp.Memory,
-	}, nil
+	}
+}
+
+func (s *ChatbotService) FailPreparedChat(ctx context.Context, prepared *PreparedChat, errorCode string) {
+	_, _ = s.userClient.LogChatFailed(
+		ctx,
+		prepared.UserCode,
+		prepared.Credit.ConsumeID,
+		prepared.Credit.ConsumedCreditIDs,
+		prepared.Query,
+		errorCode,
+		prepared.SessionID,
+	)
+}
+
+func NormalizeChatbotError(err error) (normalizedStatus int, errorCode string) {
+	var httpErr *chatbotclient.HTTPError
+	if errors.As(err, &httpErr) {
+		return normalizeChatbotStatus(httpErr.StatusCode)
+	}
+	return http.StatusInternalServerError, "chatbot_failed"
 }
 
 func normalizeChatbotStatus(statusCode int) (normalizedStatus int, errorCode string) {

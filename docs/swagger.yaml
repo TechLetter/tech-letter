@@ -17,6 +17,31 @@ definitions:
           type: string
         type: array
     type: object
+  dto.AdminBlogDTO:
+    properties:
+      blog_type:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      last_fetch_error:
+        type: string
+      last_fetched_at:
+        type: string
+      name:
+        type: string
+      post_count:
+        type: integer
+      rss_url:
+        type: string
+      updated_at:
+        type: string
+      url:
+        type: string
+    type: object
   dto.AdminPostDTO:
     properties:
       aisummary:
@@ -91,6 +116,26 @@ definitions:
       name:
         type: string
     type: object
+  dto.BlogMutationRequestDTO:
+    properties:
+      blog_type:
+        enum:
+        - company
+        - creator
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      rss_url:
+        type: string
+      url:
+        type: string
+    required:
+    - name
+    - rss_url
+    - url
+    type: object
   dto.CategoryFilterDTO:
     properties:
       items:
@@ -104,6 +149,9 @@ definitions:
         type: string
       created_at:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
       role:
         type: string
     type: object
@@ -113,6 +161,8 @@ definitions:
         type: string
       id:
         type: string
+      memory:
+        $ref: '#/definitions/dto.ChatSessionMemory'
       messages:
         items:
           $ref: '#/definitions/dto.ChatMessage'
@@ -122,6 +172,41 @@ definitions:
       updated_at:
         type: string
       user_code:
+        type: string
+    type: object
+  dto.ChatSessionMemory:
+    properties:
+      covered_message_count:
+        type: integer
+      error_message:
+        type: string
+      requested_at:
+        type: string
+      status:
+        type: string
+      summary:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.ChatbotAgentActivityDTO:
+    properties:
+      label:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  dto.ChatbotAgentMetadataDTO:
+    properties:
+      activities:
+        items:
+          $ref: '#/definitions/dto.ChatbotAgentActivityDTO'
+        type: array
+      intent:
+        type: string
+      mode:
         type: string
     type: object
   dto.ChatbotChatRequestDTO:
@@ -138,18 +223,80 @@ definitions:
     type: object
   dto.ChatbotChatResponseDTO:
     properties:
+      agent:
+        $ref: '#/definitions/dto.ChatbotAgentMetadataDTO'
       answer:
         type: string
       consumed_credits:
         type: integer
+      guard:
+        $ref: '#/definitions/dto.ChatbotGuardMetadataDTO'
+      memory:
+        $ref: '#/definitions/dto.ChatbotMemoryMetadataDTO'
       remaining_credits:
         type: integer
+      sources:
+        items:
+          $ref: '#/definitions/dto.ChatbotSourceInfoDTO'
+        type: array
+    type: object
+  dto.ChatbotGuardMetadataDTO:
+    properties:
+      action:
+        type: string
+      findings:
+        items:
+          type: string
+        type: array
+      message:
+        type: string
+      risk_level:
+        type: string
+    type: object
+  dto.ChatbotMemoryMetadataDTO:
+    properties:
+      compressed:
+        type: boolean
+      compression_failed:
+        type: boolean
+      history_message_count:
+        type: integer
+      recent_message_count:
+        type: integer
+      rewritten:
+        type: boolean
+      status:
+        type: string
+      strategy:
+        type: string
+      summary_message_count:
+        type: integer
+      used:
+        type: boolean
+    type: object
+  dto.ChatbotSourceInfoDTO:
+    properties:
+      blog_name:
+        type: string
+      link:
+        type: string
+      score:
+        type: number
+      title:
+        type: string
     type: object
   dto.CreatePostResponseDTO:
     properties:
       message:
         type: string
       post_id:
+        type: string
+    type: object
+  dto.DeleteBlogResponseDTO:
+    properties:
+      deleted_posts:
+        type: integer
+      message:
         type: string
     type: object
   dto.ErrorResponseDTO:
@@ -363,6 +510,113 @@ paths:
           schema:
             $ref: '#/definitions/dto.ErrorResponseDTO'
       summary: List blogs for admin
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Create a blog source used by RSS collection
+      parameters:
+      - description: Blog create request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BlogMutationRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.AdminBlogDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Create blog for admin
+      tags:
+      - admin
+  /api/v1/admin/blogs/{id}:
+    delete:
+      description: Delete a blog source and optionally delete all posts under that
+        blog
+      parameters:
+      - description: Blog ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Delete all posts for this blog
+        in: query
+        name: delete_posts
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DeleteBlogResponseDTO'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Delete blog for admin
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      description: Update a blog source used by RSS collection
+      parameters:
+      - description: Blog ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Blog update request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BlogMutationRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AdminBlogDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Update blog for admin
       tags:
       - admin
   /api/v1/admin/posts:
@@ -698,6 +952,26 @@ paths:
       summary: 챗봇 질의
       tags:
       - chatbot
+  /chatbot/chat/stream:
+    post:
+      consumes:
+      - application/json
+      description: 챗봇 처리 과정을 SSE로 먼저 전달하고, 최종 답변은 done 이벤트로 전달한다.
+      parameters:
+      - description: chat request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChatbotChatRequestDTO'
+      produces:
+      - text/event-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: 챗봇 질의 스트림
+      tags:
+      - chatbot
   /chatbot/sessions:
     get:
       description: 사용자의 대화 세션 목록을 페이지네이션하여 조회합니다.
@@ -892,6 +1166,14 @@ paths:
       - description: 블로그 이름
         in: query
         name: blog_name
+        type: string
+      - description: 발행일 시작 (RFC3339 또는 YYYY-MM-DD)
+        in: query
+        name: published_from
+        type: string
+      - description: 발행일 종료 (RFC3339 또는 YYYY-MM-DD)
+        in: query
+        name: published_to
         type: string
       - description: AI 요약 완료 여부
         in: query

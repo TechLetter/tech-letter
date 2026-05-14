@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"tech-letter/cmd/api/dto"
 	_ "tech-letter/cmd/api/dto"
@@ -22,6 +23,8 @@ import (
 // @Param        tags                  query  []string  false  "태그 목록 (OR 조건)"
 // @Param        blog_id               query  string    false  "블로그 ID"
 // @Param        blog_name             query  string    false  "블로그 이름"
+// @Param        published_from        query  string    false  "발행일 시작 (RFC3339 또는 YYYY-MM-DD)"
+// @Param        published_to          query  string    false  "발행일 종료 (RFC3339 또는 YYYY-MM-DD)"
 // @Param        status_ai_summarized  query  bool      false  "AI 요약 완료 여부"
 // @Produce      json
 // @Success      200  {object}  dto.PaginationPostDTO
@@ -37,6 +40,16 @@ func ListPostsHandler(postSvc *services.PostService, bookmarkSvc *services.Bookm
 		in.Tags = c.QueryArray("tags")
 		in.BlogID = c.Query("blog_id")
 		in.BlogName = c.Query("blog_name")
+		publishedFrom, ok := parseOptionalPostTimeQuery(c, "published_from")
+		if !ok {
+			return
+		}
+		publishedTo, ok := parseOptionalPostTimeQuery(c, "published_to")
+		if !ok {
+			return
+		}
+		in.PublishedFrom = publishedFrom
+		in.PublishedTo = publishedTo
 		// status filters
 		if statusStr := c.Query("status_ai_summarized"); statusStr != "" {
 			if val, err := strconv.ParseBool(statusStr); err == nil {
@@ -65,6 +78,31 @@ func ListPostsHandler(postSvc *services.PostService, bookmarkSvc *services.Bookm
 
 		c.JSON(http.StatusOK, page)
 	}
+}
+
+func parseOptionalPostTimeQuery(c *gin.Context, name string) (*time.Time, bool) {
+	value := c.Query(name)
+	if value == "" {
+		return nil, true
+	}
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err == nil {
+		return &parsed, true
+	}
+
+	parsedDate, err := time.ParseInLocation("2006-01-02", value, time.UTC)
+	if err == nil {
+		if name == "published_to" {
+			parsedDate = parsedDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
+		}
+		return &parsedDate, true
+	}
+
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error": name + " must be RFC3339 datetime or YYYY-MM-DD",
+	})
+	return nil, false
 }
 
 // GetPostHandler godoc
