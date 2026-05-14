@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
-from typing import Annotated, Literal
+import queue
+import threading
+from collections.abc import Iterator
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..guards.schemas import PolicyViolationError
@@ -139,6 +144,109 @@ def set_rag_service(service: RAGService) -> None:
     _rag_service = service
 
 
+def _build_conversation_messages(request: ChatRequest) -> list[ConversationMessage]:
+    return [
+        ConversationMessage(
+            role=message.role,
+            content=message.content,
+            created_at=message.created_at,
+        )
+        for message in request.messages
+    ]
+
+
+def _build_stored_memory(request: ChatRequest) -> StoredConversationMemory | None:
+    if not request.memory:
+        return None
+    return StoredConversationMemory(
+        summary=request.memory.summary,
+        covered_message_count=request.memory.covered_message_count,
+        status=request.memory.status,
+    )
+
+
+def _to_chat_payload(result) -> dict[str, Any]:
+    return {
+        "answer": result.answer,
+        "sources": [
+            {
+                "title": source["title"],
+                "blog_name": source["blog_name"],
+                "link": source["link"],
+                "score": source["score"],
+            }
+            for source in result.sources
+        ],
+        "agent": result.agent,
+        "guard": result.guard,
+        "memory": result.memory,
+    }
+
+
+def _format_sse(event: str, data: dict[str, Any]) -> str:
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _stream_chat_events(
+    request: ChatRequest,
+    rag_service: RAGService,
+) -> Iterator[str]:
+    events: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
+
+    def publish_activity(activity: dict[str, str]) -> None:
+        events.put(("activity", activity))
+
+    def worker() -> None:
+        try:
+            result = rag_service.chat(
+                query=request.query,
+                messages=_build_conversation_messages(request),
+                stored_memory=_build_stored_memory(request),
+                on_activity=publish_activity,
+            )
+            events.put(("done", _to_chat_payload(result)))
+        except PolicyViolationError as exc:
+            logger.info(
+                "stream chat request blocked by prompt guard: categories=%s",
+                [finding.category for finding in exc.result.findings],
+            )
+            events.put(
+                (
+                    "error",
+                    {
+                        "code": "policy_blocked",
+                        "message": exc.result.message,
+                        "guard": exc.result.to_metadata(),
+                    },
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("stream chat request failed")
+            if _is_rate_limit_error(exc):
+                code = "rate_limited"
+                message = "AI API 호출이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요."
+            elif _is_temporarily_unavailable_error(exc):
+                code = "chatbot_unavailable"
+                message = "AI 서버가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요."
+            else:
+                code = "chatbot_failed"
+                message = "채팅 요청 처리 중 오류가 발생했습니다."
+            events.put(("error", {"code": code, "message": message}))
+        finally:
+            events.put(None)
+
+    thread = threading.Thread(target=worker, daemon=True, name="chat-stream-worker")
+    thread.start()
+
+    while True:
+        event = events.get()
+        if event is None:
+            break
+        event_name, payload = event
+        yield _format_sse(event_name, payload)
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -152,23 +260,8 @@ async def chat(
     try:
         result = rag_service.chat(
             query=request.query,
-            messages=[
-                ConversationMessage(
-                    role=message.role,
-                    content=message.content,
-                    created_at=message.created_at,
-                )
-                for message in request.messages
-            ],
-            stored_memory=(
-                StoredConversationMemory(
-                    summary=request.memory.summary,
-                    covered_message_count=request.memory.covered_message_count,
-                    status=request.memory.status,
-                )
-                if request.memory
-                else None
-            ),
+            messages=_build_conversation_messages(request),
+            stored_memory=_build_stored_memory(request),
         )
     except PolicyViolationError as exc:
         logger.info(
@@ -219,4 +312,19 @@ async def chat(
         agent=result.agent,
         guard=result.guard,
         memory=result.memory,
+    )
+
+
+@router.post("/stream")
+async def stream_chat(
+    request: ChatRequest,
+    rag_service: Annotated[RAGService, Depends(get_rag_service)],
+) -> StreamingResponse:
+    return StreamingResponse(
+        _stream_chat_events(request, rag_service),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

@@ -131,6 +131,13 @@ class PostRepository(PostRepositoryInterface):
             filter_doc["blog_id"] = to_object_id(flt.blog_id)
         if flt.blog_name:
             filter_doc["blog_name"] = {"$regex": f"^{flt.blog_name}$", "$options": "i"}
+        if flt.published_from or flt.published_to:
+            published_range: dict[str, datetime] = {}
+            if flt.published_from:
+                published_range["$gte"] = flt.published_from
+            if flt.published_to:
+                published_range["$lte"] = flt.published_to
+            filter_doc["published_at"] = published_range
 
         # Status 필터링: false 조회 시 필드가 없는 경우도 포함
         if flt.status_ai_summarized is not None:

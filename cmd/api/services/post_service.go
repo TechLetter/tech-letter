@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"tech-letter/cmd/api/clients/contentclient"
 	"tech-letter/cmd/api/dto"
@@ -30,12 +31,14 @@ func NewPostService(client *contentclient.Client) *PostService {
 }
 
 type ListPostsInput struct {
-	Page       int
-	PageSize   int
-	Categories []string
-	Tags       []string
-	BlogID     string // hex string; optional
-	BlogName   string // optional; case-insensitive exact match
+	Page          int
+	PageSize      int
+	Categories    []string
+	Tags          []string
+	BlogID        string // hex string; optional
+	BlogName      string // optional; case-insensitive exact match
+	PublishedFrom *time.Time
+	PublishedTo   *time.Time
 	// Status Filters
 	StatusAISummarized *bool
 	StatusEmbedded     *bool
@@ -50,6 +53,8 @@ func (s *PostService) List(ctx context.Context, in ListPostsInput) (dto.Paginati
 		Tags:               in.Tags,
 		BlogID:             in.BlogID,
 		BlogName:           in.BlogName,
+		PublishedFrom:      in.PublishedFrom,
+		PublishedTo:        in.PublishedTo,
 		StatusAISummarized: in.StatusAISummarized,
 		StatusEmbedded:     in.StatusEmbedded,
 	})
