@@ -66,10 +66,6 @@ Your core directive is to answer developer questions based **ONLY** on the provi
 1.  **Direct Answer:** Start with a clear, high-level summary of the answer (Korean).
 2.  **Detailed Explanation:** Use Markdown (headers, bullet points, bold text) to structure the technical details found in the context.
     * *Do not mention specific blog titles in the main text unless necessary for comparison.*
-3.  **References (Mandatory):**
-    * At the very bottom, list the unique sources used for this answer.
-    * Header: `### 참고 문헌`
-    * Format: `* [Title](Link) - Blog Name` (Do NOT show raw URL)
 
 ---
 
@@ -106,7 +102,6 @@ class ChatResponse:
     agent: dict[str, Any]
     guard: dict[str, Any]
     memory: dict[str, Any]
-    suggested_questions: list[str]
 
 
 class RAGService:
@@ -232,7 +227,6 @@ class RAGService:
                 },
                 guard=guard_metadata,
                 memory=memory_metadata,
-                suggested_questions=self._suggest_follow_ups(intent),
             )
 
         # 3. 컨텍스트 구성
@@ -299,7 +293,6 @@ class RAGService:
             },
             guard=guard_metadata,
             memory=memory_metadata,
-            suggested_questions=self._suggest_follow_ups(intent),
         )
 
     def _classify_intent(self, query: str) -> str:
@@ -313,27 +306,6 @@ class RAGService:
         if any(keyword in lowered for keyword in ["출처", "source", "문서"]):
             return "source_lookup"
         return "explanation"
-
-    def _suggest_follow_ups(self, intent: str) -> list[str]:
-        if intent == "comparison":
-            return [
-                "차이를 표로 다시 정리해줘.",
-                "실무 적용 관점에서 우선순위를 매겨줘.",
-            ]
-        if intent == "recommendation":
-            return [
-                "company 블로그 글만 기준으로 다시 추천해줘.",
-                "실무 적용 사례가 있는 글 위주로 좁혀줘.",
-            ]
-        if intent == "recent_trend":
-            return [
-                "최근 변화의 배경을 더 자세히 설명해줘.",
-                "관련 글을 중요도 순으로 다시 정리해줘.",
-            ]
-        return [
-            "핵심만 요약해줘.",
-            "우리 서비스에 적용한다면 어디부터 시작하면 될지 정리해줘.",
-        ]
 
     def compress_session_context(
         self,
