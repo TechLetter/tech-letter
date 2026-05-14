@@ -71,7 +71,6 @@ class ChatResponse(BaseModel):
     agent: dict | None = None
     guard: dict | None = None
     memory: dict | None = None
-    suggested_questions: list[str] = Field(default_factory=list)
 
 
 _rag_service: RAGService | None = None
@@ -220,5 +219,4 @@ async def chat(
         agent=result.agent,
         guard=result.guard,
         memory=result.memory,
-        suggested_questions=result.suggested_questions,
     )

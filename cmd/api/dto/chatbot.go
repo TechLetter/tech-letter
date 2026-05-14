@@ -44,12 +44,11 @@ type ChatbotMemoryMetadataDTO struct {
 }
 
 type ChatbotChatResponseDTO struct {
-	Answer             string                    `json:"answer"`
-	ConsumedCredits    int                       `json:"consumed_credits"`
-	RemainingCredits   int                       `json:"remaining_credits"`
-	Sources            []ChatbotSourceInfoDTO    `json:"sources"`
-	Agent              *ChatbotAgentMetadataDTO  `json:"agent,omitempty"`
-	Guard              *ChatbotGuardMetadataDTO  `json:"guard,omitempty"`
-	Memory             *ChatbotMemoryMetadataDTO `json:"memory,omitempty"`
-	SuggestedQuestions []string                  `json:"suggested_questions,omitempty"`
+	Answer           string                    `json:"answer"`
+	ConsumedCredits  int                       `json:"consumed_credits"`
+	RemainingCredits int                       `json:"remaining_credits"`
+	Sources          []ChatbotSourceInfoDTO    `json:"sources"`
+	Agent            *ChatbotAgentMetadataDTO  `json:"agent,omitempty"`
+	Guard            *ChatbotGuardMetadataDTO  `json:"guard,omitempty"`
+	Memory           *ChatbotMemoryMetadataDTO `json:"memory,omitempty"`
 }
