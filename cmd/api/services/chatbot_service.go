@@ -12,14 +12,13 @@ import (
 
 // ChatResult는 채팅 요청의 통합 결과를 담는다.
 type ChatResult struct {
-	Answer             string
-	ConsumedCredits    int
-	RemainingCredits   int
-	Sources            []chatbotclient.SourceInfo
-	Agent              *chatbotclient.AgentMetadata
-	Guard              *chatbotclient.GuardMetadata
-	Memory             *chatbotclient.MemoryMetadata
-	SuggestedQuestions []string
+	Answer           string
+	ConsumedCredits  int
+	RemainingCredits int
+	Sources          []chatbotclient.SourceInfo
+	Agent            *chatbotclient.AgentMetadata
+	Guard            *chatbotclient.GuardMetadata
+	Memory           *chatbotclient.MemoryMetadata
 }
 
 type ChatbotService struct {
@@ -116,14 +115,13 @@ func (s *ChatbotService) ChatWithCredits(ctx context.Context, userCode, query, s
 	)
 
 	return &ChatResult{
-		Answer:             resp.Answer,
-		ConsumedCredits:    1,
-		RemainingCredits:   creditResp.Remaining,
-		Sources:            resp.Sources,
-		Agent:              resp.Agent,
-		Guard:              resp.Guard,
-		Memory:             resp.Memory,
-		SuggestedQuestions: resp.SuggestedQuestions,
+		Answer:           resp.Answer,
+		ConsumedCredits:  1,
+		RemainingCredits: creditResp.Remaining,
+		Sources:          resp.Sources,
+		Agent:            resp.Agent,
+		Guard:            resp.Guard,
+		Memory:           resp.Memory,
 	}, nil
 }
 
@@ -192,9 +190,6 @@ func buildChatMetadata(resp chatbotclient.ChatResponse) map[string]interface{} {
 	}
 	if resp.Memory != nil {
 		metadata["memory"] = resp.Memory
-	}
-	if len(resp.SuggestedQuestions) > 0 {
-		metadata["suggested_questions"] = resp.SuggestedQuestions
 	}
 	if len(metadata) == 0 {
 		return nil

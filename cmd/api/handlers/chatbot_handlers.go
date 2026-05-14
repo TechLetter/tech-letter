@@ -50,14 +50,13 @@ func ChatbotChatHandler(
 		}
 
 		c.JSON(http.StatusOK, dto.ChatbotChatResponseDTO{
-			Answer:             result.Answer,
-			ConsumedCredits:    result.ConsumedCredits,
-			RemainingCredits:   result.RemainingCredits,
-			Sources:            mapChatbotSources(result.Sources),
-			Agent:              mapChatbotAgent(result.Agent),
-			Guard:              mapChatbotGuard(result.Guard),
-			Memory:             mapChatbotMemory(result.Memory),
-			SuggestedQuestions: result.SuggestedQuestions,
+			Answer:           result.Answer,
+			ConsumedCredits:  result.ConsumedCredits,
+			RemainingCredits: result.RemainingCredits,
+			Sources:          mapChatbotSources(result.Sources),
+			Agent:            mapChatbotAgent(result.Agent),
+			Guard:            mapChatbotGuard(result.Guard),
+			Memory:           mapChatbotMemory(result.Memory),
 		})
 	}
 }

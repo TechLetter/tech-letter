@@ -45,12 +45,11 @@ type SourceInfo struct {
 }
 
 type ChatResponse struct {
-	Answer             string          `json:"answer"`
-	Sources            []SourceInfo    `json:"sources"`
-	Agent              *AgentMetadata  `json:"agent,omitempty"`
-	Guard              *GuardMetadata  `json:"guard,omitempty"`
-	Memory             *MemoryMetadata `json:"memory,omitempty"`
-	SuggestedQuestions []string        `json:"suggested_questions,omitempty"`
+	Answer  string          `json:"answer"`
+	Sources []SourceInfo    `json:"sources"`
+	Agent   *AgentMetadata  `json:"agent,omitempty"`
+	Guard   *GuardMetadata  `json:"guard,omitempty"`
+	Memory  *MemoryMetadata `json:"memory,omitempty"`
 }
 
 type AgentActivity struct {
