@@ -213,6 +213,7 @@ services:
       CHATBOT_EMBEDDING_MODEL_NAME: gemini-embedding-001
       CHATBOT_RAG_TOP_K: 5
       CHATBOT_RAG_SCORE_THRESHOLD: 0.5
+      CONTENT_SERVICE_BASE_URL: http://content_service:8001
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       QDRANT_COLLECTION_NAME: tech_letter_posts

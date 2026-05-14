@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -25,9 +25,12 @@ from .conversation_memory import (
     ConversationMessage,
     StoredConversationMemory,
 )
+from .content_post_client import ContentPostClient
+from .post_search_tool import PostSearchTool
 
 
 logger = logging.getLogger(__name__)
+ActivityCallback = Callable[[dict[str, str]], None]
 
 SYSTEM_PROMPT = """
 ### SYSTEM CONFIGURATION & SECURITY PROTOCOLS (HIGHEST PRIORITY)
@@ -115,6 +118,7 @@ class RAGService:
         *,
         default_top_k: int,
         default_score_threshold: float,
+        post_search_tool: PostSearchTool | None = None,
     ) -> None:
         self._vector_store = vector_store
         self._default_top_k = default_top_k
@@ -130,6 +134,9 @@ class RAGService:
             self._llm,
             self._prompt_guard,
         )
+        self._post_search_tool = post_search_tool or PostSearchTool(
+            ContentPostClient.from_env()
+        )
 
     def chat(
         self,
@@ -137,6 +144,7 @@ class RAGService:
         *,
         messages: list[ConversationMessage] | None = None,
         stored_memory: StoredConversationMemory | None = None,
+        on_activity: ActivityCallback | None = None,
     ) -> ChatResponse:
         """사용자 질문에 대해 RAG 기반 답변을 생성한다."""
 
@@ -148,14 +156,13 @@ class RAGService:
             raise PolicyViolationError(prompt_guard_result)
 
         safe_query = prompt_guard_result.sanitized_text
-        if prompt_guard_result.action == "sanitize":
-            activities.append(
-                {
-                    "type": "guard",
-                    "label": "질문 안전성 확인",
-                    "status": "completed",
-                }
-            )
+        self._record_activity(
+            activities,
+            "guard",
+            "질문 안전성 확인",
+            "completed",
+            on_activity,
+        )
 
         memory_context = self._conversation_memory.build(
             safe_query,
@@ -163,29 +170,88 @@ class RAGService:
             stored_memory,
         )
         if memory_context.used:
-            activities.append(
-                {
-                    "type": "memory",
-                    "label": (
-                        "긴 대화 요약 반영"
-                        if memory_context.compressed
-                        else "이전 대화 맥락 확인"
-                    ),
-                    "status": "completed",
-                }
+            self._record_activity(
+                activities,
+                "memory",
+                (
+                    "긴 대화 요약 반영"
+                    if memory_context.compressed
+                    else "이전 대화 맥락 확인"
+                ),
+                "completed",
+                on_activity,
             )
         if memory_context.rewritten:
-            activities.append(
-                {
-                    "type": "rewrite",
-                    "label": "후속 질문 맥락 보정",
-                    "status": "completed",
-                }
+            self._record_activity(
+                activities,
+                "rewrite",
+                "후속 질문 맥락 보정",
+                "completed",
+                on_activity,
             )
 
         search_query = memory_context.rewritten_query
+        intent = self._classify_intent(search_query)
+
+        post_search_request = self._post_search_tool.build_request(search_query)
+        if post_search_request:
+            self._emit_activity(
+                "list_posts",
+                "내부 포스트 조회",
+                "running",
+                on_activity,
+            )
+            try:
+                post_search_result = self._post_search_tool.search(post_search_request)
+                self._record_activity(
+                    activities,
+                    "list_posts",
+                    "내부 포스트 조회",
+                    "completed",
+                    on_activity,
+                )
+                return ChatResponse(
+                    answer=post_search_result.answer,
+                    sources=post_search_result.sources,
+                    agent={
+                        "mode": "tool",
+                        "intent": "post_lookup",
+                        "activities": activities,
+                    },
+                    guard=prompt_guard_result.to_metadata(),
+                    memory=memory_context.to_metadata(),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to list posts with content-service")
+                self._record_activity(
+                    activities,
+                    "list_posts",
+                    "내부 포스트 조회 실패",
+                    "failed",
+                    on_activity,
+                )
+                return ChatResponse(
+                    answer=(
+                        "내부 포스트 목록을 조회하는 중 오류가 발생했습니다. "
+                        "잠시 후 다시 시도해주세요."
+                    ),
+                    sources=[],
+                    agent={
+                        "mode": "tool",
+                        "intent": "post_lookup",
+                        "activities": activities,
+                    },
+                    guard=prompt_guard_result.to_metadata(),
+                    memory=memory_context.to_metadata(),
+                )
 
         # 1. 쿼리 임베딩 생성
+        self._emit_activity(
+            "search",
+            "관련 글 검색",
+            "running",
+            on_activity,
+        )
         try:
             query_vector = self._embeddings.embed_query(search_query)
         except Exception:  # noqa: BLE001
@@ -200,18 +266,17 @@ class RAGService:
                 limit=self._default_top_k,
                 score_threshold=self._default_score_threshold,
             )
-            activities.append(
-                {
-                    "type": "search",
-                    "label": "관련 글 검색",
-                    "status": "completed",
-                }
+            self._record_activity(
+                activities,
+                "search",
+                "관련 글 검색",
+                "completed",
+                on_activity,
             )
         except Exception:  # noqa: BLE001
             logger.exception("failed to search vector store")
             raise
 
-        intent = self._classify_intent(safe_query)
         guard_metadata = prompt_guard_result.to_metadata()
         memory_metadata = memory_context.to_metadata()
 
@@ -232,22 +297,28 @@ class RAGService:
         # 3. 컨텍스트 구성
         built_context = self._context_builder.build(search_results)
         if built_context.risky_chunk_count > 0:
-            activities.append(
-                {
-                    "type": "guard",
-                    "label": "외부 문서 안전성 확인",
-                    "status": "completed",
-                }
+            self._record_activity(
+                activities,
+                "guard",
+                "외부 문서 안전성 확인",
+                "completed",
+                on_activity,
             )
-        activities.append(
-            {
-                "type": "verify",
-                "label": "출처 적합성 확인",
-                "status": "completed",
-            }
+        self._record_activity(
+            activities,
+            "verify",
+            "출처 적합성 확인",
+            "completed",
+            on_activity,
         )
 
         # 4. LLM으로 답변 생성
+        self._emit_activity(
+            "answer",
+            "답변 생성",
+            "running",
+            on_activity,
+        )
         try:
             messages = [
                 SystemMessage(
@@ -269,12 +340,12 @@ class RAGService:
             logger.exception("failed to generate LLM response")
             raise
 
-        activities.append(
-            {
-                "type": "answer",
-                "label": "답변 생성",
-                "status": "completed",
-            }
+        self._record_activity(
+            activities,
+            "answer",
+            "답변 생성",
+            "completed",
+            on_activity,
         )
 
         logger.info(
@@ -295,8 +366,38 @@ class RAGService:
             memory=memory_metadata,
         )
 
+    def _emit_activity(
+        self,
+        activity_type: str,
+        label: str,
+        status: str,
+        on_activity: ActivityCallback | None,
+    ) -> dict[str, str]:
+        activity = {
+            "type": activity_type,
+            "label": label,
+            "status": status,
+        }
+        if on_activity:
+            on_activity(activity)
+        return activity
+
+    def _record_activity(
+        self,
+        activities: list[dict[str, str]],
+        activity_type: str,
+        label: str,
+        status: str,
+        on_activity: ActivityCallback | None,
+    ) -> None:
+        activities.append(
+            self._emit_activity(activity_type, label, status, on_activity)
+        )
+
     def _classify_intent(self, query: str) -> str:
         lowered = query.lower()
+        if any(keyword in lowered for keyword in ["포스트", "게시글", "아티클", "post"]):
+            return "post_lookup"
         if any(keyword in lowered for keyword in ["추천", "recommend", "찾아", "글"]):
             return "recommendation"
         if any(keyword in lowered for keyword in ["비교", "vs", "차이", "장단점"]):

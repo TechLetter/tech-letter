@@ -1,6 +1,7 @@
 package chatbotclient
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"tech-letter/cmd/api/httpclient"
@@ -50,6 +52,11 @@ type ChatResponse struct {
 	Agent   *AgentMetadata  `json:"agent,omitempty"`
 	Guard   *GuardMetadata  `json:"guard,omitempty"`
 	Memory  *MemoryMetadata `json:"memory,omitempty"`
+}
+
+type StreamEvent struct {
+	Event string
+	Data  json.RawMessage
 }
 
 type AgentActivity struct {
@@ -141,4 +148,94 @@ func (c *Client) Chat(ctx context.Context, query, sessionID string, messages []C
 		return ChatResponse{}, err
 	}
 	return out, nil
+}
+
+func (c *Client) StreamChat(
+	ctx context.Context,
+	query string,
+	sessionID string,
+	messages []ChatMessage,
+	memory *ChatMemory,
+	handleEvent func(StreamEvent) error,
+) error {
+	payload := ChatRequest{
+		Query:     query,
+		SessionID: sessionID,
+		Messages:  messages,
+		Memory:    memory,
+	}
+	buf, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/chat/stream", nil, bytes.NewReader(buf))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+
+	return readStreamEvents(resp.Body, handleEvent)
+}
+
+func readStreamEvents(reader io.Reader, handleEvent func(StreamEvent) error) error {
+	bufReader := bufio.NewReader(reader)
+	eventName := "message"
+	dataLines := make([]string, 0, 1)
+
+	dispatch := func() error {
+		if len(dataLines) == 0 {
+			eventName = "message"
+			return nil
+		}
+		payload := strings.Join(dataLines, "\n")
+		event := StreamEvent{
+			Event: eventName,
+			Data:  json.RawMessage(payload),
+		}
+		eventName = "message"
+		dataLines = dataLines[:0]
+		return handleEvent(event)
+	}
+
+	for {
+		line, err := bufReader.ReadString('\n')
+		if err != nil && len(line) == 0 {
+			if err == io.EOF {
+				return dispatch()
+			}
+			return err
+		}
+
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if dispatchErr := dispatch(); dispatchErr != nil {
+				return dispatchErr
+			}
+		} else if strings.HasPrefix(line, "event:") {
+			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		} else if strings.HasPrefix(line, "data:") {
+			data := strings.TrimPrefix(line, "data:")
+			if strings.HasPrefix(data, " ") {
+				data = data[1:]
+			}
+			dataLines = append(dataLines, data)
+		}
+
+		if err == io.EOF {
+			return dispatch()
+		}
+	}
 }

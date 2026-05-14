@@ -104,12 +104,14 @@ func New() *Client {
 // -------------------- Posts --------------------
 
 type ListPostsParams struct {
-	Page       int
-	PageSize   int
-	Categories []string
-	Tags       []string
-	BlogID     string
-	BlogName   string
+	Page          int
+	PageSize      int
+	Categories    []string
+	Tags          []string
+	BlogID        string
+	BlogName      string
+	PublishedFrom *time.Time
+	PublishedTo   *time.Time
 	// Status Filters (추후 DocumentEmbedded 등 추가 가능)
 	StatusAISummarized *bool
 	StatusEmbedded     *bool
@@ -178,6 +180,12 @@ func (c *Client) ListPosts(ctx context.Context, params ListPostsParams) (ListPos
 	}
 	if params.BlogName != "" {
 		q.Set("blog_name", params.BlogName)
+	}
+	if params.PublishedFrom != nil {
+		q.Set("published_from", params.PublishedFrom.UTC().Format(time.RFC3339Nano))
+	}
+	if params.PublishedTo != nil {
+		q.Set("published_to", params.PublishedTo.UTC().Format(time.RFC3339Nano))
 	}
 	if params.StatusAISummarized != nil {
 		q.Set("status_ai_summarized", strconv.FormatBool(*params.StatusAISummarized))
