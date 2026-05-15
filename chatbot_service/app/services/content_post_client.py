@@ -100,3 +100,12 @@ class ContentPostClient:
             if isinstance(item, dict)
         ]
         return PostListResult(total=int(payload.get("total") or 0), items=items)
+
+    def get_plain_text(self, post_id: str) -> str | None:
+        url = f"{self.base_url}/api/v1/posts/{post_id}/plain-text"
+        with urlopen(url, timeout=self.timeout_seconds) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+        value = payload.get("plain_text")
+        if value is None:
+            return None
+        return str(value)
