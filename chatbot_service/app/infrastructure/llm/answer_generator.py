@@ -25,7 +25,7 @@ class LLMAnswerGenerator:
             return tool_result.message or "요청 조건에 맞는 포스트를 찾지 못했습니다."
 
         if plan.task == "list_posts":
-            return _format_post_list_answer(plan, tool_result)
+            return _format_post_list_answer(tool_result)
 
         response = self._llm.invoke(
             [
@@ -67,7 +67,7 @@ class LLMAnswerGenerator:
         return str(response.content).strip()
 
 
-def _format_post_list_answer(plan: ChatPlan, tool_result: ToolResult) -> str:
+def _format_post_list_answer(tool_result: ToolResult) -> str:
     if not tool_result.posts:
         return tool_result.message or "요청 조건에 맞는 포스트를 찾지 못했습니다."
 
