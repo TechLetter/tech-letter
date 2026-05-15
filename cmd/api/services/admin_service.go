@@ -135,6 +135,26 @@ func (s *AdminService) GrantCredit(ctx context.Context, userCode string, req *dt
 	return s.userClient.GrantCreditInternal(ctx, userCode, internalReq)
 }
 
+// -------------------- Chatbot Suggested Questions --------------------
+
+func (s *AdminService) ListSuggestedQuestions(ctx context.Context) ([]dto.ChatbotSuggestedQuestionDTO, error) {
+	return s.userClient.ListSuggestedQuestions(ctx, true)
+}
+
+func (s *AdminService) CreateSuggestedQuestion(ctx context.Context, req dto.ChatbotSuggestedQuestionMutationDTO) (dto.ChatbotSuggestedQuestionDTO, error) {
+	req.Text = strings.TrimSpace(req.Text)
+	return s.userClient.CreateSuggestedQuestion(ctx, req)
+}
+
+func (s *AdminService) UpdateSuggestedQuestion(ctx context.Context, id string, req dto.ChatbotSuggestedQuestionMutationDTO) (dto.ChatbotSuggestedQuestionDTO, error) {
+	req.Text = strings.TrimSpace(req.Text)
+	return s.userClient.UpdateSuggestedQuestion(ctx, id, req)
+}
+
+func (s *AdminService) DeleteSuggestedQuestion(ctx context.Context, id string) error {
+	return s.userClient.DeleteSuggestedQuestion(ctx, id)
+}
+
 // -------------------- Blogs --------------------
 
 func (s *AdminService) ListBlogs(ctx context.Context, page, pageSize int) (dto.Pagination[dto.AdminBlogDTO], error) {

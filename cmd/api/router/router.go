@@ -79,6 +79,7 @@ func New() *gin.Engine {
 		api.DELETE("/users/me", handlers.DeleteCurrentUserHandler(authSvc, userSvc))
 
 		// Chatbot Handlers
+		api.GET("/chatbot/suggested-questions", handlers.ChatbotSuggestedQuestionsHandler(chatbotSvc))
 		api.POST("/chatbot/chat", handlers.ChatbotChatHandler(chatbotSvc, authSvc))
 		api.POST("/chatbot/chat/stream", handlers.ChatbotChatStreamHandler(chatbotSvc, authSvc))
 
@@ -103,6 +104,10 @@ func New() *gin.Engine {
 			admin.POST("/posts/:id/embed", handlers.AdminTriggerEmbeddingHandler(adminSvc))
 			admin.GET("/users", handlers.AdminListUsersHandler(adminSvc))
 			admin.POST("/users/:user_code/credits", handlers.AdminGrantCreditHandler(adminSvc))
+			admin.GET("/chatbot/suggested-questions", handlers.AdminListChatbotSuggestedQuestionsHandler(adminSvc))
+			admin.POST("/chatbot/suggested-questions", handlers.AdminCreateChatbotSuggestedQuestionHandler(adminSvc))
+			admin.PUT("/chatbot/suggested-questions/:id", handlers.AdminUpdateChatbotSuggestedQuestionHandler(adminSvc))
+			admin.DELETE("/chatbot/suggested-questions/:id", handlers.AdminDeleteChatbotSuggestedQuestionHandler(adminSvc))
 		}
 	}
 

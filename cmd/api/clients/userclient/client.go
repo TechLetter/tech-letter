@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +31,30 @@ type Client struct {
 var (
 	ErrNotFound = fmt.Errorf("resource not found")
 )
+
+type HTTPError struct {
+	Operation  string
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("%s: status=%d body=%s", e.Operation, e.StatusCode, e.Body)
+}
+
+func IsStatus(err error, statusCode int) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == statusCode
+}
+
+func newHTTPError(operation string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	return &HTTPError{
+		Operation:  operation,
+		StatusCode: resp.StatusCode,
+		Body:       string(body),
+	}
+}
 
 func New() *Client {
 	base := os.Getenv("USER_SERVICE_BASE_URL")
@@ -840,6 +865,109 @@ func (c *Client) DeleteSession(ctx context.Context, userCode, sessionID string) 
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to delete session: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// -------------------- Chat Suggested Question Methods --------------------
+
+func (c *Client) ListSuggestedQuestions(ctx context.Context, includeInactive bool) ([]dto.ChatbotSuggestedQuestionDTO, error) {
+	query := url.Values{}
+	if includeInactive {
+		query.Set("include_inactive", "true")
+	}
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/chatbot/suggested-questions", query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, newHTTPError("user-service ListSuggestedQuestions", resp)
+	}
+
+	var result []dto.ChatbotSuggestedQuestionDTO
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) CreateSuggestedQuestion(ctx context.Context, req dto.ChatbotSuggestedQuestionMutationDTO) (dto.ChatbotSuggestedQuestionDTO, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	httpReq, err := c.base.NewRequest(ctx, http.MethodPost, "/api/v1/chatbot/suggested-questions", nil, bytes.NewReader(body))
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(httpReq)
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return dto.ChatbotSuggestedQuestionDTO{}, newHTTPError("user-service CreateSuggestedQuestion", resp)
+	}
+
+	var result dto.ChatbotSuggestedQuestionDTO
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateSuggestedQuestion(ctx context.Context, id string, req dto.ChatbotSuggestedQuestionMutationDTO) (dto.ChatbotSuggestedQuestionDTO, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	httpReq, err := c.base.NewRequest(ctx, http.MethodPut, fmt.Sprintf("/api/v1/chatbot/suggested-questions/%s", id), nil, bytes.NewReader(body))
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.base.Do(httpReq)
+	if err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return dto.ChatbotSuggestedQuestionDTO{}, newHTTPError("user-service UpdateSuggestedQuestion", resp)
+	}
+
+	var result dto.ChatbotSuggestedQuestionDTO
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return dto.ChatbotSuggestedQuestionDTO{}, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteSuggestedQuestion(ctx context.Context, id string) error {
+	req, err := c.base.NewRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/chatbot/suggested-questions/%s", id), nil, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return newHTTPError("user-service DeleteSuggestedQuestion", resp)
 	}
 	return nil
 }

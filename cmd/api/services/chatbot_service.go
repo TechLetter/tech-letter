@@ -163,6 +163,10 @@ func (s *ChatbotService) FailPreparedChat(ctx context.Context, prepared *Prepare
 	)
 }
 
+func (s *ChatbotService) ListSuggestedQuestions(ctx context.Context) ([]dto.ChatbotSuggestedQuestionDTO, error) {
+	return s.userClient.ListSuggestedQuestions(ctx, false)
+}
+
 func NormalizeChatbotError(err error) (normalizedStatus int, errorCode string) {
 	var httpErr *chatbotclient.HTTPError
 	if errors.As(err, &httpErr) {
