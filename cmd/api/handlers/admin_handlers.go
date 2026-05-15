@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"tech-letter/cmd/api/clients/contentclient"
+	"tech-letter/cmd/api/clients/userclient"
 	"tech-letter/cmd/api/dto"
 	"tech-letter/cmd/api/services"
 
@@ -316,5 +317,111 @@ func AdminGrantCreditHandler(svc *services.AdminService) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary List chatbot suggested questions for admin
+// @Description List all chatbot suggested questions including inactive ones
+// @Tags admin
+// @Produce json
+// @Success 200 {array} dto.ChatbotSuggestedQuestionDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/chatbot/suggested-questions [get]
+func AdminListChatbotSuggestedQuestionsHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		resp, err := svc.ListSuggestedQuestions(c.Request.Context())
+		if err != nil {
+			writeAdminUserError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary Create chatbot suggested question
+// @Description Create a chatbot suggested question
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param body body dto.ChatbotSuggestedQuestionMutationDTO true "Suggested question"
+// @Success 201 {object} dto.ChatbotSuggestedQuestionDTO
+// @Failure 400 {object} dto.ErrorResponseDTO
+// @Failure 409 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/chatbot/suggested-questions [post]
+func AdminCreateChatbotSuggestedQuestionHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req dto.ChatbotSuggestedQuestionMutationDTO
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+		resp, err := svc.CreateSuggestedQuestion(c.Request.Context(), req)
+		if err != nil {
+			writeAdminUserError(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, resp)
+	}
+}
+
+// @Summary Update chatbot suggested question
+// @Description Update a chatbot suggested question
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param id path string true "Suggested question ID"
+// @Param body body dto.ChatbotSuggestedQuestionMutationDTO true "Suggested question"
+// @Success 200 {object} dto.ChatbotSuggestedQuestionDTO
+// @Failure 400 {object} dto.ErrorResponseDTO
+// @Failure 404 {object} dto.ErrorResponseDTO
+// @Failure 409 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/chatbot/suggested-questions/{id} [put]
+func AdminUpdateChatbotSuggestedQuestionHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req dto.ChatbotSuggestedQuestionMutationDTO
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+		resp, err := svc.UpdateSuggestedQuestion(c.Request.Context(), c.Param("id"), req)
+		if err != nil {
+			writeAdminUserError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// @Summary Delete chatbot suggested question
+// @Description Delete a chatbot suggested question
+// @Tags admin
+// @Produce json
+// @Param id path string true "Suggested question ID"
+// @Success 200 {object} dto.MessageResponseDTO
+// @Failure 404 {object} dto.ErrorResponseDTO
+// @Failure 500 {object} dto.ErrorResponseDTO
+// @Router /api/v1/admin/chatbot/suggested-questions/{id} [delete]
+func AdminDeleteChatbotSuggestedQuestionHandler(svc *services.AdminService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := svc.DeleteSuggestedQuestion(c.Request.Context(), c.Param("id")); err != nil {
+			writeAdminUserError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, dto.MessageResponseDTO{Message: "suggested question deleted successfully"})
+	}
+}
+
+func writeAdminUserError(c *gin.Context, err error) {
+	switch {
+	case userclient.IsStatus(err, http.StatusBadRequest):
+		c.JSON(http.StatusBadRequest, dto.ErrorResponseDTO{Error: err.Error()})
+	case userclient.IsStatus(err, http.StatusNotFound):
+		c.JSON(http.StatusNotFound, dto.ErrorResponseDTO{Error: err.Error()})
+	case userclient.IsStatus(err, http.StatusConflict):
+		c.JSON(http.StatusConflict, dto.ErrorResponseDTO{Error: err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
 	}
 }
