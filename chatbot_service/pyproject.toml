@@ -9,8 +9,9 @@ dependencies = [
   "uvicorn",
   "qdrant-client",
   "langchain-openai",
-  "langchain-core",
+  "langchain-core>=1.4.0",
   "pytest",
+  "langgraph>=1.1.6",
 ]
 
 [project.scripts]
