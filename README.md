@@ -45,8 +45,11 @@
   - 결과를 담은 `post.embedding_response` 이벤트를 발행
 - **Chatbot Service (Python)** (`chatbot_service/app/main.py`)
   - `post.embedding_response` 이벤트를 구독해 Qdrant Vector DB에 임베딩 upsert
-  - `/api/v1/chat` REST API를 통해 RAG 기반 질의응답 제공
-  - LLM(OpenAI)을 활용한 답변 생성
+  - `post.embedding_delete_requested` 이벤트를 구독해 포스트 삭제 시 Qdrant 임베딩 삭제
+  - `/api/v1/chat`, `/api/v1/chat/stream` API를 통해 LangGraph 기반 AI Agent 질의응답 제공
+  - Prompt Guard → Conversation Memory → LLM Planner → Tool Node → Answer Generator → Output Guard 순서로 실행
+  - 메타데이터 기반 포스트 조회(Content Service)와 의미 기반 벡터 검색(Qdrant)을 질문 의도에 따라 분기
+  - 채팅 컨텍스트 압축 요청(`chat.context_compression.requested`)을 처리해 긴 대화 요약 상태를 User Service에 반영
 - **Retry Worker** (`cmd/retryworker/main.go`)
   - eventbus 레이어가 생성한 지연/재시도 토픽을 구독
   - 지연 시간이 지난 이벤트를 다시 기본 토픽으로 재주입하여 재시도 처리
@@ -69,6 +72,7 @@ flowchart TB
     Client[User / Frontend] -->|HTTP| API[API Gateway]
     API -->|HTTP| CS[Content Service]
     API -->|HTTP| US[User Service]
+    API -->|HTTP / SSE| CBS[Chatbot Service]
 
     subgraph Services
         CS
@@ -85,16 +89,18 @@ flowchart TB
     CBS <-->|Subscribe/Publish| EB
     RW <-->|Subscribe/Publish| EB
 
-    %% DB 노드 모양을 관계 설정보다 먼저 명시하여 파싱 오류 방지
     DB[(MongoDB)]
+    VDB[(Qdrant)]
+    LLM[LLM / Embedding Provider]
 
     CS -->|CRUD posts| DB
-    US -->|CRUD users, bookmarks| DB
+    US -->|CRUD users, bookmarks, chat sessions| DB
     EW -->|Cache embeddings| DB
-    SW -->|Summarize| LLM[LLM Provider]
+    CBS -->|Post metadata / body query| CS
+    SW -->|Summarize| LLM
     EW -->|Embed| LLM
-    CBS -->|RAG Answer| LLM
-    CBS -->|Vector Search| VDB[(Qdrant)]
+    CBS -->|Plan / Answer / Context compression| LLM
+    CBS -->|Vector Search| VDB
 ```
 
 ### 디렉토리 구조
@@ -125,10 +131,15 @@ tech-letter/
 │       ├── embedder.py   # 텍스트 청킹 + 임베딩 생성
 │       ├── cache.py      # MongoDB 기반 임베딩 캐시
 │       └── main.py       # 이벤트 구독자
-├── chatbot_service/      # RAG 챗봇 서비스 (Python FastAPI)
+├── chatbot_service/      # LangGraph AI Agent 챗봇 서비스 (Python FastAPI)
 │   └── app/
-│       ├── api/          # /chat REST API 엔드포인트
-│       ├── services/     # RAG 질의응답 로직
+│       ├── api/          # /chat, /chat/stream API 엔드포인트
+│       ├── application/  # Chat use case 및 포트
+│       ├── domain/       # Chat plan/result 스키마 및 정책
+│       ├── infrastructure/ # LangGraph workflow, LLM planner, tool adapter
+│       ├── guards/       # Prompt/Output/Retrieved content guard
+│       ├── services/     # Agent 서비스 조립, 대화 메모리, 내부 클라이언트
+│       ├── event_handlers/ # 임베딩/컨텍스트 압축 Kafka 컨슈머
 │       ├── vector_store.py  # Qdrant Vector DB 클라이언트
 │       └── main.py       # FastAPI 앱 + 이벤트 구독자
 ├── common/               # 공통 모델 및 유틸리티
@@ -171,14 +182,19 @@ tech-letter/
    - 새로 생성된 임베딩을 캐시에 저장
    - `post.embedding_response` 이벤트 발행 (`tech-letter.post.embedding` 토픽)
 
-6. **Vector DB 업데이트 + RAG 챗봇 (Chatbot Service)**
+6. **Vector DB 반영 (Chatbot Service)**
 
    - `post.embedding_response` 이벤트를 구독
    - Qdrant Vector DB에 청크별 임베딩 upsert
-   - `/api/v1/chat` API로 RAG 기반 질의응답 제공
-   - 쿼리 임베딩 → Vector DB 검색 → LLM 답변 생성
+   - 포스트별 vector point payload에 post_id/title/blog/link/published_at 등 검색 출처 메타데이터 저장
 
-7. **실패 시 재시도 (EventBus + Retry Worker)**
+7. **포스트 삭제 시 임베딩 정리 (Content Service → Chatbot Service)**
+
+   - 포스트 삭제 또는 블로그 삭제 시 `post.embedding_delete_requested` 이벤트 발행
+   - Chatbot Service가 이벤트를 구독해 해당 post_id의 Qdrant 임베딩을 삭제
+   - 삭제 요청 토픽도 EventBus 재시도/DLQ 정책의 대상
+
+8. **실패 시 재시도 (EventBus + Retry Worker)**
 
    - Summary Worker 또는 Content Service에서 이벤트 처리 실패 시, `eventbus` 레이어가 재시도 토픽(`tech-letter.post.summary.retry.N`)으로 이벤트를 이동
    - Retry Worker가 지연 시간이 지난 메시지를 다시 기본 토픽(`tech-letter.post.summary`)으로 재주입
@@ -215,20 +231,70 @@ sequenceDiagram
     EB->>CBS: Deliver post.embedding_response
     CBS->>VDB: Upsert chunk embeddings
 
+    opt Post or Blog deleted
+        CS->>EB: post.embedding_delete_requested
+        EB->>CBS: Deliver post.embedding_delete_requested
+        CBS->>VDB: Delete vectors by post_id
+    end
+
     alt Handler error (any worker)
         EB->>EB: Publish to retry topic (*.retry.N)
         RW->>EB: After delay, re-publish to base topic
     end
 ```
 
-### 채팅 API 플로우 (크레딧 & 세션)
+### Chatbot Service 내부 Agent 구조
 
-1. **세션 생성**: 클라이언트 → API Gateway → User Service → MongoDB (chat_sessions)
-2. **채팅 요청**:
+Chatbot Service는 단순 `쿼리 임베딩 → 벡터 검색 → 답변 생성` 방식이 아니라, LangGraph로 고정된 실행 그래프를 구성한다. LLM은 주로 "어떤 도구를 어떤 조건으로 사용할지" 계획하고, 실제 조회와 검색은 명시적인 Tool Adapter가 담당한다.
+
+```mermaid
+flowchart TD
+    START([Start]) --> IG[Input Prompt Guard]
+    IG --> MEM[Conversation Memory]
+    MEM --> PLAN[LLM Planner]
+    PLAN --> ROUTE{plan.task}
+    ROUTE -->|list_posts| LIST[Content Service Post List]
+    ROUTE -->|summarize_posts / answer_from_posts| READ[Post List + Plain Text Load]
+    ROUTE -->|semantic_search_posts| SEM[Semantic Search or Scoped Post Read]
+    ROUTE -->|general_rag| RAG[Qdrant Vector Search]
+    ROUTE -->|no_result| NO[No Result]
+    LIST --> ANSWER[Answer Generator]
+    READ --> ANSWER
+    SEM --> ANSWER
+    RAG --> ANSWER
+    NO --> ANSWER
+    ANSWER --> OG[Output Guard]
+    OG --> END([End])
+```
+
+- **Input Prompt Guard**: 시스템 프롬프트 추출, 역할 우회, 시크릿 요청, 타 사용자 데이터 요청 등을 차단하거나 일부 문구를 제거한다.
+- **Conversation Memory**: User Service에서 전달된 최근 메시지와 압축 요약을 사용해 현재 질문을 standalone query로 보정한다. 대화 내용은 신뢰된 지시가 아니라 참조용 transcript로만 취급한다.
+- **LLM Planner**: 현재 시각(`Asia/Seoul`)을 포함한 planner prompt로 `list_posts`, `summarize_posts`, `answer_from_posts`, `semantic_search_posts`, `general_rag`, `no_result` 중 하나를 선택한다. 날짜/블로그/태그/카테고리 조건은 명시적인 `PostConstraints`로 변환한다.
+- **Tool Adapter**: 날짜/블로그/태그/카테고리 조건이 있는 질문은 Content Service의 포스트 조회 API를 사용하고, 일반 기술 질문이나 의미 기반 검색이 필요한 경우 Qdrant 벡터 검색을 사용한다.
+- **Answer Generator**: 도구 결과와 검증된 context만 사용해 답변한다. `list_posts`는 LLM을 거치지 않고 포맷된 목록으로 응답한다.
+- **Output Guard**: 최종 답변에서 내부 지시문 유출 패턴을 검사한다.
+- **Activity Streaming**: 각 노드는 `activity` 이벤트를 발행할 수 있고, API Gateway는 이를 SSE로 프론트엔드에 중계한다.
+
+### 채팅 API 플로우 (크레딧, 세션, AI Agent)
+
+1. **세션 생성/조회**: 클라이언트 → API Gateway → User Service → MongoDB (`chat_sessions`)
+2. **채팅 요청 준비**:
+   - API Gateway에서 JWT 인증 및 1차 Prompt Guard 수행
    - API Gateway에서 session_id 검증 (User Service 조회)
    - 크레딧 차감 (User Service)
-   - RAG 질의 (Chatbot Service)
-   - 성공/실패에 따라 이벤트 발행
+   - 세션의 최근 대화와 압축 메모리 상태를 Chatbot Service 요청에 포함
+3. **AI Agent 실행 (Chatbot Service)**
+   - Prompt Guard로 입력 안전성 확인
+   - Conversation Memory가 저장된 요약과 최근 메시지를 반영하고 standalone query로 보정
+   - LLM Planner가 현재 시각(Asia/Seoul)을 기준으로 작업 타입과 필터 조건을 JSON plan으로 생성
+   - LangGraph가 plan.task에 따라 메타데이터 조회, 본문 로드, 벡터 검색, no-result 중 하나로 분기
+   - Answer Generator가 도구 결과만 사용해 답변을 생성하고 Output Guard가 최종 답변을 검사
+4. **응답/저장**
+   - `/api/v1/chatbot/chat`: 최종 JSON 응답 반환
+   - `/api/v1/chatbot/chat/stream`: `activity` SSE로 처리 과정을 먼저 보내고 `done` SSE로 최종 답변 반환
+   - 성공 시 `chat.completed` 이벤트 발행 → User Service가 세션에 user/assistant 메시지 저장
+   - 메시지가 임계치 이상 쌓이면 User Service가 `chat.context_compression.requested` 이벤트 발행
+   - Chatbot Service가 긴 대화를 요약하고 User Service의 세션 메모리 상태를 갱신
 
 ```mermaid
 sequenceDiagram
@@ -238,8 +304,11 @@ sequenceDiagram
     participant CBS as Chatbot Service
     participant EB as EventBus/Kafka
     participant DB as MongoDB
+    participant CS as Content Service
+    participant VDB as Qdrant
+    participant LLM as LLM Provider
 
-    Client->>GW: POST /chatbot/chat (query, session_id?)
+    Client->>GW: POST /chatbot/chat or /chatbot/chat/stream
 
     opt session_id 제공
         GW->>US: GET /chatbot/sessions/:id (검증)
@@ -258,12 +327,33 @@ sequenceDiagram
     end
     US-->>GW: 200 {consume_id, remaining}
 
-    GW->>CBS: POST /chat (query)
-    CBS-->>GW: 200 {answer}
+    GW->>CBS: POST /api/v1/chat or /api/v1/chat/stream
+    CBS->>CBS: Prompt Guard + Memory load
+    CBS->>LLM: Plan query with now(Asia/Seoul)
+
+    alt metadata/list/content scoped query
+        CBS->>CS: List posts by date/blog/tag/category
+        opt content answer needed
+            CBS->>CS: Load post plain_text
+        end
+    else semantic/general RAG
+        CBS->>VDB: Vector search
+    end
+
+    CBS->>LLM: Generate answer from tool result only
+    CBS->>CBS: Output Guard
+    CBS-->>GW: activity SSE events + done {answer, sources, agent, guard, memory}
 
     GW->>US: POST /credits/log-completed (성공 로그)
     US->>EB: chat.completed 이벤트 발행
     EB->>US: 이벤트 소비 → 세션에 메시지 추가
+
+    opt context compression threshold reached
+        US->>EB: chat.context_compression.requested
+        EB->>CBS: Deliver compression request
+        CBS->>LLM: Summarize older transcript
+        CBS->>US: Update session memory summary
+    end
 
     GW-->>Client: 200 {answer, consumed_credits, remaining_credits}
 ```
@@ -393,8 +483,10 @@ EMBEDDING_WORKER_LLM_API_KEY=your-openai-api-key
 
 - `tech-letter.post.summary`: 요약 파이프라인 이벤트 (`post.summary_requested`, `post.summary_response`) - **운영 중**
 - `tech-letter.post.embedding`: 임베딩 파이프라인 이벤트 (`post.embedding_requested`, `post.embedding_response`) - **운영 중**
+- `tech-letter.post.embedding_delete_requested`: 포스트/블로그 삭제 시 Qdrant 임베딩 삭제 요청 - **운영 중**
 - `tech-letter.credit`: 크레딧 관련 이벤트 (`credit.consumed`, `credit.granted`) - **운영 중**
 - `tech-letter.chat`: 채팅 관련 이벤트 (`chat.completed`, `chat.failed`) - **운영 중**
+- `tech-letter.chat.context_compression`: 긴 채팅 세션 컨텍스트 압축 요청 - **운영 중**
 - `tech-letter.newsletter.events`: 뉴스레터 관련 이벤트 - **Phase 3 예정(현재 코드 미구현)**
 
 ## 서비스 포트
@@ -402,7 +494,7 @@ EMBEDDING_WORKER_LLM_API_KEY=your-openai-api-key
 - **API Gateway**: 8080 (클라이언트용 REST API)
 - **Content Service**: 8001 (내부 서비스 API)
 - **User Service**: 8002 (내부 서비스 API - 유저/북마크)
-- **Chatbot Service**: 8003 (RAG 챗봇 API)
+- **Chatbot Service**: 8003 (LangGraph AI Agent 챗봇 API)
 - **Qdrant**: 6333 (Vector DB HTTP), 6334 (gRPC)
 - Kafka: 9092
 - Kafka UI: 8081
