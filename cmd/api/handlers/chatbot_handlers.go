@@ -13,6 +13,27 @@ import (
 	"tech-letter/cmd/api/services"
 )
 
+// ChatbotSuggestedQuestionsHandler godoc
+// @Summary      챗봇 추천 질문 목록
+// @Description  활성화된 챗봇 추천 예시 질문을 반환한다.
+// @Tags         chatbot
+// @Produce      json
+// @Success      200  {array}   dto.ChatbotSuggestedQuestionDTO
+// @Failure      500  {object}  dto.ErrorResponseDTO
+// @Router       /chatbot/suggested-questions [get]
+func ChatbotSuggestedQuestionsHandler(
+	chatbotSvc *services.ChatbotService,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		questions, err := chatbotSvc.ListSuggestedQuestions(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponseDTO{Error: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, questions)
+	}
+}
+
 // ChatbotChatHandler godoc
 // @Summary      챗봇 질의
 // @Description  로그인된 사용자만 사용할 수 있는 챗봇 질의 API. 크레딧이 차감된다.
