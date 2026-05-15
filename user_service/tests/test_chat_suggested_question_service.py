@@ -6,7 +6,6 @@ import pytest
 
 from user_service.app.models.chat_suggested_question import ChatSuggestedQuestion
 from user_service.app.services.chat_suggested_question_service import (
-    DEFAULT_SUGGESTED_QUESTIONS,
     ChatSuggestedQuestionService,
     DuplicateSuggestedQuestionError,
     SuggestedQuestionMutation,
@@ -17,10 +16,6 @@ class FakeSuggestedQuestionRepository:
     def __init__(self) -> None:
         self.items: list[ChatSuggestedQuestion] = []
         self.normalized_by_id: dict[str, str] = {}
-        self.seeded = False
-
-    def count_all(self) -> int:
-        return len(self.items)
 
     def list(self, include_inactive: bool = False) -> list[ChatSuggestedQuestion]:
         items = self.items if include_inactive else [
@@ -78,32 +73,10 @@ class FakeSuggestedQuestionRepository:
             return 10
         return max(item.sort_order for item in self.items) + 10
 
-    def defaults_seeded(self) -> bool:
-        return self.seeded
 
-    def mark_defaults_seeded(self) -> None:
-        self.seeded = True
-
-
-def test_list_questions_seeds_default_questions_when_empty() -> None:
+def test_list_questions_returns_empty_when_no_questions_exist() -> None:
     repo = FakeSuggestedQuestionRepository()
     service = ChatSuggestedQuestionService(repo)
-
-    questions = service.list_questions()
-
-    assert len(questions) == len(DEFAULT_SUGGESTED_QUESTIONS)
-    assert questions[0].text == DEFAULT_SUGGESTED_QUESTIONS[0]
-    assert questions[0].sort_order == 10
-    assert repo.seeded
-
-
-def test_list_questions_does_not_reseed_after_defaults_were_seeded() -> None:
-    repo = FakeSuggestedQuestionRepository()
-    service = ChatSuggestedQuestionService(repo)
-
-    service.list_questions()
-    for item in list(repo.items):
-        repo.delete(item.id or "")
 
     assert service.list_questions() == []
 
