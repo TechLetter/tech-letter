@@ -16,10 +16,6 @@ from .documents.chat_suggested_question_document import (
 class ChatSuggestedQuestionRepository:
     def __init__(self, db: Database):
         self.collection = db["chat_suggested_questions"]
-        self.settings_collection = db["chat_suggested_question_settings"]
-
-    def count_all(self) -> int:
-        return self.collection.count_documents({})
 
     def list(self, include_inactive: bool = False) -> list[ChatSuggestedQuestion]:
         filter_query = {} if include_inactive else {"is_active": True}
@@ -88,17 +84,3 @@ class ChatSuggestedQuestionRepository:
         if not doc:
             return 10
         return int(doc.get("sort_order") or 0) + 10
-
-    def defaults_seeded(self) -> bool:
-        return self.settings_collection.find_one({"_id": "defaults"}) is not None
-
-    def mark_defaults_seeded(self) -> None:
-        now = datetime.utcnow()
-        self.settings_collection.update_one(
-            {"_id": "defaults"},
-            {
-                "$set": {"seeded": True, "updated_at": now},
-                "$setOnInsert": {"created_at": now},
-            },
-            upsert=True,
-        )
