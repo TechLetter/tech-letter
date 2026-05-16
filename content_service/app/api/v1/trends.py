@@ -22,8 +22,8 @@ router = APIRouter()
 )
 def get_rising_tags(
     period: str = Query(
-        "90d",
-        pattern="^(30d|90d|180d|365d)$",
+        "180d",
+        pattern="^(30d|180d|365d|3y)$",
         description="조회 기간",
     ),
     limit: int = Query(5, ge=1, le=20, description="반환할 태그 개수"),
@@ -47,8 +47,8 @@ def get_tag_series(
         description="조회할 태그 목록",
     ),
     period: str = Query(
-        "90d",
-        pattern="^(30d|90d|180d|365d)$",
+        "180d",
+        pattern="^(30d|180d|365d|3y)$",
         description="조회 기간",
     ),
     interval: str = Query(
@@ -76,8 +76,8 @@ def list_trend_posts(
         description="조회할 태그 목록",
     ),
     period: str = Query(
-        "90d",
-        pattern="^(30d|90d|180d|365d)$",
+        "180d",
+        pattern="^(30d|180d|365d|3y)$",
         description="조회 기간",
     ),
     page: int = Query(1, ge=1, description="조회할 페이지"),

@@ -26,9 +26,9 @@ class TrendsService:
 
     _PERIOD_DAYS = {
         "30d": 30,
-        "90d": 90,
         "180d": 180,
         "365d": 365,
+        "3y": 365 * 3,
     }
     _INTERVALS = {"day", "week", "month"}
 
