@@ -1,9 +1,24 @@
 from __future__ import annotations
 
-from typing import Protocol
+from datetime import datetime
+from typing import Protocol, TypedDict
 
 from common.models.blog import Blog, ListBlogsFilter
 from common.models.post import ListPostsFilter, Post
+
+
+class TagCountRow(TypedDict):
+    key: str
+    tag: str
+    count: int
+
+
+class TagSeriesRow(TypedDict):
+    key: str
+    tag: str
+    bucket: datetime
+    post_count: int
+    blog_count: int
 
 
 class PostRepositoryInterface(Protocol):
@@ -54,6 +69,22 @@ class PostRepositoryInterface(Protocol):
         self, blog_id: str | None, categories: list[str]
     ) -> dict[str, int]:  # pragma: no cover - Protocol
         """태그별 포스트 개수를 반환한다. (대소문자 무시)"""
+        ...
+
+    def get_tag_counts_between(
+        self, published_from: datetime, published_to: datetime
+    ) -> list[TagCountRow]:  # pragma: no cover - Protocol
+        """발행 기간 안의 태그별 포스트 수를 반환한다. (대소문자 무시)"""
+        ...
+
+    def get_tag_series(
+        self,
+        tags: list[str],
+        published_from: datetime,
+        published_to: datetime,
+        interval: str,
+    ) -> list[TagSeriesRow]:  # pragma: no cover - Protocol
+        """태그별 시간 버킷 집계를 반환한다. (대소문자 무시)"""
         ...
 
     def get_blog_stats(

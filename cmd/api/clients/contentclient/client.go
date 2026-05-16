@@ -582,6 +582,173 @@ func (c *Client) GetBlogFilters(ctx context.Context, params FilterParams) (BlogF
 	return out, nil
 }
 
+// -------------------- Trends --------------------
+
+type TrendParams struct {
+	Period string
+	Limit  int
+}
+
+type TrendSeriesParams struct {
+	Tags     []string
+	Period   string
+	Interval string
+}
+
+type TrendPostsParams struct {
+	Tags     []string
+	Period   string
+	Page     int
+	PageSize int
+}
+
+type RisingTrendPeriod struct {
+	From         time.Time `json:"from"`
+	To           time.Time `json:"to"`
+	PreviousFrom time.Time `json:"previous_from"`
+	PreviousTo   time.Time `json:"previous_to"`
+}
+
+type RisingTagItem struct {
+	Tag           string   `json:"tag"`
+	CurrentCount  int      `json:"current_count"`
+	PreviousCount int      `json:"previous_count"`
+	Delta         int      `json:"delta"`
+	GrowthRate    *float64 `json:"growth_rate"`
+}
+
+type RisingTagsResponse struct {
+	Period RisingTrendPeriod `json:"period"`
+	Items  []RisingTagItem   `json:"items"`
+}
+
+type SeriesTrendPeriod struct {
+	From     time.Time `json:"from"`
+	To       time.Time `json:"to"`
+	Interval string    `json:"interval"`
+}
+
+type TrendSeriesPoint struct {
+	Bucket    time.Time `json:"bucket"`
+	PostCount int       `json:"post_count"`
+	BlogCount int       `json:"blog_count"`
+}
+
+type TrendSeriesItem struct {
+	Tag    string             `json:"tag"`
+	Points []TrendSeriesPoint `json:"points"`
+}
+
+type TrendSeriesResponse struct {
+	Period SeriesTrendPeriod `json:"period"`
+	Series []TrendSeriesItem `json:"series"`
+}
+
+func (c *Client) GetRisingTags(ctx context.Context, params TrendParams) (RisingTagsResponse, error) {
+	q := url.Values{}
+	if params.Period != "" {
+		q.Set("period", params.Period)
+	}
+	if params.Limit > 0 {
+		q.Set("limit", strconv.Itoa(params.Limit))
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/trends/rising", q, nil)
+	if err != nil {
+		return RisingTagsResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return RisingTagsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return RisingTagsResponse{}, fmt.Errorf("content-service GetRisingTags: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out RisingTagsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return RisingTagsResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) GetTrendSeries(ctx context.Context, params TrendSeriesParams) (TrendSeriesResponse, error) {
+	q := url.Values{}
+	for _, tag := range params.Tags {
+		q.Add("tags", tag)
+	}
+	if params.Period != "" {
+		q.Set("period", params.Period)
+	}
+	if params.Interval != "" {
+		q.Set("interval", params.Interval)
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/trends/series", q, nil)
+	if err != nil {
+		return TrendSeriesResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return TrendSeriesResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return TrendSeriesResponse{}, fmt.Errorf("content-service GetTrendSeries: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out TrendSeriesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return TrendSeriesResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *Client) ListTrendPosts(ctx context.Context, params TrendPostsParams) (ListPostsResponse, error) {
+	q := url.Values{}
+	for _, tag := range params.Tags {
+		q.Add("tags", tag)
+	}
+	if params.Period != "" {
+		q.Set("period", params.Period)
+	}
+	if params.Page > 0 {
+		q.Set("page", strconv.Itoa(params.Page))
+	}
+	if params.PageSize > 0 {
+		q.Set("page_size", strconv.Itoa(params.PageSize))
+	}
+
+	req, err := c.base.NewRequest(ctx, http.MethodGet, "/api/v1/trends/posts", q, nil)
+	if err != nil {
+		return ListPostsResponse{}, err
+	}
+
+	resp, err := c.base.Do(req)
+	if err != nil {
+		return ListPostsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return ListPostsResponse{}, fmt.Errorf("content-service ListTrendPosts: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var out ListPostsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return ListPostsResponse{}, err
+	}
+	return out, nil
+}
+
 // -------------------- Admin Methods --------------------
 
 type CreatePostRequest struct {

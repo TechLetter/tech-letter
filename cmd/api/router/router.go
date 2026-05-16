@@ -54,6 +54,7 @@ func New() *gin.Engine {
 		bookmarkSvc := services.NewBookmarkService(contentClient, userClient)
 		chatbotSvc := services.NewChatbotService(chatbotClient, userClient)
 		adminSvc := services.NewAdminService(contentClient, userClient)
+		trendsSvc := services.NewTrendService(contentClient)
 
 		api.GET("/posts", handlers.ListPostsHandler(postsSvc, bookmarkSvc, authSvc))
 		api.GET("/posts/:id", handlers.GetPostHandler(postsSvc))
@@ -69,6 +70,10 @@ func New() *gin.Engine {
 		api.GET("/filters/categories", handlers.GetCategoryFiltersHandler(filtersSvc))
 		api.GET("/filters/tags", handlers.GetTagFiltersHandler(filtersSvc))
 		api.GET("/filters/blogs", handlers.GetBlogFiltersHandler(filtersSvc))
+
+		api.GET("/trends/rising", handlers.GetRisingTagsHandler(trendsSvc))
+		api.GET("/trends/series", handlers.GetTrendSeriesHandler(trendsSvc))
+		api.GET("/trends/posts", handlers.ListTrendPostsHandler(trendsSvc))
 
 		api.GET("/auth/google/login", handlers.GoogleLoginHandler(authSvc))
 		api.GET("/auth/google/callback", handlers.GoogleCallbackHandler(authSvc, userSvc))
