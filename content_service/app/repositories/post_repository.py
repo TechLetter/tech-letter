@@ -8,7 +8,7 @@ from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.database import Database
 
 from .documents.post_document import PostDocument
-from .interfaces import PostRepositoryInterface
+from .interfaces import PostRepositoryInterface, TagCountRow, TagSeriesRow
 from common.models.post import ListPostsFilter, Post
 from common.mongo.types import from_object_id, to_object_id
 
@@ -290,6 +290,114 @@ class PostRepository(PostRepositoryInterface):
             if blog_id is not None:
                 counts[blog_id] = int(doc["count"])
         return counts
+
+    def get_tag_counts_between(
+        self, published_from: datetime, published_to: datetime
+    ) -> list[TagCountRow]:
+        pipeline = [
+            {
+                "$match": {
+                    "published_at": {"$gte": published_from, "$lt": published_to},
+                    "status.ai_summarized": True,
+                    "aisummary.tags": {"$exists": True, "$type": "array", "$ne": []},
+                }
+            },
+            {"$unwind": "$aisummary.tags"},
+            {"$match": {"aisummary.tags": {"$type": "string", "$ne": ""}}},
+            {
+                "$group": {
+                    "_id": {"$toLower": "$aisummary.tags"},
+                    "original": {"$first": "$aisummary.tags"},
+                    "count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"count": -1, "original": 1}},
+        ]
+
+        rows: list[TagCountRow] = []
+        for doc in self._col.aggregate(pipeline):
+            key = str(doc["_id"]).strip()
+            if not key:
+                continue
+            rows.append(
+                {
+                    "key": key,
+                    "tag": str(doc.get("original") or key),
+                    "count": int(doc["count"]),
+                }
+            )
+        return rows
+
+    def get_tag_series(
+        self,
+        tags: list[str],
+        published_from: datetime,
+        published_to: datetime,
+        interval: str,
+    ) -> list[TagSeriesRow]:
+        if interval not in {"day", "week", "month"}:
+            raise ValueError(f"unsupported trend interval: {interval}")
+
+        tag_patterns = [
+            re.compile(f"^{re.escape(tag.strip())}$", re.IGNORECASE)
+            for tag in tags
+            if tag.strip()
+        ]
+        if not tag_patterns:
+            return []
+
+        match_doc = {
+            "published_at": {"$gte": published_from, "$lt": published_to},
+            "status.ai_summarized": True,
+            "aisummary.tags": {"$in": tag_patterns},
+        }
+
+        pipeline = [
+            {"$match": match_doc},
+            {"$unwind": "$aisummary.tags"},
+            {"$match": {"aisummary.tags": {"$in": tag_patterns}}},
+            {
+                "$group": {
+                    "_id": {
+                        "tag": {"$toLower": "$aisummary.tags"},
+                        "bucket": {
+                            "$dateTrunc": {
+                                "date": "$published_at",
+                                "unit": interval,
+                                "timezone": "UTC",
+                            }
+                        },
+                    },
+                    "original": {"$first": "$aisummary.tags"},
+                    "post_count": {"$sum": 1},
+                    "blog_ids": {"$addToSet": "$blog_id"},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "key": "$_id.tag",
+                    "tag": "$original",
+                    "bucket": "$_id.bucket",
+                    "post_count": 1,
+                    "blog_count": {"$size": "$blog_ids"},
+                }
+            },
+            {"$sort": {"bucket": 1, "tag": 1}},
+        ]
+
+        rows: list[TagSeriesRow] = []
+        for doc in self._col.aggregate(pipeline):
+            rows.append(
+                {
+                    "key": str(doc["key"]),
+                    "tag": str(doc["tag"]),
+                    "bucket": doc["bucket"],
+                    "post_count": int(doc["post_count"]),
+                    "blog_count": int(doc["blog_count"]),
+                }
+            )
+        return rows
 
     def get_category_stats(
         self, blog_id: str | None, tags: list[str]
