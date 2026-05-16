@@ -11,9 +11,9 @@ import (
 
 var allowedTrendPeriods = map[string]bool{
 	"30d":  true,
-	"90d":  true,
 	"180d": true,
 	"365d": true,
+	"3y":   true,
 }
 
 var allowedTrendIntervals = map[string]bool{
@@ -24,7 +24,7 @@ var allowedTrendIntervals = map[string]bool{
 
 func GetRisingTagsHandler(svc *services.TrendService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		period := c.DefaultQuery("period", "90d")
+		period := c.DefaultQuery("period", "180d")
 		if !allowedTrendPeriods[period] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid trend period"})
 			return
@@ -47,7 +47,7 @@ func GetRisingTagsHandler(svc *services.TrendService) gin.HandlerFunc {
 
 func GetTrendSeriesHandler(svc *services.TrendService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		period := c.DefaultQuery("period", "90d")
+		period := c.DefaultQuery("period", "180d")
 		if !allowedTrendPeriods[period] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid trend period"})
 			return
@@ -75,7 +75,7 @@ func GetTrendSeriesHandler(svc *services.TrendService) gin.HandlerFunc {
 
 func ListTrendPostsHandler(svc *services.TrendService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		period := c.DefaultQuery("period", "90d")
+		period := c.DefaultQuery("period", "180d")
 		if !allowedTrendPeriods[period] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid trend period"})
 			return
