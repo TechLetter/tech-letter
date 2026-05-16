@@ -40,7 +40,7 @@ class FakePostRepository:
 def test_get_rising_tags_sorts_by_delta_and_calculates_growth() -> None:
     service = TrendsService(FakePostRepository())
 
-    result = service.get_rising_tags(period="90d", limit=1)
+    result = service.get_rising_tags(period="180d", limit=1)
 
     assert len(result.items) == 1
     assert result.items[0].tag == "RAG"
@@ -66,10 +66,18 @@ def test_get_tag_series_deduplicates_tags_and_preserves_empty_series() -> None:
 
     result = service.get_tag_series(
         tags=["rag", "RAG", "MCP"],
-        period="90d",
+        period="180d",
         interval="week",
     )
 
     assert [item.tag for item in result.series] == ["RAG", "MCP"]
     assert result.series[0].points[0].post_count == 3
     assert result.series[1].points == []
+
+
+def test_get_rising_tags_accepts_three_year_period() -> None:
+    service = TrendsService(FakePostRepository())
+
+    result = service.get_rising_tags(period="3y", limit=1)
+
+    assert result.items[0].tag == "RAG"
