@@ -3,6 +3,11 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # 문서만 바뀐 push 는 배포할 필요가 없다 — 컷오버 문서를 갱신했다가
+    # 백필이 도는 워커를 불필요하게 재시작시킨 적이 있다.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
     inputs:
       image_tag:
