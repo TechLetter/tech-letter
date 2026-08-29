@@ -361,6 +361,89 @@ def settings_check() -> None:
     typer.secho(f"설정 OK (service={loaded.service_name}, db={loaded.mongo.db_name})", fg="green")
 
 
+# Settings 자체의 필드 중 서브모델(예: mongo, router)은 env var가 아니라 조립
+# 대상이라 출력에서 뺀다. 이름은 settings.py의 Settings.load() 인자와 동기화한다.
+_NESTED_SETTINGS_FIELDS = frozenset(
+    {
+        "mongo",
+        "qdrant",
+        "router",
+        "jobs",
+        "rss",
+        "summary",
+        "embedding",
+        "chat",
+        "auth_settings",
+        "summary_llm",
+        "embedding_llm",
+        "chat_llm",
+        "chat_embedding",
+    }
+)
+
+
+def _field_default(field: Any) -> str:
+    if field.is_required():
+        return ""
+    value = field.default_factory() if field.default_factory is not None else field.default
+    if value in (None, [], ""):
+        return ""
+    if isinstance(value, list):
+        return ",".join(str(v) for v in value)
+    return str(value)
+
+
+@settings_app.command("example")
+def settings_example() -> None:
+    """`.env.example` 형식으로 전체 환경변수 목록을 출력한다(시크릿 값은 채우지 않는다)."""
+    from techletter.settings import (  # noqa: PLC0415
+        AuthSettings,
+        ChatEmbeddingSettings,
+        ChatLlmSettings,
+        ChatSettings,
+        EmbeddingLlmSettings,
+        EmbeddingSettings,
+        JobSettings,
+        MongoSettings,
+        QdrantSettings,
+        RouterSettings,
+        RssSettings,
+        Settings,
+        SummaryLlmSettings,
+        SummarySettings,
+    )
+
+    sections: list[tuple[str, type[Any]]] = [
+        ("서비스", Settings),
+        ("MongoDB", MongoSettings),
+        ("Qdrant", QdrantSettings),
+        ("인증 (Google OAuth · JWT)", AuthSettings),
+        ("요약 워커 LLM", SummaryLlmSettings),
+        ("임베딩 워커 LLM", EmbeddingLlmSettings),
+        ("챗봇 LLM", ChatLlmSettings),
+        ("챗봇 임베딩", ChatEmbeddingSettings),
+        ("LLM 모델 라우터 (ADR-0008)", RouterSettings),
+        ("잡 큐 (ADR-0004)", JobSettings),
+        ("RSS 수집", RssSettings),
+        ("요약 파이프라인", SummarySettings),
+        ("임베딩 파이프라인", EmbeddingSettings),
+        ("챗봇", ChatSettings),
+    ]
+    lines: list[str] = []
+    for title, cls in sections:
+        prefix = cls.model_config.get("env_prefix", "") or ""
+        lines.append(f"# {title}")
+        for name, field in cls.model_fields.items():
+            if name in _NESTED_SETTINGS_FIELDS:
+                continue
+            # env_prefix만 있는 필드(예: LLM 서브클래스)는 alias가 없다 —
+            # pydantic-settings가 prefix + 필드명으로 env var를 만든다.
+            env_name = (field.alias or f"{prefix}{name}").upper()
+            lines.append(f"{env_name}={_field_default(field)}")
+        lines.append("")
+    typer.echo("\n".join(lines).rstrip() + "\n", nl=False)
+
+
 def main() -> None:
     app()
 

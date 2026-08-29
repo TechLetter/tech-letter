@@ -1,13 +1,11 @@
 # Tech-Letter 문서
 
-> **2026-08-28 — 백엔드 대격변(Great Rewrite) 계획 단계.** 결정 인터뷰가 끝나 문서를 개정했고, **코드는 아직 변경되지 않았다**. 현재 운영 중인 구조의 설명은 루트 [README.md](../README.md) 참조.
->
-> **지금 필요한 것: [04-api-v2.md](plan/04-api-v2.md) 리뷰** — 새 API 계약에 합의하면 Phase 0부터 착수한다.
+> **2026-08-29 — 백엔드 대격변(Great Rewrite) 컷오버 완료.** Go 게이트웨이 + Python 마이크로서비스 4개 + Kafka 구조를 **FastAPI 모듈러 모놀리스 + Mongo 잡 큐**로 전환했다. 아래 계획 문서는 이제 **현재 아키텍처를 설명하는 문서**다(작업 중 발견한 버그·수정 내역까지 포함). 최신 개요는 루트 [README.md](../README.md) 참조.
 
 ## 읽는 순서
-1. [00-overview](plan/00-overview.md) — 왜/무엇을/제약, **결정 로그 21건**, 성공 기준, 리스크
-2. [**04-api-v2**](plan/04-api-v2.md) — ⭐ **새 API 계약 제안(리뷰 핵심)**: 경로·스키마·에러 체계·프론트 변경 체크리스트
-3. [06-migration-steps](plan/06-migration-steps.md) — Phase 0~11, 85스텝, 진행 보드
+1. [01-target-architecture](plan/01-target-architecture.md) — 프로세스 4종, 모듈러 모놀리스, Mongo 잡 큐, LLM 라우터
+2. [04-api-v2](plan/04-api-v2.md) — 현재 API 계약: 경로·스키마·에러 체계
+3. [06-migration-steps](plan/06-migration-steps.md) — Phase 0~11, 85스텝, 진행 보드(실행 과정에서 발견·수정한 버그 포함)
 
 ## 계획 (`plan/`)
 | 문서 | 내용 |
@@ -40,7 +38,7 @@
 
 ## 기타
 - [PRIVACY_POLICY.md](PRIVACY_POLICY.md) — 개인정보처리방침(현행 유지)
-- [legacy/](legacy/README.md) — 구 설계 문서(Phase 11에서 삭제)
-- `swagger.json` / `swagger.yaml` / `docs.go` — Go swag 산출물(Go 빌드가 참조하므로 Phase 11까지 유지)
 - `images/` — README 이미지
 - 배포 절차: 워크스페이스 루트 `AGENTS.md`("변경사항 배포")
+
+`legacy/`(구 설계 문서)와 Go swag 산출물(`swagger.json`/`swagger.yaml`/`docs.go`)은 Phase 11.1에서 삭제됐다 — Go 코드 자체가 사라져 더는 참조되지 않는다.

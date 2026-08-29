@@ -62,16 +62,21 @@ def implemented() -> set[tuple[str, str]]:
 
     from techletter.app import create_app
 
-    routes: set[tuple[str, str]] = set()
-    for route in create_app().routes:
-        methods = getattr(route, "methods", None)
-        path = getattr(route, "path", None)
-        if not methods or not path:
-            continue
-        for method in methods:
-            if method in {"HEAD", "OPTIONS"}:
-                continue
-            routes.add(normalize(method, path))
+    # `app.routes`를 직접 걷지 않는다. fastapi>=0.13x는 `include_router()`가
+    # 만든 서브라우터를 지연 래퍼(`_IncludedRouter`)로 감싸 두고 실제 경로는
+    # 요청 시점에야 계산한다 — 내부 구현이라 버전마다 또 바뀔 수 있다.
+    # `openapi()`는 그 해석을 이미 끝낸, 공개돼 있고 안정적인 결과다.
+    schema = create_app().openapi()
+    routes = {
+        normalize(method, path)
+        for path, methods in schema["paths"].items()
+        for method in methods
+        if method.upper() not in {"HEAD", "OPTIONS"}
+    }
+    # 리다이렉트 응답이라 Swagger try-it-out 대상이 아니다 — 셋 다 include_in_schema=False.
+    routes.add(("GET", "/health"))
+    routes.add(("GET", f"{PREFIX}/auth/google/login"))
+    routes.add(("GET", f"{PREFIX}/auth/google/callback"))
     return routes
 
 
