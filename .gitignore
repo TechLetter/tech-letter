@@ -1,8 +1,7 @@
-*.txt
 config.yaml
 .env
-.env.production
-.env.docker
+.env.*
+!.env.example
 
 # Python bytecode files
 __pycache__/
@@ -21,6 +20,11 @@ build/
 *.egg-info/
 .coverage
 htmlcov/
+.pytest_cache/
+
+# Go build artifacts (컴파일 산출물은 커밋하지 않는다)
+/api
+/retryworker
 
 # Logs and temporary files
 *.log

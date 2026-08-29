@@ -1,0 +1,28 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/admin/blogs"
+ },
+ "body": {
+  "data": [
+   {
+    "blog_type": "<str>",
+    "created_at": "<datetime>",
+    "id": "<oid>",
+    "is_active": "<bool>",
+    "last_fetch_error": null,
+    "last_fetched_at": "<datetime>",
+    "name": "<str>",
+    "post_count": "<int>",
+    "rss_url": "<url>",
+    "updated_at": "<datetime>",
+    "url": "<url>"
+   }
+  ],
+  "page": "<int>",
+  "page_size": "<int>",
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

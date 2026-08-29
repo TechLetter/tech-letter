@@ -1,0 +1,19 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/admin/suggested-questions"
+ },
+ "body": {
+  "items": [
+   {
+    "id": "<oid>",
+    "is_active": "<bool>",
+    "sort_order": "<int>",
+    "text": "<str>"
+   }
+  ],
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

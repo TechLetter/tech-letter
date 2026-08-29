@@ -1,0 +1,14 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/posts/bookmarks"
+ },
+ "body": {
+  "data": [],
+  "page": "<int>",
+  "page_size": "<int>",
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

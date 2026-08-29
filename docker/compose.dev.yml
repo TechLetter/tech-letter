@@ -1,0 +1,37 @@
+# 로컬 개발용 인프라만. 앱은 `uv run techletter api` 로 직접 띄운다.
+#
+#   docker compose -f docker/compose.dev.yml up -d
+#   uv run techletter ensure-indexes
+#   uv run techletter all
+#
+# 이미지 태그는 운영과 같은 것을 쓴다. 버전이 어긋나면 로컬에서 통과한
+# 쿼리가 운영에서 다르게 동작한다.
+
+name: techletter-dev
+
+services:
+  mongo:
+    image: mongo:8.0
+    container_name: techletter_dev_mongo
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-devpassword}
+    volumes: [mongo_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.2
+    container_name: techletter_dev_qdrant
+    restart: unless-stopped
+    ports: ["6333:6333"]
+    volumes: [qdrant_data:/qdrant/storage]
+
+volumes:
+  mongo_data:
+  qdrant_data:

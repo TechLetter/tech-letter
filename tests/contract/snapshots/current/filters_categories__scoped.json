@@ -1,0 +1,16 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/filters/categories"
+ },
+ "body": {
+  "items": [
+   {
+    "count": "<int>",
+    "name": "<str>"
+   }
+  ]
+ },
+ "content_type": "application/json",
+ "status": 200
+}

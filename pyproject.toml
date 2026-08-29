@@ -1,51 +1,149 @@
+[project]
+name = "techletter"
+version = "2.0.0"
+description = "Tech-Letter — 기술 블로그 수집·AI 요약·RAG 챗봇 서비스"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.122",
+    "uvicorn[standard]>=0.38",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.12",
+    "pymongo>=4.15",
+    "qdrant-client>=1.16",
+    "httpx>=0.28",
+    "pyjwt>=2.10",
+    "typer>=0.15",
+    "langchain-core>=1.4",
+    "langgraph>=1.1",
+    "langchain-google-genai>=3.2",
+    "langchain-openai>=1.1",
+    "langchain-text-splitters",
+    "feedparser>=6",
+]
+
+[project.optional-dependencies]
+# summary-worker 이미지에서만 설치한다. 본문 추출과 썸네일 처리는 요약
+# 파이프라인 전용이라 api/worker 이미지가 짊어질 이유가 없다 —
+# trafilatura 하나가 lxml·babel·zstandard 를 끌고 와 90MB 를 더한다.
+browser = [
+    "playwright==1.49.1",
+    "trafilatura",
+    "beautifulsoup4",
+    "pillow",
+]
+
+[project.scripts]
+techletter = "techletter.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "syrupy",
+    "ruff",
+    "pyright",
+    "pre-commit",
+    # summary-worker 이미지에만 들어가지만, 타입 검사와 테스트에는 필요하다.
+    "playwright==1.49.1",
+    "trafilatura",
+    "beautifulsoup4",
+    "pillow",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/techletter"]
+
+# ── 구 서비스 워크스페이스 (Phase 11에서 제거) ────────────────────────
+# 기존 Dockerfile들이 `uv pip install ./common ./<service>`로 설치하며
+# techletter-common을 workspace source로 해석한다. 컷오버 전까지 유지한다.
 [tool.uv.workspace]
 members = [
-  "common",
-  "summary_worker",
-  "embedding_worker",
-  "chatbot_service",
-  "content_service",
-  "user_service",
+    "common",
+    "summary_worker",
+    "embedding_worker",
+    "chatbot_service",
+    "content_service",
+    "user_service",
 ]
 
 [tool.uv.sources]
 techletter-common = { workspace = true }
 
+# ── 도구 설정 ────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = [
+    "common",
+    "summary_worker",
+    "embedding_worker",
+    "chatbot_service",
+    "content_service",
+    "user_service",
+    "docs",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "UP", "B", "ASYNC", "DTZ", "T20", "SIM", "RUF", "PL", "TID", "N", "ANN",
+]
+ignore = [
+    "ANN401",   # Any 허용 (동적 페이로드)
+    "PLR0913",  # 인자 개수
+    "PLR2004",  # magic value
+    "RUF001",   # 한글 문자열의 유사 문자 경고
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "PLR2004", "S101", "PLC0415"]  # 픽스처 안 지연 import는 의도적
+# 스크립트는 일회용 앱을 띄우느라 프로세스 환경을 직접 채운다(TID251).
+"scripts/**" = ["T20", "ANN", "E501", "PLR0911", "PLR0912", "PLC0415", "TID251"]
+# 라우트 핸들러는 쿼리 파라미터 수만큼 인자를 갖는다 — FastAPI의 시그니처 규약이다.
+"src/techletter/api/v1/**" = ["PLR0913", "PLR0917"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"datetime.datetime.utcnow".msg = "techletter.core.time.utcnow() 를 사용한다 (naive datetime 금지)"
+"motor".msg = "pymongo.asynchronous 를 사용한다"
+"confluent_kafka".msg = "Kafka는 제거되었다 (ADR-0004). techletter.core.jobs 를 사용한다"
+"aiokafka".msg = "Kafka는 제거되었다 (ADR-0004). techletter.core.jobs 를 사용한다"
+"os.environ.setdefault".msg = "프로세스 환경을 변경하지 않는다. 자격증명은 인자로 전달한다"
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-extraPaths = [
+include = ["src", "tests"]
+exclude = [
+    "**/__pycache__",
     "common",
     "summary_worker",
     "embedding_worker",
     "chatbot_service",
     "content_service",
     "user_service",
+    ".venv",
 ]
-
-include = [
-    "common",
-    "summary_worker",
-    "embedding_worker",
-    "chatbot_service",
-    "content_service",
-    "user_service",
-]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
 
 [tool.pytest.ini_options]
-
-python_files = [
-  "test_*.py",
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: 컨테이너(Mongo/Qdrant)가 필요한 테스트",
+    "e2e: 실행 중인 스택과 브라우저가 필요한 테스트",
+    "contract: 골든 스냅샷 비교",
+    "network: 실제 외부 서비스를 호출",
 ]
-pythonpath = [
-  ".",
-]
-
-filterwarnings = [
-  "ignore::DeprecationWarning:feedparser.util",
-]
-
-log_cli = true 
-log_cli_level = "INFO"
-log_cli_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+addopts = "-m 'not integration and not e2e and not network' --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning:feedparser.util"]

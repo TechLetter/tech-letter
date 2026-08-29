@@ -1,0 +1,19 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/trends/rising?period=7d"
+ },
+ "body": {
+  "error": {
+   "code": "<str>",
+   "details": {
+    "allowed": [
+     "<str>"
+    ]
+   },
+   "message": "<str>"
+  }
+ },
+ "content_type": "application/json",
+ "status": 400
+}

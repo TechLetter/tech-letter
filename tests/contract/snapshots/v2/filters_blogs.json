@@ -1,0 +1,18 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/filters/blogs"
+ },
+ "body": {
+  "items": [
+   {
+    "count": "<int>",
+    "id": "<oid>",
+    "name": "<str>"
+   }
+  ],
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

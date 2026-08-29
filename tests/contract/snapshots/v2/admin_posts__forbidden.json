@@ -1,0 +1,14 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/admin/posts"
+ },
+ "body": {
+  "error": {
+   "code": "<str>",
+   "message": "<str>"
+  }
+ },
+ "content_type": "application/json",
+ "status": 401
+}

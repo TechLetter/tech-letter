@@ -57,5 +57,6 @@ docker-compose*.yml
 
 # Misc
 *.log
-.env.example
+.env
+.env.*
 config-example.yaml

@@ -1,0 +1,21 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/me"
+ },
+ "body": {
+  "created_at": "<datetime>",
+  "credits": {
+   "granted_today": "<int>",
+   "remaining": "<int>"
+  },
+  "email": "<str>",
+  "name": "<str>",
+  "profile_image": "<url>",
+  "role": "<str>",
+  "updated_at": "<datetime>",
+  "user_code": "<str>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

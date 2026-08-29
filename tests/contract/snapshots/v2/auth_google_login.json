@@ -1,0 +1,9 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/auth/google/login"
+ },
+ "body": null,
+ "content_type": "",
+ "status": 302
+}

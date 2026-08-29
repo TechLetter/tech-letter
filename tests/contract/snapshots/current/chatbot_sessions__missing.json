@@ -1,0 +1,11 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/chatbot/sessions/{id}"
+ },
+ "body": {
+  "error": "<str>"
+ },
+ "content_type": "application/json",
+ "status": 404
+}

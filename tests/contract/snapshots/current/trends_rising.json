@@ -1,0 +1,25 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/trends/rising"
+ },
+ "body": {
+  "items": [
+   {
+    "current_count": "<int>",
+    "delta": "<int>",
+    "growth_rate": "<float>",
+    "previous_count": "<int>",
+    "tag": "<str>"
+   }
+  ],
+  "period": {
+   "from": "<datetime>",
+   "previous_from": "<datetime>",
+   "previous_to": "<datetime>",
+   "to": "<datetime>"
+  }
+ },
+ "content_type": "application/json",
+ "status": 200
+}

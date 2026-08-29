@@ -1,0 +1,18 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/chatbot/suggested-questions"
+ },
+ "body": [
+  {
+   "created_at": "<datetime>",
+   "id": "<oid>",
+   "is_active": "<bool>",
+   "sort_order": "<int>",
+   "text": "<str>",
+   "updated_at": "<datetime>"
+  }
+ ],
+ "content_type": "application/json",
+ "status": 200
+}

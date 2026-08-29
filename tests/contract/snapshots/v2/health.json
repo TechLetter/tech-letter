@@ -1,0 +1,10 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/health"
+ },
+ "body": null,
+ "content_type": null,
+ "skipped": "v1 스냅샷은 프론트 도메인의 /health(text/html)를 찍었다 — API 응답이 아니다",
+ "status": null
+}

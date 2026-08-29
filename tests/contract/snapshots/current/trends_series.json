@@ -1,0 +1,27 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/trends/series"
+ },
+ "body": {
+  "period": {
+   "from": "<datetime>",
+   "interval": "<str>",
+   "to": "<datetime>"
+  },
+  "series": [
+   {
+    "points": [
+     {
+      "blog_count": "<int>",
+      "bucket": "<datetime>",
+      "post_count": "<int>"
+     }
+    ],
+    "tag": "<str>"
+   }
+  ]
+ },
+ "content_type": "application/json",
+ "status": 200
+}

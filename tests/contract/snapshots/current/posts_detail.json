@@ -1,0 +1,25 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/posts/{id}"
+ },
+ "body": {
+  "blog_id": "<oid>",
+  "blog_name": "<str>",
+  "categories": [
+   "<str>"
+  ],
+  "id": "<oid>",
+  "link": "<url>",
+  "published_at": "<datetime>",
+  "summary": "<str>",
+  "tags": [
+   "<str>"
+  ],
+  "thumbnail_url": "<url>",
+  "title": "<str>",
+  "view_count": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}
