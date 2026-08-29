@@ -56,6 +56,10 @@ def extract_json(raw: str) -> dict[str, Any]:
     return parsed
 
 
+def _purpose(value: ModelPurpose | str) -> ModelPurpose:
+    return ModelPurpose(value) if isinstance(value, str) else value
+
+
 class ChatClient:
     """모델 하나를 호출하는 최소 인터페이스."""
 
@@ -155,6 +159,10 @@ class LlmGateway:
         self._router = router
         self._client = client
 
+    async def candidates(self, purpose: ModelPurpose | str) -> list[str]:
+        """라우터가 고른 후보. 호출자가 앞에 모델을 끼워 넣을 때 쓴다."""
+        return await self._router.candidates(_purpose(purpose))
+
     async def complete(
         self,
         purpose: ModelPurpose | str,
@@ -162,12 +170,13 @@ class LlmGateway:
         user: str,
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        candidates: list[str] | None = None,
     ) -> tuple[str, str]:
         """텍스트 응답과 실제로 답한 모델 id를 준다."""
-        target = ModelPurpose(purpose) if isinstance(purpose, str) else purpose
         return await self._router.run(
-            target,
+            _purpose(purpose),
             lambda model_id: self._client.complete(model_id, system, user, max_tokens=max_tokens),
+            candidates=candidates,
         )
 
     async def complete_json(
@@ -177,16 +186,16 @@ class LlmGateway:
         user: str,
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        candidates: list[str] | None = None,
     ) -> tuple[dict[str, Any], str]:
         """JSON 객체를 요구한다. 파싱 실패는 그 모델의 실패로 친다.
 
         `extract_json`을 라우터 **안쪽**에서 부르는 것이 핵심이다. 그래야
         모양이 깨진 응답에서 다음 모델로 넘어간다.
         """
-        target = ModelPurpose(purpose) if isinstance(purpose, str) else purpose
 
         async def call(model_id: str) -> dict[str, Any]:
             raw = await self._client.complete(model_id, system, user, max_tokens=max_tokens)
             return extract_json(raw)
 
-        return await self._router.run(target, call)
+        return await self._router.run(_purpose(purpose), call, candidates=candidates)

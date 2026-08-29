@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head>
+  <title>Kafka 리밸런싱</title>
+  <meta property="og:image" content="/images/cover.png">
+</head><body>
+  <article>
+    <h1>Kafka 컨슈머 리밸런싱 줄이기</h1>
+    <p>컨슈머 그룹이 리밸런싱을 자주 겪으면 처리량이 크게 떨어진다. 세션 타임아웃과
+    하트비트 간격을 조정하면 불필요한 재할당을 줄일 수 있다. 정적 멤버십을 쓰면
+    재시작 중에도 파티션 할당이 유지된다.</p>
+    <p>실제 운영에서는 max.poll.interval.ms 를 처리 시간에 맞춰 늘리는 것이
+    가장 효과가 컸다. 컨슈머가 폴을 늦게 하면 그룹에서 빠지기 때문이다.</p>
+  </article>
+</body></html>

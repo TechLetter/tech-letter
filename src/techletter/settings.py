@@ -209,6 +209,18 @@ class SummarySettings(BaseSettings):
     max_tags: int = 7
 
 
+class EmbeddingSettings(BaseSettings):
+    """청킹·임베딩 (ISSUE-003: 캐시 폐지, D17)."""
+
+    model_config = _BASE
+    chunk_size: int = Field(default=1000, alias="EMBEDDING_WORKER_CHUNK_SIZE")
+    chunk_overlap: int = Field(default=200, alias="EMBEDDING_WORKER_CHUNK_OVERLAP")
+    embed_batch_size: int = 64
+    """한 번에 임베딩 API로 보내는 청크 수. 긴 글이 요청 하나로 몰리지 않게 한다."""
+    max_chunks_per_post: int = 200
+    """포스트 하나의 상한. 91K자짜리 글이 벡터를 수백 개 만드는 것을 막는다."""
+
+
 class ChatSettings(BaseSettings):
     model_config = _BASE
     rag_top_k: int = Field(default=5, alias="CHATBOT_RAG_TOP_K")
@@ -240,6 +252,7 @@ class Settings(BaseSettings):
     jobs: JobSettings
     rss: RssSettings
     summary: SummarySettings
+    embedding: EmbeddingSettings
     chat: ChatSettings
 
     summary_llm: SummaryLlmSettings
@@ -267,6 +280,7 @@ class Settings(BaseSettings):
             jobs=JobSettings(),
             rss=RssSettings(),
             summary=SummarySettings(),
+            embedding=EmbeddingSettings(),
             chat=ChatSettings(),
             summary_llm=SummaryLlmSettings(),
             embedding_llm=EmbeddingLlmSettings(),

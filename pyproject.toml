@@ -40,6 +40,8 @@ dev = [
     "ruff",
     "pyright",
     "pre-commit",
+    # summary-worker 이미지에만 들어가지만, 타입 검사와 테스트에는 필요하다.
+    "playwright==1.49.1",
 ]
 
 [build-system]

@@ -20,6 +20,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 TEST_MONGO_URI = os.environ.get("TEST_MONGO_URI", "mongodb://localhost:27018")
 TEST_DB_NAME = "techletter_itest"
+TEST_QDRANT_HOST = os.environ.get("TEST_QDRANT_HOST", "localhost")
+TEST_QDRANT_PORT = int(os.environ.get("TEST_QDRANT_PORT", "6334"))
 
 pytestmark = pytest.mark.integration
 
@@ -68,3 +70,38 @@ def queue(mongo_db, job_settings):
     from techletter.core.jobs import JobQueue, RetryPolicy
 
     return JobQueue(mongo_db, job_settings, RetryPolicy(job_settings, quota_reset_utc_hour=7))
+
+
+@pytest.fixture
+async def vector_store():
+    """실제 Qdrant. `docker run -d -p 6334:6333 qdrant/qdrant`.
+
+    컬렉션 이름 규칙과 필터 삭제는 대역으로 검증되지 않는다.
+    """
+    from techletter.core.db.qdrant import VectorStore
+    from techletter.settings import QdrantSettings
+
+    settings = QdrantSettings(
+        QDRANT_HOST=TEST_QDRANT_HOST,
+        QDRANT_PORT=TEST_QDRANT_PORT,
+        QDRANT_COLLECTION_NAME="techletter_itest",
+    )
+    store = VectorStore(settings)
+    try:
+        await store.ping()
+    except Exception as exc:
+        await store.close()
+        pytest.skip(
+            f"테스트 Qdrant에 접속할 수 없다 ({TEST_QDRANT_HOST}:{TEST_QDRANT_PORT}): {exc}"
+        )
+
+    yield store
+
+    from qdrant_client import AsyncQdrantClient
+
+    client = AsyncQdrantClient(host=TEST_QDRANT_HOST, port=TEST_QDRANT_PORT)
+    for collection in (await client.get_collections()).collections:
+        if collection.name.startswith("techletter_itest"):
+            await client.delete_collection(collection.name)
+    await client.close()
+    await store.close()
