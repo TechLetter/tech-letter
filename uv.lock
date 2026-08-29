@@ -2258,7 +2258,6 @@ name = "techletter"
 version = "2.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "beautifulsoup4" },
     { name = "fastapi" },
     { name = "feedparser" },
     { name = "httpx" },
@@ -2267,24 +2266,27 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
-    { name = "pillow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "pymongo" },
     { name = "qdrant-client" },
-    { name = "trafilatura" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
 browser = [
+    { name = "beautifulsoup4" },
+    { name = "pillow" },
     { name = "playwright" },
+    { name = "trafilatura" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
+    { name = "pillow" },
     { name = "playwright" },
     { name = "pre-commit" },
     { name = "pyright" },
@@ -2293,11 +2295,12 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "syrupy" },
+    { name = "trafilatura" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "beautifulsoup4" },
+    { name = "beautifulsoup4", marker = "extra == 'browser'" },
     { name = "fastapi", specifier = ">=0.122" },
     { name = "feedparser", specifier = ">=6" },
     { name = "httpx", specifier = ">=0.28" },
@@ -2306,14 +2309,14 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.1" },
     { name = "langchain-text-splitters" },
     { name = "langgraph", specifier = ">=1.1" },
-    { name = "pillow" },
+    { name = "pillow", marker = "extra == 'browser'" },
     { name = "playwright", marker = "extra == 'browser'", specifier = "==1.49.1" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pydantic-settings", specifier = ">=2.12" },
     { name = "pyjwt", specifier = ">=2.10" },
     { name = "pymongo", specifier = ">=4.15" },
     { name = "qdrant-client", specifier = ">=1.16" },
-    { name = "trafilatura" },
+    { name = "trafilatura", marker = "extra == 'browser'" },
     { name = "typer", specifier = ">=0.15" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.38" },
 ]
@@ -2321,6 +2324,8 @@ provides-extras = ["browser"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "beautifulsoup4" },
+    { name = "pillow" },
     { name = "playwright", specifier = "==1.49.1" },
     { name = "pre-commit" },
     { name = "pyright" },
@@ -2329,6 +2334,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "syrupy" },
+    { name = "trafilatura" },
 ]
 
 [[package]]

@@ -1,32 +1,112 @@
-name: CI/CD Deploy on Self-hosted Runner
+name: Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "되돌릴 이미지 태그(git sha). 비우면 현재 커밋으로 배포한다."
+        required: false
+
+# 배포가 겹치면 컨테이너 교체가 서로를 덮어쓴다. 앞선 배포를 취소하지 않고
+# 끝까지 기다린다 — 중간에 죽으면 절반만 교체된 상태가 남는다.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  COMPOSE_FILE: docker/compose.prod.yml
+  IMAGE_REPO: techletter
 
 jobs:
   deploy:
     runs-on: [self-hosted, Linux, ARM64, techletter-prod]
     environment: production
+    timeout-minutes: 40
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Stop existing application and Run new version
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_SHA::12}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "배포 태그: $TAG"
+
+      - name: Record the currently running tag
+        id: previous
+        # 스모크가 실패하면 여기로 되돌린다. 현행은 `latest` 하나뿐이라
+        # 되돌릴 대상 자체를 특정할 수 없었다.
+        run: |
+          PREV=$(docker inspect techletter_api \
+            --format '{{index .Config.Image}}' 2>/dev/null | sed 's/.*://' || true)
+          if [ "$PREV" = "latest" ]; then PREV=""; fi
+          echo "previous=$PREV" >> "$GITHUB_OUTPUT"
+          echo "직전 태그: ${PREV:-없음}"
+
+      - name: Build images
+        # 먼저 빌드하고 나중에 교체한다. 현행은 `down` 후 `up --build` 라
+        # 빌드하는 몇 분 동안 서비스가 통째로 내려가 있었다.
         env:
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          docker compose -f "$COMPOSE_FILE" build --pull
+          docker image inspect "$IMAGE_REPO:$IMAGE_TAG" >/dev/null
+          docker image inspect "$IMAGE_REPO-browser:$IMAGE_TAG" >/dev/null
+
+      - name: Start
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          # 값이 없으면 compose 의 `${VAR:?}` 가 배포를 멈춘다. 현행은 빈
+          # 문자열로 치환돼 시크릿 누락이 "배포 성공" 으로 위장됐다.
           MONGO_URI: ${{ secrets.MONGO_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
           EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
           CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
           CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
           CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
+          SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
+          CHAT_MODEL_PREFERENCE: ${{ vars.CHAT_MODEL_PREFERENCE }}
+          CHAT_PLANNER_MODEL_PREFERENCE: ${{ vars.CHAT_PLANNER_MODEL_PREFERENCE }}
+          LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
         run: |
-          touch .env
-          docker-compose -f docker-compose.prod.yml down
-          docker-compose -f docker-compose.prod.yml up -d --build
+          docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 --remove-orphans
+
+      - name: Smoke
+        id: smoke
+        run: bash scripts/verify_prod_smoke.sh
+
+      - name: Roll back
+        if: failure() && steps.smoke.outcome == 'failure' && steps.previous.outputs.previous != ''
+        # GitHub Actions 는 YAML 앵커를 해석하지 않는다. 풀어서 쓴다.
+        env:
+          IMAGE_TAG: ${{ steps.previous.outputs.previous }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
+          EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
+          CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
+          CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
+          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
+          SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
+          CHAT_MODEL_PREFERENCE: ${{ vars.CHAT_MODEL_PREFERENCE }}
+          CHAT_PLANNER_MODEL_PREFERENCE: ${{ vars.CHAT_PLANNER_MODEL_PREFERENCE }}
+          LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
+        run: |
+          echo "::warning::스모크 실패. ${{ steps.previous.outputs.previous }} 로 되돌린다."
+          docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180
+          bash scripts/verify_prod_smoke.sh
+
+      - name: Prune old images
+        if: success()
+        run: docker image prune -f --filter "until=168h"

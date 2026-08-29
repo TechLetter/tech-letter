@@ -19,14 +19,18 @@ dependencies = [
     "langchain-openai>=1.1",
     "langchain-text-splitters",
     "feedparser>=6",
+]
+
+[project.optional-dependencies]
+# summary-worker 이미지에서만 설치한다. 본문 추출과 썸네일 처리는 요약
+# 파이프라인 전용이라 api/worker 이미지가 짊어질 이유가 없다 —
+# trafilatura 하나가 lxml·babel·zstandard 를 끌고 와 90MB 를 더한다.
+browser = [
+    "playwright==1.49.1",
     "trafilatura",
     "beautifulsoup4",
     "pillow",
 ]
-
-[project.optional-dependencies]
-# summary-worker 이미지에서만 설치한다.
-browser = ["playwright==1.49.1"]
 
 [project.scripts]
 techletter = "techletter.cli:main"
@@ -42,6 +46,9 @@ dev = [
     "pre-commit",
     # summary-worker 이미지에만 들어가지만, 타입 검사와 테스트에는 필요하다.
     "playwright==1.49.1",
+    "trafilatura",
+    "beautifulsoup4",
+    "pillow",
 ]
 
 [build-system]

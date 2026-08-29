@@ -1,0 +1,174 @@
+# 운영 스택. 프로세스 4개, 이미지 2개, Kafka 없음.
+#
+# 현행은 서비스 7개(gateway + 마이크로서비스 4 + 워커 2)에 Kafka·kafka-ui까지
+# 돌았다. 잡 큐를 Mongo로 옮기면서 Kafka와 retryworker가 함께 사라졌다(D19).
+#
+# 인프라(mongo·qdrant·traefik)는 `tech-letter_iac`가 따로 띄운다. 여기서는
+# 외부 네트워크로 붙기만 한다.
+
+name: tech-letter
+
+x-image: &image
+  image: ${IMAGE_REPO:-techletter}:${IMAGE_TAG:-latest}
+
+x-logging: &logging
+  # 로그 무제한이 디스크를 채우던 문제(ISSUE-017).
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+x-app-env: &app-env
+  TZ: Asia/Seoul
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  MONGO_URI: ${MONGO_URI:?MONGO_URI is required}
+  MONGO_DB_NAME: ${MONGO_DB_NAME:-techletter}
+  QDRANT_HOST: qdrant
+  QDRANT_PORT: "6333"
+  QDRANT_COLLECTION_NAME: tech_letter_posts
+  SCOUTER_BASE_URL: ${SCOUTER_BASE_URL:-http://openrouter-scouter:8000}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_ISSUER: tech-letter
+
+x-llm-env: &llm-env
+  SUMMARY_WORKER_LLM_PROVIDER: ${SUMMARY_WORKER_LLM_PROVIDER:-google}
+  SUMMARY_WORKER_LLM_MODEL_NAME: ${SUMMARY_WORKER_LLM_MODEL_NAME:-gemini-3-flash-preview}
+  SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY:?SUMMARY_WORKER_LLM_API_KEY is required}
+  EMBEDDING_WORKER_LLM_PROVIDER: ${EMBEDDING_WORKER_LLM_PROVIDER:-google}
+  EMBEDDING_WORKER_LLM_MODEL_NAME: ${EMBEDDING_WORKER_LLM_MODEL_NAME:-gemini-embedding-001}
+  EMBEDDING_WORKER_LLM_API_KEY: ${EMBEDDING_WORKER_LLM_API_KEY:?EMBEDDING_WORKER_LLM_API_KEY is required}
+  CHATBOT_LLM_PROVIDER: ${CHATBOT_LLM_PROVIDER:-openrouter}
+  CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY:?CHATBOT_LLM_API_KEY is required}
+  CHATBOT_EMBEDDING_PROVIDER: ${CHATBOT_EMBEDDING_PROVIDER:-google}
+  CHATBOT_EMBEDDING_MODEL_NAME: ${CHATBOT_EMBEDDING_MODEL_NAME:-gemini-embedding-001}
+  CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY:?CHATBOT_EMBEDDING_API_KEY is required}
+  # 모델 선호 목록은 실측으로 정한다(ADR-0008, scripts/eval_models.py).
+  SUMMARY_MODEL_PREFERENCE: ${SUMMARY_MODEL_PREFERENCE:-}
+  CHAT_MODEL_PREFERENCE: ${CHAT_MODEL_PREFERENCE:-}
+  CHAT_PLANNER_MODEL_PREFERENCE: ${CHAT_PLANNER_MODEL_PREFERENCE:-}
+  LLM_STATIC_FALLBACK_MODELS: ${LLM_STATIC_FALLBACK_MODELS:-}
+
+services:
+  api:
+    <<: [*image, *logging]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: techletter_api
+    restart: unless-stopped
+    command: ["techletter", "api"]
+    environment:
+      <<: [*app-env, *llm-env]
+      SERVICE_NAME: techletter-api
+      API_PORT: "8080"
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?GOOGLE_OAUTH_CLIENT_ID is required}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?GOOGLE_OAUTH_CLIENT_SECRET is required}
+      GOOGLE_OAUTH_REDIRECT_URL: ${PUBLIC_ORIGIN:-https://tech-letter.duckdns.org}/api/v1/auth/google/callback
+      AUTH_LOGIN_SUCCESS_REDIRECT_URL: ${PUBLIC_ORIGIN:-https://tech-letter.duckdns.org}/login/success
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://tech-letter.duckdns.org}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks: [default]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`${PUBLIC_HOST:-tech-letter.duckdns.org}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.tls.certresolver=duckdns"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+    deploy:
+      resources:
+        limits: { memory: 640M }
+        reservations: { memory: 256M }
+
+  worker:
+    <<: [*image, *logging]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: techletter_worker
+    restart: unless-stopped
+    command: ["techletter", "worker"]
+    environment:
+      <<: [*app-env, *llm-env]
+      SERVICE_NAME: techletter-worker
+      CONTENT_BLOG_FETCH_BATCH_SIZE: ${CONTENT_BLOG_FETCH_BATCH_SIZE:-10}
+    healthcheck: &heartbeat-check
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import pathlib, sys, time
+          p = pathlib.Path("/tmp/techletter-heartbeat")
+          sys.exit(0 if p.exists() and time.time() - p.stat().st_mtime < 120 else 1)
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    # 처리 중인 잡을 끝내고 나갈 시간을 준다(runtime.run_with_shutdown 은 25초).
+    stop_grace_period: 30s
+    networks: [default]
+    deploy:
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 192M }
+
+  summary_worker:
+    <<: *logging
+    image: ${IMAGE_REPO:-techletter}-browser:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: browser
+    container_name: techletter_summary_worker
+    restart: unless-stopped
+    command: ["techletter", "summary-worker"]
+    environment:
+      <<: [*app-env, *llm-env]
+      SERVICE_NAME: techletter-summary-worker
+      RENDERER_STRATEGY: ${RENDERER_STRATEGY:-playwright}
+      SCRAPERAPI_KEY: ${SCRAPERAPI_KEY:-}
+      SUMMARY_DAILY_BUDGET: ${SUMMARY_DAILY_BUDGET:-20}
+    healthcheck: *heartbeat-check
+    stop_grace_period: 60s
+    networks: [default]
+    # 브라우저가 /dev/shm 을 쓴다. 기본 64MB 로는 큰 페이지에서 죽는다.
+    shm_size: 256m
+    deploy:
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 384M }
+
+  embedding_worker:
+    <<: [*image, *logging]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: techletter_embedding_worker
+    restart: unless-stopped
+    command: ["techletter", "embedding-worker"]
+    environment:
+      <<: [*app-env, *llm-env]
+      SERVICE_NAME: techletter-embedding-worker
+    healthcheck: *heartbeat-check
+    stop_grace_period: 30s
+    networks: [default]
+    deploy:
+      resources:
+        limits: { memory: 640M }
+        reservations: { memory: 256M }
+
+networks:
+  default:
+    # mongo·qdrant·traefik·scouter 가 사는 네트워크. iac 가 만든다.
+    name: tech-letter_default
+    external: true

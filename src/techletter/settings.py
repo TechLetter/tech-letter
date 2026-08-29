@@ -247,7 +247,6 @@ class Settings(BaseSettings):
 
     mongo: MongoSettings
     qdrant: QdrantSettings
-    auth: AuthSettings
     router: RouterSettings
     jobs: JobSettings
     rss: RssSettings
@@ -255,10 +254,25 @@ class Settings(BaseSettings):
     embedding: EmbeddingSettings
     chat: ChatSettings
 
+    auth_settings: AuthSettings | None = Field(default=None, exclude=True)
+    """지연 로딩. 아래 `auth` 프로퍼티로 접근한다."""
+
     summary_llm: SummaryLlmSettings
     embedding_llm: EmbeddingLlmSettings
     chat_llm: ChatLlmSettings
     chat_embedding: ChatEmbeddingSettings
+
+    @property
+    def auth(self) -> AuthSettings:
+        """OAuth·JWT 설정. **처음 쓸 때** 읽는다.
+
+        워커는 로그인을 처리하지 않는다. 부팅 때 함께 읽으면 요약 워커가
+        Google OAuth 자격증명 없이는 뜨지 못하고, 필요도 없는 프로세스에
+        시크릿을 넣어야 한다.
+        """
+        if self.auth_settings is None:
+            self.auth_settings = AuthSettings()  # pyright: ignore[reportCallIssue]
+        return self.auth_settings
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -275,7 +289,6 @@ class Settings(BaseSettings):
         return cls(
             mongo=MongoSettings(),  # pyright: ignore[reportCallIssue]
             qdrant=QdrantSettings(),
-            auth=AuthSettings(),  # pyright: ignore[reportCallIssue]
             router=RouterSettings(),
             jobs=JobSettings(),
             rss=RssSettings(),

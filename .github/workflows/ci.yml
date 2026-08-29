@@ -14,19 +14,16 @@ env:
 
 jobs:
   check:
-    name: lint · typecheck · test
+    name: lint · typecheck · unit
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --frozen
+      - run: uv sync --frozen
 
       - name: Lint (ruff)
         run: |
@@ -36,8 +33,185 @@ jobs:
       - name: Typecheck (pyright)
         run: uv run pyright
 
-      - name: Test (unit + contract)
+      - name: Unit tests
         run: uv run pytest -q
 
-  # Phase 9에서 통합/E2E/이미지 빌드 잡을 추가한다
-  # (docs/plan/06-migration-steps.md 스텝 9.4)
+      - name: Routes match the contract
+        run: uv run python scripts/check_routes.py
+
+  integration:
+    name: integration · contract
+    runs-on: ubuntu-24.04
+    services:
+      # 태그를 운영과 맞춘다. 어긋나면 CI 에서 통과한 쿼리가 운영에서
+      # 다르게 동작한다.
+      mongo:
+        image: mongo:8.0
+        ports: ["27018:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.16.2
+        ports: ["6334:6333"]
+    env:
+      TEST_MONGO_URI: mongodb://localhost:27018
+      TEST_QDRANT_HOST: localhost
+      TEST_QDRANT_PORT: "6334"
+      MONGO_URI: mongodb://localhost:27018
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - run: uv sync --frozen
+
+      - name: Integration + contract tests
+        run: uv run pytest -q -m integration
+
+  e2e:
+    name: e2e (playwright)
+    runs-on: ubuntu-24.04
+    services:
+      mongo:
+        image: mongo:8.0
+        ports: ["27018:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.16.2
+        ports: ["6334:6333"]
+    env:
+      E2E_API_URL: http://localhost:8080
+      E2E_MONGO_URI: mongodb://localhost:27018
+      E2E_MONGO_DB: techletter_e2e
+      E2E_UI_DIST: ${{ github.workspace }}/ui/dist
+      JWT_SECRET: e2e-secret-at-least-32-bytes-long-value
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: api }
+      - uses: actions/checkout@v4
+        id: ui
+        continue-on-error: true
+        with:
+          repository: ${{ github.repository_owner }}/tech-letter_ui
+          path: ui
+          ref: develop
+
+      - name: Skip when the UI checkout is unavailable
+        if: steps.ui.outcome != 'success'
+        run: echo "::warning::프론트 체크아웃 실패 — E2E 를 건너뛴다."
+
+      - uses: actions/setup-node@v4
+        if: steps.ui.outcome == 'success'
+        with: { node-version: "22" }
+      - name: Build the frontend
+        if: steps.ui.outcome == 'success'
+        working-directory: ui
+        env:
+          VITE_API_BASE_URL: http://localhost:8080
+        run: npm ci && npm run build
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.ui.outcome == 'success'
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install
+        if: steps.ui.outcome == 'success'
+        working-directory: api
+        run: |
+          uv sync --frozen
+          uv run playwright install --with-deps chromium
+
+      - name: Start the API
+        if: steps.ui.outcome == 'success'
+        working-directory: api
+        env:
+          MONGO_URI: mongodb://localhost:27018/techletter_e2e
+          MONGO_DB_NAME: techletter_e2e
+          GOOGLE_OAUTH_CLIENT_ID: x
+          GOOGLE_OAUTH_CLIENT_SECRET: y
+          GOOGLE_OAUTH_REDIRECT_URL: http://localhost:8080/api/v1/auth/google/callback
+          AUTH_LOGIN_SUCCESS_REDIRECT_URL: http://127.0.0.1:4173/login/success
+          CORS_ALLOWED_ORIGINS: http://127.0.0.1:4173,http://localhost:4173
+          QDRANT_HOST: localhost
+          QDRANT_PORT: "6334"
+          # scouter 는 CI 에 없다. 라우터가 정적 폴백으로 떨어지는지도 함께 본다.
+          SCOUTER_BASE_URL: http://127.0.0.1:9/unreachable
+          LOG_LEVEL: WARNING
+        run: |
+          uv run techletter api --port 8080 &
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8080/health && break
+            sleep 1
+          done
+
+      - name: Run E2E
+        if: steps.ui.outcome == 'success'
+        working-directory: api
+        run: uv run pytest tests/e2e -q -m e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: api/tests/e2e/_artifacts/
+          if-no-files-found: ignore
+
+  images:
+    name: docker build · size gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: runtime
+          load: true
+          tags: techletter:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build browser image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: browser
+          load: true
+          tags: techletter-browser:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Size gate
+        # 이미지가 조용히 불어나는 것을 막는다. 현행 summary_worker 는
+        # 빌드 스테이지의 /usr/lib 를 통째로 복사해 2.9GB 였다(ISSUE-015).
+        run: |
+          set -euo pipefail
+          check() {
+            local image="$1" limit_mb="$2" bytes size_mb
+            bytes=$(docker image inspect "$image" --format '{{.Size}}')
+            size_mb=$((bytes / 1000 / 1000))
+            echo "$image: ${size_mb}MB (limit ${limit_mb}MB)"
+            if [ "$size_mb" -gt "$limit_mb" ]; then
+              echo "::error::$image exceeds ${limit_mb}MB"
+              exit 1
+            fi
+          }
+          check techletter:ci 450
+          check techletter-browser:ci 1200
+
+      - name: Smoke
+        run: |
+          docker run --rm techletter:ci techletter version
+          docker run --rm --entrypoint python techletter-browser:ci -c \
+            "import trafilatura, bs4, PIL, playwright; print('browser deps ok')"
