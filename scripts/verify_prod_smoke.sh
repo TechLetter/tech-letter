@@ -5,10 +5,12 @@
 # "요청이 실제로 처리되는가" 를 본다 — 그 둘이 갈라진 적이 있다.
 set -euo pipefail
 
-API="${SMOKE_API_URL:-http://localhost:8080}"
+# 러너 호스트에서 API 포트가 열려 있지 않다. 같은 네트워크의 사이드카
+# 컨테이너로 친다 — 그 안에서 "localhost"는 사이드카 자신이 되므로 기본값은
+# 반드시 컨테이너 이름(`techletter_api`)이어야 한다.
+API="${SMOKE_API_URL:-http://techletter_api:8080}"
 NETWORK="${SMOKE_NETWORK:-tech-letter_default}"
 
-# 러너 호스트에서 API 포트가 열려 있지 않다. 같은 네트워크에서 친다.
 curl_in_network() {
   docker run --rm --network "$NETWORK" curlimages/curl:latest -sS -m 10 "$@"
 }
