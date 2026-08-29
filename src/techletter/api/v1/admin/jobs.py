@@ -6,7 +6,9 @@ Kafka 시절에는 큐 상태를 보려면 서버에 들어가 CLI를 쳐야 했
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Response, status
 
 from techletter.api.deps import AdminUser, Ctx
 from techletter.api.schemas import JobOut, JobStatsOut, Paged, RetryBulkIn
@@ -18,20 +20,26 @@ from techletter.core.time import to_iso_z
 router = APIRouter(prefix="/jobs", tags=["admin:jobs"])
 
 
+# 계약(04 §4.4)의 쿼리 이름은 `status`, `type`이다. 파이썬 쪽에서는 그 이름이
+# `fastapi.status`와 겹치므로 alias로 받는다.
+StatusQ = Annotated[str | None, Query(alias="status")]
+TypeQ = Annotated[str | None, Query(alias="type")]
+
+
 @router.get("", response_model=Paged[JobOut])
 async def list_jobs(
     ctx: Ctx,
     _: AdminUser,
     page: StrQ = None,
     page_size: StrQ = None,
-    status_filter: StrQ = None,
-    type_filter: StrQ = None,
+    job_status: StatusQ = None,
+    job_type: TypeQ = None,
 ) -> Paged[JobOut]:
     paging = parse_page(page, page_size, default_size=50)
     jobs, total = await ctx.queue.list_jobs(
         paging,
-        status=(status_filter or "").strip() or None,
-        job_type=(type_filter or "").strip() or None,
+        status=(job_status or "").strip() or None,
+        job_type=(job_type or "").strip() or None,
     )
     return Paged.of_page([JobOut.of(job) for job in jobs], total, paging)
 

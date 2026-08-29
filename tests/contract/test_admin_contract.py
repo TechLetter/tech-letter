@@ -360,9 +360,9 @@ async def test_job_shape_hides_the_payload(client, admin_headers, dead_job) -> N
 
 
 async def test_jobs_can_be_filtered_by_status(client, admin_headers, dead_job) -> None:
-    dead = (await client.get("/api/v1/admin/jobs?status_filter=dead", headers=admin_headers)).json()
+    dead = (await client.get("/api/v1/admin/jobs?status=dead", headers=admin_headers)).json()
     pending = (
-        await client.get("/api/v1/admin/jobs?status_filter=pending", headers=admin_headers)
+        await client.get("/api/v1/admin/jobs?status=pending", headers=admin_headers)
     ).json()
 
     assert dead["total"] == 1
