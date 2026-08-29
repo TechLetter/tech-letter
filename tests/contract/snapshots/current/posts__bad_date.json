@@ -1,0 +1,11 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/posts"
+ },
+ "body": {
+  "error": "<str>"
+ },
+ "content_type": "application/json",
+ "status": 400
+}

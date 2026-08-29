@@ -1,0 +1,22 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/chatbot/sessions"
+ },
+ "body": {
+  "items": [
+   {
+    "created_at": "<datetime>",
+    "id": "<oid>",
+    "title": "<str>",
+    "updated_at": "<datetime>",
+    "user_code": "<str>"
+   }
+  ],
+  "page": "<int>",
+  "page_size": "<int>",
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

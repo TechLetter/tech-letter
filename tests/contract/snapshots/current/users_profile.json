@@ -1,0 +1,20 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/users/profile"
+ },
+ "body": {
+  "created_at": "<datetime>",
+  "credits": "<int>",
+  "email": "<str>",
+  "name": "<str>",
+  "profile_image": "<url>",
+  "provider": "<str>",
+  "provider_sub": "<str>",
+  "role": "<str>",
+  "updated_at": "<datetime>",
+  "user_code": "<str>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}
