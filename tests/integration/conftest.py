@@ -42,6 +42,7 @@ async def mongo_db() -> AsyncIterator[AsyncDatabase]:
 
     # 운영과 같은 인덱스를 만들어 둔다. 유니크 제약에 기대는 동작(중복 지급 방지,
     # 북마크 중복 등)이 인덱스 없이는 조용히 통과하기 때문이다.
+    import techletter.content.repositories
     import techletter.core.jobs.queue
     import techletter.users.repositories  # noqa: F401
     from techletter.core.db.indexes import ensure_indexes

@@ -1,0 +1,418 @@
+{
+  "posts": [
+    {
+      "_id": {
+        "$oid": "6a91edbec1f22e3fced90b13"
+      },
+      "created_at": {
+        "$date": {
+          "$numberLong": "1787948478083"
+        }
+      },
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1787948498874"
+        }
+      },
+      "status": {
+        "ai_summarized": true,
+        "embedded": true
+      },
+      "view_count": {
+        "$numberInt": "0"
+      },
+      "blog_id": {
+        "$oid": "6992d3264a828a62c84eaa20"
+      },
+      "blog_name": "CMU ML",
+      "title": "Navigating the AI Era With a CMU Focus on Critical Thinking",
+      "link": "https://www.cmu.edu/news/stories/archives/2026/august/navigating-the-ai-era-with-a-cmu-focus-on-critical-thinking",
+      "published_at": {
+        "$date": {
+          "$numberLong": "1788181200000"
+        }
+      },
+      "thumbnail_url": "https://www.cmu.edu/news/sites/default/files/styles/embedded_max/public/2026-08/250909A_AI_Undergrad019.jpg.webp?itok=Jt8uTH5T",
+      "plain_text": "Navigating the AI Era with a CMU Focus on Critical Thinking\nMedia Inquiries\nCarnegie Mellon University is weaving AI int",
+      "aisummary": {
+        "categories": [
+          "AI",
+          "Programming Languages",
+          "Other"
+        ],
+        "tags": [
+          "Generative AI",
+          "DARE",
+          "ACTION framework",
+          "GAITAR",
+          "LLM",
+          "NLP"
+        ],
+        "summary": "카네기 멜런 대학교는 생성형 AI를 교육 과정에 통합하여 알고리즘적 사고와 비판적 분석 능력을 배양하는 데 집중합니다. 특히 ACTION 프레임워크 기반의 DARE 플랫폼과 GAITAR 이니셔티브를 통해 AI를 '사고의 파트너'로 활용하며 교육적 효과를 실증하고 있습니다. 본 포스트에서 AI 시대 기술 교육의 방향과 구체적인 교수법 변화를 관찰할 수 있습니다.",
+        "model_name": "gemini-3-flash-preview",
+        "generated_at": {
+          "$date": {
+            "$numberLong": "1787948497057"
+          }
+        }
+      },
+      "embedding": {
+        "model_name": "gemini-embedding-001",
+        "collection_name": "tech_letter_posts__gemini-embedding-001__3072",
+        "vector_dimension": {
+          "$numberInt": "3072"
+        },
+        "chunk_count": {
+          "$numberInt": "17"
+        },
+        "embedded_at": {
+          "$date": {
+            "$numberLong": "1787948498865"
+          }
+        }
+      }
+    },
+    {
+      "_id": {
+        "$oid": "6a91d7c6c1f22e3fced90b11"
+      },
+      "created_at": {
+        "$date": {
+          "$numberLong": "1787942854362"
+        }
+      },
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1787942867334"
+        }
+      },
+      "status": {
+        "ai_summarized": true,
+        "embedded": true
+      },
+      "view_count": {
+        "$numberInt": "0"
+      },
+      "blog_id": {
+        "$oid": "6992d3264a828a62c84eaa11"
+      },
+      "blog_name": "Databricks",
+      "title": "Beyond answers: New Genie One features to turn insights into action",
+      "link": "https://www.databricks.com/blog/beyond-answers-new-genie-one-features-turn-insights-action",
+      "published_at": {
+        "$date": {
+          "$numberLong": "1787950800000"
+        }
+      },
+      "thumbnail_url": "https://www.databricks.com/sites/default/files/2026-08/Untitled-design-6.png",
+      "plain_text": "What’s new in Genie One, including a desktop app and collaboration features to help business users go from question to a",
+      "aisummary": {
+        "categories": [
+          "AI",
+          "Data Engineering",
+          "Cloud"
+        ],
+        "tags": [
+          "Genie One",
+          "Genie Agent",
+          "Unity Catalog",
+          "Databricks",
+          "Genie Ontology",
+          "macOS",
+          "MCP"
+        ],
+        "summary": "Genie One은 데스크톱 앱과 협업 기능을 도입하여 데이터 분석 워크플로우를 효율화합니다. Unity Catalog 기반의 거버넌스 환경에서 Genie Ontology와 Genie Agent를 활용해 기업 컨텍스트를 확장하고 문서 협업을 간소화할 수 있습니다. 이 포스트에서 데이터 분석부터 실행까지 이어지는 효율적인 통합 워크플로우를 관찰할 수 있습니다.",
+        "model_name": "gemini-3-flash-preview",
+        "generated_at": {
+          "$date": {
+            "$numberLong": "1787942865741"
+          }
+        }
+      },
+      "embedding": {
+        "model_name": "gemini-embedding-001",
+        "collection_name": "tech_letter_posts__gemini-embedding-001__3072",
+        "vector_dimension": {
+          "$numberInt": "3072"
+        },
+        "chunk_count": {
+          "$numberInt": "7"
+        },
+        "embedded_at": {
+          "$date": {
+            "$numberLong": "1787942867325"
+          }
+        }
+      }
+    }
+  ],
+  "unsummarized": [
+    {
+      "_id": {
+        "$oid": "695719bb7f37aee4d866c0b7"
+      },
+      "created_at": {
+        "$date": {
+          "$numberLong": "1767315899407"
+        }
+      },
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1767315899407"
+        }
+      },
+      "status": {
+        "ai_summarized": false,
+        "embedded": false
+      },
+      "view_count": {
+        "$numberInt": "0"
+      },
+      "blog_id": {
+        "$oid": "68d7b40543d9b84bd2a35365"
+      },
+      "blog_name": "여기어때",
+      "title": "패키지 여행에 가이드의 경험를 더하다 ‘여기어때 가이드팩’",
+      "link": "https://techblog.gccompany.co.kr/%ED%8C%A8%ED%82%A4%EC%A7%80-%EC%97%AC%ED%96%89%EC%97%90-%EA%B0%80%EC%9D%B4%EB%93%9C%EC%9D%98-%EA%B2%BD%ED%97%98%EB%A5%BC-%EB%8D%94%ED%95%98%EB%8B%A4-%EC%97%AC%EA%B8%B0%EC%96%B4%EB%95%8C-%EA%B0%80%EC%9D%B4%EB%93%9C%ED%8C%A9-ce03631f935f?source=rss----18356045d353---4",
+      "published_at": {
+        "$date": {
+          "$numberLong": "1767314402000"
+        }
+      },
+      "thumbnail_url": "",
+      "plain_text": "",
+      "aisummary": {
+        "categories": [],
+        "tags": [],
+        "summary": "",
+        "model_name": "",
+        "generated_at": {
+          "$date": {
+            "$numberLong": "1767315899407"
+          }
+        }
+      }
+    },
+    {
+      "_id": {
+        "$oid": "696c3a659422890c95b250b0"
+      },
+      "created_at": {
+        "$date": {
+          "$numberLong": "1768700517740"
+        }
+      },
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1768700517740"
+        }
+      },
+      "status": {
+        "ai_summarized": false,
+        "embedded": false
+      },
+      "view_count": {
+        "$numberInt": "0"
+      },
+      "blog_id": {
+        "$oid": "696c3a534a828a62c84ea4b1"
+      },
+      "blog_name": "하이퍼엑셀",
+      "title": "About",
+      "link": "https://hyper-accel.github.io/about/",
+      "published_at": {
+        "$date": {
+          "$numberLong": "1761802077000"
+        }
+      },
+      "thumbnail_url": "",
+      "plain_text": "",
+      "aisummary": {
+        "categories": [],
+        "tags": [],
+        "summary": "",
+        "model_name": "",
+        "generated_at": {
+          "$date": {
+            "$numberLong": "1768700517740"
+          }
+        }
+      }
+    }
+  ],
+  "oldest": [
+    {
+      "_id": {
+        "$oid": "6992d352bc06a22d14d283d0"
+      },
+      "created_at": {
+        "$date": {
+          "$numberLong": "1771230034004"
+        }
+      },
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1771233244076"
+        }
+      },
+      "status": {
+        "ai_summarized": true,
+        "embedded": true
+      },
+      "view_count": {
+        "$numberInt": "0"
+      },
+      "blog_id": {
+        "$oid": "6992d3264a828a62c84eaa1f"
+      },
+      "blog_name": "MIT CSAIL",
+      "title": "Detecting walking speed with wireless signals",
+      "link": "https://www.csail.mit.edu/news/detecting-walking-speed-wireless-signals",
+      "published_at": {
+        "$date": {
+          "$numberLong": "1493648729000"
+        }
+      },
+      "thumbnail_url": "https://www.csail.mit.edu/sites/default/files/images/migration/WiGait-wirelessly-measures-walking-speed-MIT-00_0.png",
+      "plain_text": "We’ve long known that blood pressure, breathing, body temperature and pulse provide an important window into the complex",
+      "aisummary": {
+        "categories": [
+          "AI",
+          "Other"
+        ],
+        "tags": [
+          "WiGait",
+          "wireless signals",
+          "algorithms",
+          "FitBit",
+          "GPS",
+          "VICON motion tracking"
+        ],
+        "summary": "MIT CSAIL 연구팀은 무선 신호 분석 알고리즘을 활용, 사람의 보행 속도 및 보폭 길이를 고정밀로 측정하는 'WiGait' 장치를 개발했습니다. 이 시스템은 신체 반사 무선 신호로 착용 없이 비침습적 움직임 모니터링을 제공하여, 건강 지표 변화 감지에 기여합니다. 본 기술로 비침습적 무선 센서 기반 건강 모니터링의 가능성을 살펴보실 수 있습니다.",
+        "model_name": "gemini-2.5-flash",
+        "generated_at": {
+          "$date": {
+            "$numberLong": "1771233243417"
+          }
+        }
+      },
+      "embedding": {
+        "model_name": "gemini-embedding-001",
+        "collection_name": "tech_letter_posts__gemini-embedding-001__3072",
+        "vector_dimension": {
+          "$numberInt": "3072"
+        },
+        "chunk_count": {
+          "$numberInt": "6"
+        },
+        "embedded_at": {
+          "$date": {
+            "$numberLong": "1771233244069"
+          }
+        }
+      }
+    }
+  ],
+  "blogs": [
+    {
+      "_id": {
+        "$oid": "68d7b40543d9b84bd2a3535f"
+      },
+      "rss_url": "https://tech.kakao.com/feed/",
+      "blog_type": "company",
+      "created_at": {
+        "$date": {
+          "$numberLong": "1758966789043"
+        }
+      },
+      "name": "카카오",
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1788004819716"
+        }
+      },
+      "url": "https://tech.kakao.com/blog",
+      "last_fetch_error": null,
+      "last_fetched_at": {
+        "$date": {
+          "$numberLong": "1788004819716"
+        }
+      }
+    },
+    {
+      "_id": {
+        "$oid": "68d7b40543d9b84bd2a35360"
+      },
+      "rss_url": "https://tech.kakaopay.com/rss",
+      "blog_type": "company",
+      "created_at": {
+        "$date": {
+          "$numberLong": "1758966789058"
+        }
+      },
+      "name": "카카오페이",
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1788004819962"
+        }
+      },
+      "url": "https://tech.kakaopay.com",
+      "last_fetch_error": null,
+      "last_fetched_at": {
+        "$date": {
+          "$numberLong": "1788004819962"
+        }
+      }
+    },
+    {
+      "_id": {
+        "$oid": "68d7b40543d9b84bd2a35361"
+      },
+      "rss_url": "https://d2.naver.com/d2.atom",
+      "blog_type": "company",
+      "created_at": {
+        "$date": {
+          "$numberLong": "1758966789058"
+        }
+      },
+      "name": "네이버",
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1788004804602"
+        }
+      },
+      "url": "https://d2.naver.com/home",
+      "last_fetch_error": null,
+      "last_fetched_at": {
+        "$date": {
+          "$numberLong": "1788004804602"
+        }
+      }
+    },
+    {
+      "_id": {
+        "$oid": "68d7b40543d9b84bd2a35363"
+      },
+      "rss_url": "https://medium.com/feed/daangn",
+      "blog_type": "company",
+      "created_at": {
+        "$date": {
+          "$numberLong": "1758966789059"
+        }
+      },
+      "name": "당근마켓",
+      "updated_at": {
+        "$date": {
+          "$numberLong": "1788004805191"
+        }
+      },
+      "url": "https://medium.com/daangn",
+      "last_fetch_error": null,
+      "last_fetched_at": {
+        "$date": {
+          "$numberLong": "1788004805191"
+        }
+      }
+    }
+  ]
+}

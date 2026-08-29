@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom Blog</title>
+  <entry>
+    <title>Only updated, no published</title>
+    <link href="https://atom.example.com/posts/1"/>
+    <updated>2025-01-15T08:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>No date at all</title>
+    <link href="https://atom.example.com/posts/2"/>
+  </entry>
+</feed>
