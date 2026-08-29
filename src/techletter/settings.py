@@ -18,7 +18,11 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 __all__ = ["Settings", "get_settings"]
 
 _BASE = SettingsConfigDict(
-    env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+    env_file=".env",
+    env_file_encoding="utf-8",
+    extra="ignore",
+    case_sensitive=False,
+    populate_by_name=True,  # 테스트에서 alias 대신 필드명으로 생성할 수 있게 한다
 )
 
 
@@ -66,6 +70,7 @@ def _llm_config(prefix: str) -> SettingsConfigDict:
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        populate_by_name=True,
         env_prefix=prefix,
     )
 
