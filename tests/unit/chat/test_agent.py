@@ -257,7 +257,7 @@ class RecordingLlm:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def complete(self, purpose, system, user, **kwargs):
+    async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
         self.calls += 1
         return "모델 답변", "m"
 
@@ -303,7 +303,7 @@ async def test_the_context_is_clipped_before_it_reaches_the_model() -> None:
     captured: dict[str, str] = {}
 
     class Capturing(RecordingLlm):
-        async def complete(self, purpose, system, user, **kwargs):
+        async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
             captured["user"] = user
             return "답변", "m"
 

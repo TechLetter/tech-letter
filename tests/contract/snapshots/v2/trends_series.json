@@ -1,0 +1,22 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/trends/series?tags=Kafka"
+ },
+ "body": {
+  "items": [
+   {
+    "points": [],
+    "tag": "<str>"
+   }
+  ],
+  "period": {
+   "from_at": "<datetime>",
+   "interval": "<str>",
+   "to": "<datetime>"
+  },
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

@@ -116,7 +116,7 @@ class FakeLlm:
         self.payload = payload
         self.calls = 0
 
-    async def complete_json(self, purpose, system, user, **kwargs):
+    async def complete_json(self, purpose, system, user, **kwargs) -> tuple[dict, str]:
         self.calls += 1
         if isinstance(self.payload, Exception):
             raise self.payload
@@ -148,7 +148,7 @@ async def test_the_planner_prompt_carries_the_current_time() -> None:
     captured: dict[str, str] = {}
 
     class Capturing(FakeLlm):
-        async def complete_json(self, purpose, system, user, **kwargs):
+        async def complete_json(self, purpose, system, user, **kwargs) -> tuple[dict, str]:
             captured["system"] = system
             captured["purpose"] = purpose
             return {"task": "general_rag"}, "m"

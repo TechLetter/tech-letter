@@ -36,13 +36,13 @@ def to_iso_z(value: datetime | None) -> str | None:
     return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
 
 
-def parse_rfc3339_or_date(raw: str, *, end_of_day: bool = False) -> datetime | None:
+def parse_rfc3339_or_date(raw: str | None, *, end_of_day: bool = False) -> datetime | None:
     """RFC3339 우선, 실패하면 `YYYY-MM-DD`로 파싱한다. 둘 다 실패하면 None.
 
     `end_of_day=True`이고 날짜만 주어지면 그 날의 끝(23:59:59.999999)으로 올린다.
     현행 게이트웨이의 `published_to` 동작을 유지하기 위한 것이다.
     """
-    text = raw.strip()
+    text = (raw or "").strip()
     if not text:
         return None
     # `datetime.fromisoformat`은 3.11+에서 date-only 문자열도 받아 자정으로 준다.

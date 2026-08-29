@@ -32,9 +32,8 @@ def repo(mongo_db) -> ChatSessionRepository:
 
 @pytest.fixture
 def sessions(repo) -> ChatSessionService:
-    return ChatSessionService(
-        repo, ChatSettings(compression_min_messages=6, compression_batch_size=3)
-    )
+    settings = ChatSettings(compression_min_messages=6, compression_batch_size=3)  # type: ignore[call-arg]
+    return ChatSessionService(repo, settings)
 
 
 # ── 생성·조회 ───────────────────────────────────────────────────────

@@ -1,0 +1,18 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/trends/rising?limit=abc"
+ },
+ "body": {
+  "items": [],
+  "period": {
+   "from_at": "<datetime>",
+   "previous_from": "<datetime>",
+   "previous_to": "<datetime>",
+   "to": "<datetime>"
+  },
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

@@ -1,0 +1,21 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/blogs"
+ },
+ "body": {
+  "items": [
+   {
+    "id": "<oid>",
+    "name": "<str>",
+    "url": "<url>"
+   }
+  ],
+  "page": "<int>",
+  "page_size": "<int>",
+  "total": "<int>",
+  "total_pages": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

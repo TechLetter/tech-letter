@@ -95,7 +95,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "PLR2004", "S101", "PLC0415"]  # 픽스처 안 지연 import는 의도적
-"scripts/**" = ["T20", "ANN", "E501", "PLR0911", "PLR0912", "PLC0415"]
+# 스크립트는 일회용 앱을 띄우느라 프로세스 환경을 직접 채운다(TID251).
+"scripts/**" = ["T20", "ANN", "E501", "PLR0911", "PLR0912", "PLC0415", "TID251"]
+# 라우트 핸들러는 쿼리 파라미터 수만큼 인자를 갖는다 — FastAPI의 시그니처 규약이다.
+"src/techletter/api/v1/**" = ["PLR0913", "PLR0917"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

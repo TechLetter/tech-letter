@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
 
+async def test_health_is_degraded_before_the_container_is_ready(client):
+    """수명주기를 열지 않은 앱은 아직 준비되지 않았다.
 
-async def test_health_returns_ok(client):
+    부팅 중에 200을 내면 배포가 그대로 통과해 버린다. 정상 경로는 계약
+    테스트(`test_health_reports_ok`)가 실제 Mongo로 확인한다.
+    """
     response = await client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "degraded", "checks": {"mongo": "starting"}}
 
 
 async def test_request_id_is_echoed(client):
@@ -59,14 +63,26 @@ async def test_validation_error_becomes_400_not_422(app, client):
     assert response.json()["error"]["code"] == "request.invalid"
 
 
-async def test_unhandled_exception_does_not_leak_internals(app, client):
+async def test_unhandled_exception_does_not_leak_internals(app):
+    """starlette은 500을 보낸 뒤에도 예외를 다시 올린다(서버 로그용).
+
+    그래서 실제 응답을 보려면 `raise_app_exceptions=False`가 필요하다.
+    """
+    from httpx import ASGITransport, AsyncClient
+
     @app.get("/_test/boom")
     async def _boom() -> None:
         raise RuntimeError("secret detail: mongodb://user:pw@host")
 
-    with pytest.raises(RuntimeError):
-        # ASGITransport는 예외를 그대로 올린다. 핸들러 동작은 아래에서 확인한다.
-        await client.get("/_test/boom")
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/_test/boom")
+
+    assert response.status_code == 500
+    assert "mongodb://" not in response.text
+    assert response.json()["error"]["code"] == "internal.error"
 
 
 def test_openapi_is_generated(app):

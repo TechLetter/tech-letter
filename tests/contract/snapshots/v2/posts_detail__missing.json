@@ -1,0 +1,10 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/posts/{id}"
+ },
+ "body": null,
+ "content_type": null,
+ "skipped": "경로에 {id} 자리표시자가 남아 있다",
+ "status": null
+}

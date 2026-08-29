@@ -62,7 +62,7 @@ class FakeLlm:
 
 @pytest.fixture
 def chat_settings() -> ChatSettings:
-    return ChatSettings(compression_min_messages=4, compression_batch_size=2)
+    return ChatSettings(compression_min_messages=4, compression_batch_size=2)  # type: ignore[call-arg]
 
 
 @pytest.fixture

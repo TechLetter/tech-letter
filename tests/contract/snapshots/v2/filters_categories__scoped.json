@@ -1,0 +1,17 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/filters/categories?tags=Kafka"
+ },
+ "body": {
+  "items": [
+   {
+    "count": "<int>",
+    "name": "<str>"
+   }
+  ],
+  "total": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

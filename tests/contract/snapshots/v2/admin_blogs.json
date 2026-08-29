@@ -1,0 +1,31 @@
+{
+ "_request": {
+  "authed": true,
+  "path": "/api/v1/admin/blogs"
+ },
+ "body": {
+  "items": [
+   {
+    "blog_type": "<str>",
+    "consecutive_failures": "<int>",
+    "created_at": "<datetime>",
+    "id": "<oid>",
+    "is_active": "<bool>",
+    "last_fetch_error": "<null>",
+    "last_fetched_at": "<null>",
+    "name": "<str>",
+    "post_count": "<int>",
+    "rss_url": "<url>",
+    "tls_insecure": "<bool>",
+    "updated_at": "<datetime>",
+    "url": "<url>"
+   }
+  ],
+  "page": "<int>",
+  "page_size": "<int>",
+  "total": "<int>",
+  "total_pages": "<int>"
+ },
+ "content_type": "application/json",
+ "status": 200
+}

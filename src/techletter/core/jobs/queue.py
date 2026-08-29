@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from pymongo import ASCENDING, ReturnDocument
+from pymongo import ASCENDING, DESCENDING, ReturnDocument
 
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.jobs.models import PRIORITY_NORMAL, Job
@@ -26,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from pymongo.asynchronous.database import AsyncDatabase
 
     from techletter.core.jobs.policy import RetryPolicy
+    from techletter.core.pagination import Page
     from techletter.settings import JobSettings
 
 __all__ = ["JobQueue"]
@@ -251,6 +252,77 @@ class JobQueue:
             "by_type": by_type,
             "oldest_pending_at": oldest.get("run_at") if oldest else None,
         }
+
+    async def list_jobs(
+        self,
+        page: Page,
+        *,
+        status: str | None = None,
+        job_type: str | None = None,
+    ) -> tuple[list[Job], int]:
+        """어드민 잡 목록. 최근 갱신 순으로 준다."""
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        if job_type:
+            query["type"] = job_type
+        total = await self._col.count_documents(query)
+        cursor = (
+            self._col.find(query)
+            .sort([("updated_at", DESCENDING)])
+            .skip(page.skip)
+            .limit(page.page_size)
+        )
+        return [Job.model_validate(doc) async for doc in cursor], total
+
+    async def retry_bulk(
+        self, *, job_type: str | None = None, error_kind: str | None = None, limit: int = 100
+    ) -> int:
+        """dead 잡을 한 번에 되살린다. 실제로 되살린 개수를 준다.
+
+        `update_many`를 한 번에 쓰지 않고 개수를 제한하는 이유: dead가 수천 건일
+        때 통째로 풀면 워커가 같은 실패를 반복하며 큐를 채운다.
+        """
+        query: dict[str, Any] = {"status": JobStatus.DEAD.value}
+        if job_type:
+            query["type"] = job_type
+        if error_kind:
+            query["error_kind"] = error_kind
+        ids = [
+            doc["_id"]
+            async for doc in self._col.find(query, projection={"_id": 1}).limit(max(1, limit))
+        ]
+        if not ids:
+            return 0
+        result = await self._col.update_many(
+            {"_id": {"$in": ids}},
+            {
+                "$set": {
+                    "status": JobStatus.PENDING.value,
+                    "attempt": 0,
+                    "quota_waited_seconds": 0,
+                    "run_at": utcnow(),
+                    "updated_at": utcnow(),
+                    "finished_at": None,
+                    "last_error": None,
+                    "error_kind": None,
+                }
+            },
+        )
+        logger.info("jobs retried in bulk", extra={"count": result.modified_count})
+        return result.modified_count
+
+    async def delete(self, job_id: Any) -> bool:
+        result = await self._col.delete_one({"_id": job_id})
+        return result.deleted_count > 0
+
+    async def count(self, *, status: str | None = None, job_type: str | None = None) -> int:
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        if job_type:
+            query["type"] = job_type
+        return await self._col.count_documents(query)
 
     async def retry(self, job_id: Any) -> Job | None:
         """dead 잡을 즉시 다시 큐에 넣는다(어드민/CLI)."""

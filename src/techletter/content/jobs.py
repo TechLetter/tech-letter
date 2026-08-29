@@ -15,6 +15,7 @@ from techletter.core.jobs.types import JobType
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.models import Post
+    from techletter.core.jobs.models import Job
     from techletter.core.jobs.queue import JobQueue
 
 __all__ = [
@@ -131,21 +132,22 @@ class EmbeddingDeletePayload:
 
 async def enqueue_summary_requested(
     queue: JobQueue, post: Post, *, trace_id: str | None = None
-) -> None:
+) -> Job | None:
+    """요약 잡을 건다. 이미 대기 중이면 None(중복 억제)."""
     if post.id is None:
-        return
+        return None
     payload = SummaryRequestedPayload(
         post_id=str(post.id), title=post.title, link=post.link, blog_name=post.blog_name
     )
-    await queue.enqueue(
+    return await queue.enqueue(
         JobType.SUMMARY_REQUESTED, str(post.id), payload.to_dict(), trace_id=trace_id
     )
 
 
 async def enqueue_embedding_requested(
     queue: JobQueue, post_id: str, *, trace_id: str | None = None
-) -> None:
-    await queue.enqueue(
+) -> Job | None:
+    return await queue.enqueue(
         JobType.EMBEDDING_REQUESTED,
         post_id,
         EmbeddingRequestedPayload(post_id=post_id).to_dict(),
@@ -155,15 +157,15 @@ async def enqueue_embedding_requested(
 
 async def enqueue_embedding_delete(
     queue: JobQueue, post_ids: list[str], *, key: str, trace_id: str | None = None
-) -> None:
+) -> Job | None:
     """벡터 삭제를 요청한다. 포스트/블로그 삭제 뒤에 부른다.
 
     삭제는 여러 건을 한 잡에 묶는다. 블로그를 지우면 포스트가 수백 개라
     잡을 하나씩 만들면 큐가 그것으로 가득 찬다.
     """
     if not post_ids:
-        return
-    await queue.enqueue(
+        return None
+    return await queue.enqueue(
         JobType.EMBEDDING_DELETE_REQUESTED,
         key,
         EmbeddingDeletePayload(post_ids=post_ids).to_dict(),

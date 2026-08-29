@@ -1,0 +1,10 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/posts/{id}"
+ },
+ "body": null,
+ "content_type": null,
+ "skipped": "운영 ObjectId를 그대로 담고 있어 시드 데이터로 재현 불가",
+ "status": null
+}

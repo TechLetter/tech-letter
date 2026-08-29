@@ -1,0 +1,17 @@
+{
+ "_request": {
+  "authed": false,
+  "path": "/api/v1/posts?published_from=not-a-date"
+ },
+ "body": {
+  "error": {
+   "code": "<str>",
+   "details": {
+    "field": "<str>"
+   },
+   "message": "<str>"
+  }
+ },
+ "content_type": "application/json",
+ "status": 400
+}
