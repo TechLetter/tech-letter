@@ -18,6 +18,25 @@ concurrency:
 env:
   COMPOSE_FILE: docker/compose.prod.yml
   IMAGE_REPO: techletter
+  # compose가 파일을 파싱하는 순간(build든 up이든) `x-app-env`/`x-llm-env`
+  # 앵커의 `${VAR:?}`가 전부 평가된다. 그래서 "Build images"에서도 이 값들이
+  # 있어야 한다 — 이전에는 "Start" 스텝에만 있어서 build가 즉시 실패했다.
+  # 값이 없으면 compose 의 `${VAR:?}` 가 배포를 멈춘다. 현행은 빈 문자열로
+  # 치환돼 시크릿 누락이 "배포 성공" 으로 위장됐다.
+  MONGO_URI: ${{ secrets.MONGO_URI }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+  GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+  SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
+  EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
+  CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
+  CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
+  SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+  CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
+  SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
+  CHAT_MODEL_PREFERENCE: ${{ vars.CHAT_MODEL_PREFERENCE }}
+  CHAT_PLANNER_MODEL_PREFERENCE: ${{ vars.CHAT_PLANNER_MODEL_PREFERENCE }}
+  LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
 
 jobs:
   deploy:
@@ -60,22 +79,6 @@ jobs:
       - name: Start
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
-          # 값이 없으면 compose 의 `${VAR:?}` 가 배포를 멈춘다. 현행은 빈
-          # 문자열로 치환돼 시크릿 누락이 "배포 성공" 으로 위장됐다.
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
-          EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
-          CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
-          CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
-          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
-          CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
-          SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
-          CHAT_MODEL_PREFERENCE: ${{ vars.CHAT_MODEL_PREFERENCE }}
-          CHAT_PLANNER_MODEL_PREFERENCE: ${{ vars.CHAT_PLANNER_MODEL_PREFERENCE }}
-          LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
         run: |
           docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 --remove-orphans
 
@@ -85,23 +88,8 @@ jobs:
 
       - name: Roll back
         if: failure() && steps.smoke.outcome == 'failure' && steps.previous.outputs.previous != ''
-        # GitHub Actions 는 YAML 앵커를 해석하지 않는다. 풀어서 쓴다.
         env:
           IMAGE_TAG: ${{ steps.previous.outputs.previous }}
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-          SUMMARY_WORKER_LLM_API_KEY: ${{ secrets.SUMMARY_WORKER_LLM_API_KEY }}
-          EMBEDDING_WORKER_LLM_API_KEY: ${{ secrets.EMBEDDING_WORKER_LLM_API_KEY }}
-          CHATBOT_LLM_API_KEY: ${{ secrets.CHATBOT_LLM_API_KEY }}
-          CHATBOT_EMBEDDING_API_KEY: ${{ secrets.CHATBOT_EMBEDDING_API_KEY }}
-          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
-          CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
-          SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
-          CHAT_MODEL_PREFERENCE: ${{ vars.CHAT_MODEL_PREFERENCE }}
-          CHAT_PLANNER_MODEL_PREFERENCE: ${{ vars.CHAT_PLANNER_MODEL_PREFERENCE }}
-          LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
         run: |
           echo "::warning::스모크 실패. ${{ steps.previous.outputs.previous }} 로 되돌린다."
           docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180
