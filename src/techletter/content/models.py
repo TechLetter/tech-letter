@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from techletter.core.db.documents import BaseDocument, MongoDateTime, PyObjectId
+from techletter.core.db.documents import BaseDocument, MongoDateTime, PyObjectId, SubDocument
 
 __all__ = [
     "AISummary",
@@ -26,7 +26,7 @@ __all__ = [
 BlogType = Literal["company", "creator"]
 
 
-class StatusFlags(BaseDocument):
+class StatusFlags(SubDocument):
     """`posts.status`. 필드명은 DB 그대로 둔다."""
 
     ai_summarized: bool = False
@@ -35,7 +35,7 @@ class StatusFlags(BaseDocument):
     """요약이 영구 실패한 사유(신규 필드, 05 §1.5). 기존 문서에는 없어도 무해."""
 
 
-class AISummary(BaseDocument):
+class AISummary(SubDocument):
     categories: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     summary: str | None = None
@@ -43,7 +43,7 @@ class AISummary(BaseDocument):
     generated_at: MongoDateTime | None = None
 
 
-class EmbeddingMeta(BaseDocument):
+class EmbeddingMeta(SubDocument):
     model_name: str
     collection_name: str
     vector_dimension: int
