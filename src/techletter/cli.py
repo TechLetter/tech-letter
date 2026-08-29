@@ -292,6 +292,9 @@ def jobs_purge(older_than_days: int = typer.Option(30)) -> None:
 @backfill_app.command("summaries")
 def backfill_summaries(
     limit: int = typer.Option(50),
+    priority: int = typer.Option(
+        10, help="숫자가 클수록 나중에 처리된다. 신규 수집물보다 뒤로 미룬다."
+    ),
     dry_run: bool = typer.Option(True, "--dry-run/--execute"),
 ) -> None:
     """요약이 없는 포스트에 대해 요약 잡을 넣는다."""
@@ -305,7 +308,10 @@ def backfill_summaries(
             for post in posts[:10]:
                 typer.echo(f"  {post.id}  {post.title[:60]}")
             return
-        queued = [await enqueue_summary_requested(container.queue, post) for post in posts]
+        queued = [
+            await enqueue_summary_requested(container.queue, post, priority=priority)
+            for post in posts
+        ]
         enqueued = sum(job is not None for job in queued)
         typer.echo(f"{enqueued}건 enqueue (중복 {len(posts) - enqueued}건 건너뜀)")
 
@@ -315,6 +321,9 @@ def backfill_summaries(
 @backfill_app.command("embeddings")
 def backfill_embeddings(
     limit: int = typer.Option(50),
+    priority: int = typer.Option(
+        10, help="숫자가 클수록 나중에 처리된다. 신규 수집물보다 뒤로 미룬다."
+    ),
     dry_run: bool = typer.Option(True, "--dry-run/--execute"),
 ) -> None:
     """요약됐지만 임베딩되지 않은 포스트를 채운다."""
@@ -327,7 +336,8 @@ def backfill_embeddings(
             typer.echo(f"[dry-run] {len(posts)}건이 대상이다. --execute 로 실행한다.")
             return
         queued = [
-            await enqueue_embedding_requested(container.queue, str(post.id)) for post in posts
+            await enqueue_embedding_requested(container.queue, str(post.id), priority=priority)
+            for post in posts
         ]
         typer.echo(f"{sum(job is not None for job in queued)}건 enqueue")
 

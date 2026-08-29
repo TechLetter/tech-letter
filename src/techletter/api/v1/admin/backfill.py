@@ -40,7 +40,9 @@ async def enqueue_summaries(ctx: Ctx, _: AdminUser, body: BackfillIn) -> dict[st
     이미 대기 중인 잡은 중복 억제로 건너뛴다.
     """
     posts = await ctx.posts.find_unsummarized(body.limit)
-    queued = [await enqueue_summary_requested(ctx.queue, post) for post in posts]
+    queued = [
+        await enqueue_summary_requested(ctx.queue, post, priority=body.priority) for post in posts
+    ]
     enqueued = sum(job is not None for job in queued)
     logger.info(
         "summary backfill enqueued",
@@ -52,7 +54,10 @@ async def enqueue_summaries(ctx: Ctx, _: AdminUser, body: BackfillIn) -> dict[st
 @router.post("/embeddings", status_code=status.HTTP_202_ACCEPTED)
 async def enqueue_embeddings(ctx: Ctx, _: AdminUser, body: BackfillIn) -> dict[str, int]:
     posts = await ctx.posts.find_summarized_not_embedded(body.limit)
-    queued = [await enqueue_embedding_requested(ctx.queue, str(post.id)) for post in posts]
+    queued = [
+        await enqueue_embedding_requested(ctx.queue, str(post.id), priority=body.priority)
+        for post in posts
+    ]
     enqueued = sum(job is not None for job in queued)
     logger.info("embedding backfill enqueued", extra={"count": enqueued})
     return {"enqueued": enqueued}

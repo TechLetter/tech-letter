@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from techletter.core.jobs.models import PRIORITY_NORMAL
 from techletter.core.jobs.types import JobType
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -131,26 +132,43 @@ class EmbeddingDeletePayload:
 
 
 async def enqueue_summary_requested(
-    queue: JobQueue, post: Post, *, trace_id: str | None = None
+    queue: JobQueue,
+    post: Post,
+    *,
+    priority: int = PRIORITY_NORMAL,
+    trace_id: str | None = None,
 ) -> Job | None:
-    """요약 잡을 건다. 이미 대기 중이면 None(중복 억제)."""
+    """요약 잡을 건다. 이미 대기 중이면 None(중복 억제).
+
+    `priority`는 백필 호출자가 `PRIORITY_BACKFILL`을 넘긴다 — 신규 수집
+    포스트가 항상 먼저 처리되게 하기 위해서다(ADR-0004 §7).
+    """
     if post.id is None:
         return None
     payload = SummaryRequestedPayload(
         post_id=str(post.id), title=post.title, link=post.link, blog_name=post.blog_name
     )
     return await queue.enqueue(
-        JobType.SUMMARY_REQUESTED, str(post.id), payload.to_dict(), trace_id=trace_id
+        JobType.SUMMARY_REQUESTED,
+        str(post.id),
+        payload.to_dict(),
+        priority=priority,
+        trace_id=trace_id,
     )
 
 
 async def enqueue_embedding_requested(
-    queue: JobQueue, post_id: str, *, trace_id: str | None = None
+    queue: JobQueue,
+    post_id: str,
+    *,
+    priority: int = PRIORITY_NORMAL,
+    trace_id: str | None = None,
 ) -> Job | None:
     return await queue.enqueue(
         JobType.EMBEDDING_REQUESTED,
         post_id,
         EmbeddingRequestedPayload(post_id=post_id).to_dict(),
+        priority=priority,
         trace_id=trace_id,
     )
 
