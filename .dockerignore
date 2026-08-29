@@ -22,17 +22,6 @@ build/
 .mypy_cache/
 .ruff_cache/
 
-# Go
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-/bin/
-/pkg/
-
 # IDEs
 .vscode/
 .idea/
@@ -42,7 +31,6 @@ build/
 .DS_Store
 
 # Tests
-*_test.go
 test_*.py
 tests/
 **/tests/

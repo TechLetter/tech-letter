@@ -21,10 +21,7 @@ build/
 .coverage
 htmlcov/
 .pytest_cache/
-
-# Go build artifacts (컴파일 산출물은 커밋하지 않는다)
-/api
-/retryworker
+.ruff_cache/
 
 # Logs and temporary files
 *.log

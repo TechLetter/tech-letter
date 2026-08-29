@@ -183,9 +183,7 @@ class RoutingChatClient(ChatClient):
     async def complete(
         self, model_id: str, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_TOKENS
     ) -> str:
-        return await self._pick(model_id).complete(
-            model_id, system, user, max_tokens=max_tokens
-        )
+        return await self._pick(model_id).complete(model_id, system, user, max_tokens=max_tokens)
 
     async def aclose(self) -> None:
         await self._primary.aclose()

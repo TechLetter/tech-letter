@@ -32,7 +32,7 @@ class LangChainEmbedder:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: PLC0415
 
             self._client = GoogleGenerativeAIEmbeddings(
-                model=self._settings.model_name, google_api_key=api_key
+                model=self._settings.model_name, api_key=api_key
             )
         else:
             from langchain_openai import OpenAIEmbeddings  # noqa: PLC0415

@@ -58,36 +58,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/techletter"]
 
-# ── 구 서비스 워크스페이스 (Phase 11에서 제거) ────────────────────────
-# 기존 Dockerfile들이 `uv pip install ./common ./<service>`로 설치하며
-# techletter-common을 workspace source로 해석한다. 컷오버 전까지 유지한다.
-[tool.uv.workspace]
-members = [
-    "common",
-    "summary_worker",
-    "embedding_worker",
-    "chatbot_service",
-    "content_service",
-    "user_service",
-]
-
-[tool.uv.sources]
-techletter-common = { workspace = true }
-
 # ── 도구 설정 ────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
-extend-exclude = [
-    "common",
-    "summary_worker",
-    "embedding_worker",
-    "chatbot_service",
-    "content_service",
-    "user_service",
-    "docs",
-]
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = [
@@ -123,16 +99,7 @@ ban-relative-imports = "all"
 venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
-exclude = [
-    "**/__pycache__",
-    "common",
-    "summary_worker",
-    "embedding_worker",
-    "chatbot_service",
-    "content_service",
-    "user_service",
-    ".venv",
-]
+exclude = ["**/__pycache__", ".venv"]
 typeCheckingMode = "standard"
 pythonVersion = "3.12"
 
