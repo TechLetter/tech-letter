@@ -11,6 +11,7 @@
 
 안전장치: GET 요청만 보낸다. 운영 데이터를 변경하는 요청은 보내지 않는다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -85,7 +86,7 @@ def fetch(base, path, token=None, headers=None) -> dict[str, object]:
     except urllib.error.HTTPError as e:
         body, status, ctype = e.read(), e.code, e.headers.get("Content-Type", "")
         loc = e.headers.get("Location")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
     out: dict[str, object] = {"status": status, "content_type": ctype.split(";")[0].strip()}
@@ -96,7 +97,7 @@ def fetch(base, path, token=None, headers=None) -> dict[str, object]:
     if body:
         try:
             out["body"] = norm(json.loads(body))
-        except Exception:  # noqa: BLE001
+        except Exception:
             out["body"] = f"<non-json:{len(body)}bytes>"
     else:
         out["body"] = None
@@ -120,9 +121,19 @@ def main() -> int:
         ("posts__anon", "/api/v1/posts?page=1&page_size=2&status_ai_summarized=true", None, None),
         ("posts__auth", "/api/v1/posts?page=1&page_size=2&status_ai_summarized=true", tok, None),
         ("posts__empty_category", "/api/v1/posts?page=1&page_size=2&categories=", None, None),
-        ("posts__repeated_tags", "/api/v1/posts?page=1&page_size=2&tags=Kafka&tags=React", None, None),
+        (
+            "posts__repeated_tags",
+            "/api/v1/posts?page=1&page_size=2&tags=Kafka&tags=React",
+            None,
+            None,
+        ),
         ("posts__bad_page", "/api/v1/posts?page=abc&page_size=xyz", None, None),
-        ("posts__date_only", "/api/v1/posts?published_from=2026-01-01&published_to=2026-08-01&page_size=2", None, None),
+        (
+            "posts__date_only",
+            "/api/v1/posts?published_from=2026-01-01&published_to=2026-08-01&page_size=2",
+            None,
+            None,
+        ),
         ("posts__bad_date", "/api/v1/posts?published_from=nope", None, None),
         ("posts_detail", f"/api/v1/posts/{post_id}", None, None),
         ("posts_detail__missing", "/api/v1/posts/000000000000000000000000", None, None),
@@ -136,19 +147,44 @@ def main() -> int:
         ("trends_rising__bad_period", "/api/v1/trends/rising?period=999d", None, None),
         ("trends_rising__bad_limit", "/api/v1/trends/rising?limit=99", None, None),
         ("trends_series", "/api/v1/trends/series?tags=LLM&period=180d&interval=week", None, None),
-        ("trends_series__bad_interval", "/api/v1/trends/series?tags=LLM&interval=fortnight", None, None),
+        (
+            "trends_series__bad_interval",
+            "/api/v1/trends/series?tags=LLM&interval=fortnight",
+            None,
+            None,
+        ),
         ("trends_posts", "/api/v1/trends/posts?tags=LLM&period=180d&page_size=2", None, None),
         ("users_profile", "/api/v1/users/profile", tok, None),
         ("users_profile__no_header", "/api/v1/users/profile", None, None),
         ("users_profile__basic", "/api/v1/users/profile", None, {"Authorization": "Basic zzz"}),
-        ("users_profile__empty_token", "/api/v1/users/profile", None, {"Authorization": "Bearer  "}),
-        ("users_profile__bad_token", "/api/v1/users/profile", None, {"Authorization": "Bearer not.a.jwt"}),
+        (
+            "users_profile__empty_token",
+            "/api/v1/users/profile",
+            None,
+            {"Authorization": "Bearer  "},
+        ),
+        (
+            "users_profile__bad_token",
+            "/api/v1/users/profile",
+            None,
+            {"Authorization": "Bearer not.a.jwt"},
+        ),
         ("chatbot_sessions", "/api/v1/chatbot/sessions?page=1&page_size=2", tok, None),
-        ("chatbot_sessions__missing", "/api/v1/chatbot/sessions/000000000000000000000000", tok, None),
+        (
+            "chatbot_sessions__missing",
+            "/api/v1/chatbot/sessions/000000000000000000000000",
+            tok,
+            None,
+        ),
         ("chatbot_suggested", "/api/v1/chatbot/suggested-questions", None, None),
         ("auth_google_login", "/api/v1/auth/google/login", None, None),
         ("admin_posts", "/api/v1/admin/posts?page=1&page_size=2", admin, None),
-        ("admin_posts__filtered", "/api/v1/admin/posts?page=1&page_size=2&status_ai_summarized=false", admin, None),
+        (
+            "admin_posts__filtered",
+            "/api/v1/admin/posts?page=1&page_size=2&status_ai_summarized=false",
+            admin,
+            None,
+        ),
         ("admin_blogs", "/api/v1/admin/blogs?page=1&page_size=2", admin, None),
         ("admin_users", "/api/v1/admin/users?page=1&page_size=2", admin, None),
         ("admin_suggested", "/api/v1/admin/chatbot/suggested-questions", admin, None),
@@ -162,7 +198,10 @@ def main() -> int:
             continue
         res = fetch(base, path, token, headers)
         req_path = re.sub(r"/[0-9a-f]{24}", "/{id}", path.split("?")[0])
-        res["_request"] = {"path": req_path, "authed": bool(token or (headers or {}).get("Authorization"))}
+        res["_request"] = {
+            "path": req_path,
+            "authed": bool(token or (headers or {}).get("Authorization")),
+        }
         with open(os.path.join(args.out, f"{label}.json"), "w", encoding="utf-8") as f:
             json.dump(res, f, ensure_ascii=False, indent=1, sort_keys=True)
         st = res.get("status", res.get("error"))

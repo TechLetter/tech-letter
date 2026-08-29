@@ -1,0 +1,24 @@
+# 설치: uv run pre-commit install
+# 구 서비스 디렉토리(common, *_service, *_worker)는 Phase 11에서 삭제되므로 제외한다.
+exclude: '^(common|content_service|user_service|chatbot_service|summary_worker|embedding_worker|docs/legacy)/'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      # 39MB 바이너리가 커밋됐던 재발 방지 (ISSUE-016)
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.5
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format

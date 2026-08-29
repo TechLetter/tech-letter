@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.10.6"
+
+jobs:
+  check:
+    name: lint · typecheck · test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check src tests scripts
+          uv run ruff format --check src tests scripts
+
+      - name: Typecheck (pyright)
+        run: uv run pyright
+
+      - name: Test (unit + contract)
+        run: uv run pytest -q
+
+  # Phase 9에서 통합/E2E/이미지 빌드 잡을 추가한다
+  # (docs/plan/06-migration-steps.md 스텝 9.4)
