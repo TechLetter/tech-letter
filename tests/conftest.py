@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _TEST_ENV = {
     "MONGO_URI": "mongodb://test:test@localhost:27017/techletter_test?authSource=admin",
     "MONGO_DB_NAME": "techletter_test",
-    "JWT_SECRET": "test-secret-not-a-real-key",
+    "JWT_SECRET": "test-secret-not-a-real-key-at-least-32-bytes",
     "GOOGLE_OAUTH_CLIENT_ID": "test-client-id",
     "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
     "GOOGLE_OAUTH_REDIRECT_URL": "http://localhost:8080/api/v1/auth/google/callback",

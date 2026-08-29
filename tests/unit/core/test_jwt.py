@@ -12,7 +12,7 @@ import json
 import time
 
 import pytest
-from pydantic import SecretStr
+from tests.factories import TEST_JWT_SECRET, make_auth_settings
 
 from techletter.core.errors import AuthRequiredError, InvalidTokenError
 from techletter.core.security import (
@@ -24,19 +24,12 @@ from techletter.core.security import (
 )
 from techletter.settings import AuthSettings
 
-SECRET = "test-secret-not-a-real-key"
+SECRET = TEST_JWT_SECRET
 
 
 @pytest.fixture
 def auth() -> AuthSettings:
-    return AuthSettings(
-        JWT_SECRET=SecretStr(SECRET),
-        JWT_ISSUER="tech-letter",
-        GOOGLE_OAUTH_CLIENT_ID="cid",
-        GOOGLE_OAUTH_CLIENT_SECRET=SecretStr("csecret"),
-        GOOGLE_OAUTH_REDIRECT_URL="http://localhost/cb",
-        AUTH_LOGIN_SUCCESS_REDIRECT_URL="http://localhost/login/success",
-    )
+    return make_auth_settings(jwt_secret=SECRET)
 
 
 def _legacy_token(payload: dict, secret: str = SECRET, alg: str = "HS256") -> str:
