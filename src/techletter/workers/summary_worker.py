@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from techletter.core.jobs.runner import JobRunner
 from techletter.core.jobs.types import JobType
-from techletter.core.llm.chat import LangChainChatClient, LlmGateway
+from techletter.core.llm.chat import LangChainChatClient, LlmGateway, RoutingChatClient
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
@@ -45,13 +45,21 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
     settings = container.settings
     heartbeat = Heartbeat()
 
+    # 요약은 Gemini를 1순위로 쓰고(D13) 예산이 다하면 OpenRouter 무료 모델로
+    # 넘어간다(ADR-0008). 후보 목록에 두 provider의 모델 id가 섞여 오므로,
+    # 하나의 provider만 아는 LangChainChatClient 로는 처리할 수 없다 —
+    # `RoutingChatClient`가 model_id를 보고 알맞은 클라이언트로 나눠 보낸다.
     llm = LlmGateway(
         ModelRouter(
             settings.router,
             ScouterClient(settings.router, container.http.get()),
             container.model_stats,
         ),
-        LangChainChatClient(settings.summary_llm),
+        RoutingChatClient(
+            settings.summary_llm.model_name,
+            LangChainChatClient(settings.summary_llm),
+            LangChainChatClient(settings.chat_llm),
+        ),
     )
     renderer = build_renderer(container)
     pipeline = SummaryPipeline(renderer, Summarizer(llm, settings.summary), container.http.get())
