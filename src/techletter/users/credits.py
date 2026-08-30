@@ -1,6 +1,7 @@
 """크레딧 서비스.
 
-정책: 로그인 시 일일 10크레딧, 채팅 1회당 1크레딧, 다음 UTC 자정에 소멸.
+정책: 로그인 시 일일 크레딧 지급(기본 10, `DAILY_CREDIT_GRANT`), 채팅 1회당 1크레딧,
+다음 UTC 자정에 소멸.
 중복 지급은 식별자 해시 기준 정책으로 막는다(계정을 다시 만들어도 동일).
 
 차감은 원자적이다 — 동시 요청에도 잔액이 음수가 되지 않는다. 환불에는
@@ -56,10 +57,13 @@ class CreditService:
         credits: CreditRepository,
         transactions: CreditTransactionRepository,
         policies: IdentityPolicyRepository,
+        *,
+        daily_credit_grant: int = DAILY_CREDITS,
     ) -> None:
         self._credits = credits
         self._transactions = transactions
         self._policies = policies
+        self._daily_credit_grant = daily_credit_grant
 
     async def remaining(self, user_code: str) -> int:
         return await self._credits.remaining(user_code)
@@ -114,14 +118,14 @@ class CreditService:
 
         credit = await self._credits.grant(
             user_code,
-            DAILY_CREDITS,
+            self._daily_credit_grant,
             source="daily",
             reason="로그인 일일 지급",
             expired_at=self._next_midnight(),
         )
-        await self._log(user_code, credit.id, "grant", DAILY_CREDITS, "로그인 일일 지급")
+        await self._log(user_code, credit.id, "grant", self._daily_credit_grant, "로그인 일일 지급")
         logger.info("daily credits granted", extra={"user_code": user_code})
-        return DAILY_CREDITS
+        return self._daily_credit_grant
 
     async def admin_grant(
         self, user_code: str, amount: int, expires_at: datetime, reason: str = "어드민 수동 지급"

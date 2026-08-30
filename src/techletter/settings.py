@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import functools
+import os
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, PrivateAttr, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 __all__ = ["Settings", "get_settings"]
@@ -72,6 +73,12 @@ def _llm_config(prefix: str) -> SettingsConfigDict:
     )
 
 
+# provider 하나당 계정 하나뿐이라, 어떤 역할이든 이 provider를 쓰면 이 키를
+# 쓴다. 역할별로 따로 설정할 것이 없다 — google/openrouter 둘 다 실제로 쓰는
+# provider고, openai/ollama는 로컬에서만 쓰는 것이라 공유 키가 없다.
+_SHARED_API_KEY_ENV = {"google": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+
+
 class LlmSettings(BaseSettings):
     """provider별 LLM 설정. 용도별 서브클래스가 env prefix를 지정한다.
 
@@ -82,39 +89,50 @@ class LlmSettings(BaseSettings):
     model_config = _BASE
     provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
     model_name: str = ""
-    api_key: SecretStr | None = None
     base_url: str | None = None
     temperature: float = 0.3
     max_retries: int = 0
     timeout_seconds: int = 120
 
+    # 역할별 `*_API_KEY` 환경변수는 없다 — pydantic 필드가 아니라 PrivateAttr이라
+    # env var로 채워질 방법 자체가 없다(`populate_by_name`이 필드명+env_prefix로도
+    # 채우려 들기 때문에, 진짜 pydantic 필드였다면 alias를 숨겨도
+    # `SUMMARY_WORKER_LLM_API_KEY` 같은 옛 이름이 여전히 새어 들어왔다).
+    _api_key: SecretStr | None = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _load_shared_api_key(self) -> LlmSettings:
+        env_var = _SHARED_API_KEY_ENV.get(self.provider)
+        raw = os.environ.get(env_var) if env_var else None
+        if raw:
+            self._api_key = SecretStr(raw)
+        return self
+
+    @property
+    def api_key(self) -> SecretStr | None:
+        return self._api_key
+
 
 class SummaryLlmSettings(LlmSettings):
     model_config = _llm_config("SUMMARY_WORKER_LLM_")
-    # 4개 역할이 실제로는 Gemini 키 하나 / OpenRouter 키 하나를 그대로 복붙해
-    # 썼다. 역할별 시크릿 대신 provider별 공유 키 하나로 정리한다.
-    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class EmbeddingLlmSettings(LlmSettings):
     model_config = _llm_config("EMBEDDING_WORKER_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
     model_name: str = "gemini-embedding-001"
-    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class ChatLlmSettings(LlmSettings):
     model_config = _llm_config("CHATBOT_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
     temperature: float = 0.7
-    api_key: SecretStr | None = Field(default=None, alias="OPENROUTER_API_KEY")
 
 
 class ChatEmbeddingSettings(LlmSettings):
     model_config = _llm_config("CHATBOT_EMBEDDING_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
     model_name: str = "gemini-embedding-001"
-    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class RouterSettings(BaseSettings):
@@ -128,7 +146,6 @@ class RouterSettings(BaseSettings):
     scouter_scan_concurrency: int = 2
     scouter_scan_request_delay_seconds: float = 0.3
     scouter_scan_prompt: str = "Respond with the exact text: OK"
-    scouter_check_retention_days: int = 3
     min_uptime_24h: float = 90.0
     max_model_attempts: int = 3
     min_success_rate: float = Field(default=0.6, alias="LLM_MIN_SUCCESS_RATE")
@@ -147,7 +164,6 @@ class RouterSettings(BaseSettings):
     static_fallback: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="LLM_STATIC_FALLBACK_MODELS"
     )
-    chat_gemini_fallback: bool = Field(default=True, alias="CHAT_GEMINI_FALLBACK")
 
     @field_validator(
         "summary_preference",
@@ -168,12 +184,10 @@ class JobSettings(BaseSettings):
     poll_interval_seconds: float = Field(default=2.0, alias="JOB_POLL_INTERVAL_SECONDS")
     idle_backoff_seconds: float = 10.0
     lock_timeout_minutes: int = Field(default=30, alias="JOB_LOCK_TIMEOUT_MINUTES")
-    summary_lock_timeout_minutes: int = 60
     max_attempt: int = Field(default=5, alias="JOB_MAX_ATTEMPT")
     backoff_minutes: Annotated[list[int], NoDecode] = Field(
         default=[5, 30, 120, 480, 1440], alias="JOB_BACKOFF_MINUTES"
     )
-    done_ttl_days: int = 14
     quota_max_wait_hours: int = 30
     dead_retryable_alert_threshold: int = Field(
         default=5, alias="JOB_DEAD_RETRYABLE_ALERT_THRESHOLD"
@@ -192,15 +206,7 @@ class RssSettings(BaseSettings):
     interval_seconds: int = 30 * 60
     batch_size: int = Field(default=10, alias="CONTENT_BLOG_FETCH_BATCH_SIZE")
     request_timeout_seconds: int = 30
-    tls_insecure_hosts: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, alias="RSS_TLS_INSECURE_HOSTS"
-    )
     auto_disable_after_failures: int = 48
-
-    @field_validator("tls_insecure_hosts", mode="before")
-    @classmethod
-    def _split(cls, v: str | list[str] | None) -> list[str]:
-        return _csv(v)
 
 
 class SummarySettings(BaseSettings):
@@ -212,7 +218,6 @@ class SummarySettings(BaseSettings):
     max_input_chars: int = Field(default=12000, alias="SUMMARY_MAX_INPUT_CHARS")
     max_render_attempts: int = 3
     render_timeout_seconds: int = 30
-    max_thumbnail_candidates: int = 10
     summary_target_chars: int = 200
     summary_tolerance_chars: int = 20
     max_tags: int = 7
@@ -234,7 +239,6 @@ class ChatSettings(BaseSettings):
     model_config = _BASE
     rag_top_k: int = Field(default=5, alias="CHATBOT_RAG_TOP_K")
     rag_score_threshold: float = Field(default=0.5, alias="CHATBOT_RAG_SCORE_THRESHOLD")
-    history_limit: int = 60
     memory_recent_messages: int = 8
     memory_max_message_chars: int = 1200
     memory_max_summary_chars: int = 1800

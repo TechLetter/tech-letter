@@ -145,6 +145,7 @@ class Container:
             CreditRepository(self.db),
             CreditTransactionRepository(self.db),
             IdentityPolicyRepository(self.db),
+            daily_credit_grant=self.settings.chat.daily_credit_grant,
         )
 
     @property

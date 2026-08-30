@@ -157,11 +157,11 @@ class Settings(BaseSettings):
     qdrant:     QdrantSettings        # QDRANT_HOST/PORT, QDRANT_COLLECTION_NAME=tech_letter_posts
     router:     RouterSettings        # SCOUTER_SCAN_INTERVAL_HOURS=1, *_MODEL_PREFERENCE, LLM_STATIC_FALLBACK_MODELS,
                                       # LLM_MIN_SUCCESS_RATE, LLM_QUOTA_RESET_UTC_HOUR=7,
-                                      # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20, CHAT_GEMINI_FALLBACK=true
+                                      # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20(Gemini 예산 소진 시 우선순위 조정)
     jobs:       JobSettings           # JOB_POLL_INTERVAL_SECONDS=2, JOB_LOCK_TIMEOUT_MINUTES=30,
                                       # JOB_BACKOFF_MINUTES=[5,30,120,480,1440], JOB_MAX_ATTEMPT=5,
                                       # JOB_DEAD_RETRYABLE_ALERT_THRESHOLD=5
-    rss:        RssSettings           # interval=30m, CONTENT_BLOG_FETCH_BATCH_SIZE=10, tls 예외 목록
+    rss:        RssSettings           # interval=30m, CONTENT_BLOG_FETCH_BATCH_SIZE=10
     summary:    SummarySettings       # RENDERER_STRATEGY, SCRAPERAPI_KEY, SUMMARY_MAX_INPUT_CHARS
     embedding:  EmbeddingSettings     # EMBEDDING_WORKER_CHUNK_SIZE/OVERLAP
     chat:       ChatSettings          # CHATBOT_RAG_TOP_K/_SCORE_THRESHOLD, CHAT_CONTEXT_COMPRESSION_*

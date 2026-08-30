@@ -103,7 +103,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 ```
 요약   : Gemini(일일 예산) → 소진 시 OpenRouter[큐레이션 ∩ scouter 헬스]로 순차 폴백
-챗봇   : OpenRouter[큐레이션 ∩ scouter 헬스] → 전부 실패 시 Gemini 폴백
+챗봇   : OpenRouter[큐레이션 ∩ scouter 헬스]
 임베딩 : Gemini gemini-embedding-001 고정
 ```
 

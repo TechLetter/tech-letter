@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from techletter.core.jobs.runner import JobRunner
 from techletter.core.jobs.types import JobType
+from techletter.core.llm.budget import DailyBudget
 from techletter.core.llm.chat import LangChainChatClient, LlmGateway, RoutingChatClient
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
@@ -62,7 +63,15 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
         ),
     )
     renderer = build_renderer(container)
-    pipeline = SummaryPipeline(renderer, Summarizer(llm, settings.summary), container.http.get())
+    summarizer = Summarizer(
+        llm,
+        settings.summary,
+        budget=DailyBudget(container.db, reset_utc_hour=settings.router.quota_reset_utc_hour),
+        primary_model=settings.summary_llm.model_name,
+        primary_provider=settings.summary_llm.provider,
+        daily_limit=settings.router.summary_daily_budget,
+    )
+    pipeline = SummaryPipeline(renderer, summarizer, container.http.get())
     runner = JobRunner(
         container.queue,
         settings.jobs,

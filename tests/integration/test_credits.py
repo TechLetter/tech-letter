@@ -135,6 +135,21 @@ async def test_grant_daily(credit_service):
     assert await credit_service.remaining(USER) == DAILY_CREDITS
 
 
+async def test_grant_daily_uses_configured_amount(mongo_db):
+    """DAILY_CREDIT_GRANT가 실제로 지급량을 바꿔야 한다 — 설정이 죽어있으면 안 된다."""
+    service = CreditService(
+        CreditRepository(mongo_db),
+        CreditTransactionRepository(mongo_db),
+        IdentityPolicyRepository(mongo_db),
+        daily_credit_grant=3,
+    )
+
+    granted = await service.grant_daily(USER, "google", "sub-1")
+
+    assert granted == 3
+    assert await service.remaining(USER) == 3
+
+
 async def test_grant_daily_is_idempotent_within_a_day(credit_service):
     assert await credit_service.grant_daily(USER, "google", "sub-1") == DAILY_CREDITS
     assert await credit_service.grant_daily(USER, "google", "sub-1") == 0
