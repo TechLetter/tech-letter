@@ -13,13 +13,11 @@
 | [00-overview](plan/00-overview.md) | 목표·비목표·**결정 로그**·제약·토폴로지·DoD·리스크 |
 | [01-target-architecture](plan/01-target-architecture.md) | 프로세스 4종, 모듈러 모놀리스, **Mongo 잡 큐**, LLM 라우터, 관측 |
 | [02-directory-structure](plan/02-directory-structure.md) | `src/techletter` 트리, `pyproject.toml`, 설정 트리, 코드 규약 |
-| [03-api-current](plan/03-api-current.md) | **현행** 계약 기록(프론트가 실제로 읽던 필드) — 이식 참조·스냅샷 기준 |
-| [04-api-v2](plan/04-api-v2.md) | ⭐ **새 계약**: 봉투 통일, 에러 코드 체계, 경로 정리, 어드민 운영 API |
-| [05-data-contract](plan/05-data-contract.md) | MongoDB 컬렉션·인덱스(유지/신설), Qdrant, **Kafka 삭제 절차**, 시크릿 이름 |
+| [04-api-v2](plan/04-api-v2.md) | ⭐ **현재 API 계약**: 봉투 통일, 에러 코드 체계, 경로 정리, 어드민 운영 API |
+| [05-data-contract](plan/05-data-contract.md) | MongoDB 컬렉션·인덱스, Qdrant, **Kafka 삭제 절차**, 시크릿 이름 |
 | [06-migration-steps](plan/06-migration-steps.md) | Phase 0~11 실행 스텝(**프론트 Phase 8** 포함) |
 | [07-testing-strategy](plan/07-testing-strategy.md) | 단위·계약·통합·**Playwright E2E**, 컷오버 스모크 |
-| [08-deployment-and-ops](plan/08-deployment-and-ops.md) | 운영 현황, 새 파이프라인, compose, 관측 기준선, 런북, 롤백, IaC 정리 |
-| [09-current-state-audit](plan/09-current-state-audit.md) | 코드·운영 전수 감사 압축본(실측 데이터) |
+| [08-deployment-and-ops](plan/08-deployment-and-ops.md) | 운영 현황, 파이프라인, compose, 관측 기준선, 런북, 롤백, IaC 정리 |
 
 ## 결정 기록 (`plan/adr/`)
 | ADR | 결정 |
