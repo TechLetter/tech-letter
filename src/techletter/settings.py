@@ -91,35 +91,44 @@ class LlmSettings(BaseSettings):
 
 class SummaryLlmSettings(LlmSettings):
     model_config = _llm_config("SUMMARY_WORKER_LLM_")
+    # 4개 역할이 실제로는 Gemini 키 하나 / OpenRouter 키 하나를 그대로 복붙해
+    # 썼다. 역할별 시크릿 대신 provider별 공유 키 하나로 정리한다.
+    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class EmbeddingLlmSettings(LlmSettings):
     model_config = _llm_config("EMBEDDING_WORKER_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
     model_name: str = "gemini-embedding-001"
+    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class ChatLlmSettings(LlmSettings):
     model_config = _llm_config("CHATBOT_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
     temperature: float = 0.7
+    api_key: SecretStr | None = Field(default=None, alias="OPENROUTER_API_KEY")
 
 
 class ChatEmbeddingSettings(LlmSettings):
     model_config = _llm_config("CHATBOT_EMBEDDING_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
     model_name: str = "gemini-embedding-001"
+    api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
 
 
 class RouterSettings(BaseSettings):
     """LLM 모델 라우터."""
 
     model_config = _BASE
-    scouter_base_url: str = Field(
-        default="http://openrouter-scouter:8000", alias="SCOUTER_BASE_URL"
-    )
-    scouter_timeout_seconds: float = 3.0
+    scouter_timeout_seconds: float = 20.0
     scouter_cache_ttl_seconds: int = 600
+    scouter_scan_interval_hours: float = 1.0
+    scouter_scan_max_retries: int = 2
+    scouter_scan_concurrency: int = 2
+    scouter_scan_request_delay_seconds: float = 0.3
+    scouter_scan_prompt: str = "Respond with the exact text: OK"
+    scouter_check_retention_days: int = 3
     min_uptime_24h: float = 90.0
     max_model_attempts: int = 3
     min_success_rate: float = Field(default=0.6, alias="LLM_MIN_SUCCESS_RATE")

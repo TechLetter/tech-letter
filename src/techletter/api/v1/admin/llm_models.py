@@ -35,13 +35,13 @@ async def list_model_stats(
 
 
 async def _health_by_model(ctx: Ctx) -> dict[str, dict[str, object]]:
-    """scouter 헬스. 죽어 있어도 통계는 보여야 하므로 실패를 삼킨다."""
+    """모델 헬스. 최근 스캔 기록이 없어도 통계는 보여야 하므로 실패를 삼킨다."""
     from techletter.core.llm.scouter import ScouterClient  # noqa: PLC0415
 
     try:
-        models = await ScouterClient(ctx.settings.router, ctx.http.get()).healthy_models()
+        models = await ScouterClient(ctx.settings.router, ctx.db).healthy_models()
     except Exception:
-        logger.warning("scouter unavailable; reporting stats without health")
+        logger.warning("model health unavailable; reporting stats without health")
         return {}
     return {
         model.model_id: {"healthy": model.is_healthy, "uptime_24h": model.uptime_24h}

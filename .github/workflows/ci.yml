@@ -141,8 +141,6 @@ jobs:
           CORS_ALLOWED_ORIGINS: http://127.0.0.1:4173,http://localhost:4173
           QDRANT_HOST: localhost
           QDRANT_PORT: "6334"
-          # scouter 는 CI 에 없다. 라우터가 정적 폴백으로 떨어지는지도 함께 본다.
-          SCOUTER_BASE_URL: http://127.0.0.1:9/unreachable
           LOG_LEVEL: WARNING
         run: |
           uv run techletter api --port 8080 &

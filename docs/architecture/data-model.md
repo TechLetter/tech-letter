@@ -18,6 +18,7 @@
 | `jobs` | `core.jobs` | 잡 큐. 상태 4종: pending/running/done/dead |
 | `llm_model_stats` | `core.llm` | 모델×용도별 성적. `_id = "{model_id}:{purpose}"` |
 | `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 30일 |
+| `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 기록(1시간 주기). TTL 3일 |
 
 ### 1.2 인덱스
 ```
@@ -39,6 +40,8 @@ credit_transactions      idx_credit_tx_user_created {user_code:1, created_at:-1}
 jobs       idx_jobs_claim {status:1,type:1,priority:1,run_at:1} · idx_jobs_stale {status:1,locked_at:1}
            idx_jobs_dedupe {key:1,type:1,status:1}
            ttl_jobs_done {finished_at:1} TTL 14일, partialFilterExpression {status:"done"}
+llm_model_checks  idx_model_checks_model_time {model_id:1,checked_at:-1}
+                  idx_model_checks_ttl {checked_at:1} TTL 3일
 ```
 인덱스는 부팅 시 `IndexRegistry`가 한 번 생성한다(요청마다 만들지 않는다).
 
@@ -101,10 +104,8 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 | `MONGO_URI` | Mongo 접속 |
 | `JWT_SECRET` | JWT HS256 — 바꾸면 전체 재로그인이 필요하다 |
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | OAuth |
-| `SUMMARY_WORKER_LLM_API_KEY` | 요약 1순위(Gemini) |
-| `EMBEDDING_WORKER_LLM_API_KEY` | 임베딩(Gemini) |
-| `CHATBOT_LLM_API_KEY` | OpenRouter 키(요약 폴백·챗봇 공용) |
-| `CHATBOT_EMBEDDING_API_KEY` | 쿼리 임베딩(Gemini) |
+| `GEMINI_API_KEY` | Gemini 계정 하나. 요약·임베딩 워커·챗봇 임베딩이 공유한다 |
+| `OPENROUTER_API_KEY` | OpenRouter 계정 하나. 요약 폴백·챗봇·모델 헬스 스캔이 공유한다 |
 | `SCRAPERAPI_KEY` | 렌더러 대안 |
 
 전체 목록은 `techletter settings example`로 생성한다(코드가 최신 출처).

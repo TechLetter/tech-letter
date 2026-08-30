@@ -30,7 +30,7 @@ uv run pytest -q -m e2e                                                    # E2E
 - `core/pagination`: 관용 파싱 표(`""`, `abc`, `0`, `-1`, `101`).
 - `core/jobs/policy`: 백오프 표, 쿼터 리셋 계산(리셋 시각 경계·jitter), attempt 롤백, max 초과 시 dead 전이, `dead_retryable_alert` 임계치.
 - `core/jobs/queue`: 중복 억제, 동시 클레임 시 단일 승자, 스테일 락 회수, `count_dead`.
-- `core/llm/router`: 큐레이션∩헬스 순서, scouter 다운 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
+- `core/llm/router`: 큐레이션∩헬스 순서, 헬스 기록 없을 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
 - `core/llm/chat`: `RoutingChatClient`가 `model_id`로 올바른 provider 클라이언트를 고르는지.
 - `chat/use_case`: 순서 보장(가드 실패 시 크레딧 미차감, 차감 실패 시 에이전트 미호출, 에이전트 실패 시 환불 호출).
 - `summary/pipeline`: 예외 분류(렌더 실패/봇 차단/파싱 실패 → 각각 다른 처리).

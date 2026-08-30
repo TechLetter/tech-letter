@@ -65,6 +65,19 @@ def build_core_worker(container: Container) -> CoreWorker:
     async def collect_feeds() -> None:
         await aggregator.run()
 
+    async def scan_models() -> None:
+        """OpenRouter 무료 모델 헬스체크. 라우터가 이 기록으로 후보를 고른다."""
+        from techletter.core.llm.model_scan import run_scan  # noqa: PLC0415
+
+        api_key = settings.chat_llm.api_key
+        if api_key is None:
+            logger.warning("model scan skipped: no OPENROUTER_API_KEY configured")
+            return
+        checked = await run_scan(
+            container.db, settings.router, api_key.get_secret_value(), container.http.get()
+        )
+        logger.info("model scan finished", extra={"checked": checked})
+
     async def maintenance() -> None:
         """죽은 워커가 잡고 있던 잡을 회수하고, dead 잡이 쌓이는지 살핀다.
 
@@ -87,7 +100,7 @@ def build_core_worker(container: Container) -> CoreWorker:
     llm = LlmGateway(
         ModelRouter(
             settings.router,
-            ScouterClient(settings.router, container.http.get()),
+            ScouterClient(settings.router, container.db),
             container.model_stats,
         ),
         LangChainChatClient(settings.chat_llm),
@@ -111,6 +124,12 @@ def build_core_worker(container: Container) -> CoreWorker:
         [
             PeriodicTask("rss", settings.rss.interval_seconds, collect_feeds),
             PeriodicTask("maintenance", MAINTENANCE_INTERVAL_SECONDS, maintenance),
+            PeriodicTask(
+                "model_scan",
+                settings.router.scouter_scan_interval_hours * 3600,
+                scan_models,
+                run_at_start=True,
+            ),
         ]
     )
     return CoreWorker(runner, scheduler)

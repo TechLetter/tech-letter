@@ -64,6 +64,7 @@ class Container:
         import techletter.chat.repositories  # noqa: PLC0415
         import techletter.content.repositories  # noqa: PLC0415
         import techletter.core.jobs.queue  # noqa: PLC0415
+        import techletter.core.llm.model_scan  # noqa: PLC0415
         import techletter.core.llm.stats  # noqa: PLC0415
         import techletter.users.repositories  # noqa: F401, PLC0415
 
@@ -237,7 +238,7 @@ class Container:
 
         router = ModelRouter(
             self.settings.router,
-            ScouterClient(self.settings.router, self.http.get()),
+            ScouterClient(self.settings.router, self.db),
             stats=self.model_stats,
         )
         llm = LlmGateway(router, LangChainChatClient(self.settings.chat_llm))

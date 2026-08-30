@@ -11,14 +11,14 @@ flowchart LR
 
     subgraph img1["image: techletter"]
         API["api<br/>FastAPI · uvicorn"]
-        W["worker<br/>RSS 스케줄러 · 잡 컨슈머<br/>스테일 락 회수"]
+        W["worker<br/>RSS 스케줄러 · 잡 컨슈머<br/>스테일 락 회수 · 모델 헬스 스캔"]
         EW["embedding-worker"]
     end
     subgraph img2["image: techletter-browser"]
         SW["summary-worker<br/>async_playwright + Chromium"]
     end
 
-    API -->|enqueue / read| M[("MongoDB<br/>도메인 데이터 + jobs 큐")]
+    API -->|enqueue / read| M[("MongoDB<br/>도메인 데이터 + jobs 큐 + 모델 헬스")]
     W -->|claim / update| M
     SW -->|claim / update| M
     EW -->|claim / update| M
@@ -28,11 +28,12 @@ flowchart LR
 
     API -->|chat · plan| R{{"LLM 모델 라우터"}}
     W -->|context compression| R
+    W -->|1시간마다 헬스체크| OR
     SW -->|summarize| R
     EW -->|embed| G[Gemini Embeddings]
+    R -.->|헬스 조회| M
     R --> OR[OpenRouter]
     R --> GG[Gemini]
-    R -.->|헬스 조회| SC[openrouter-scouter]
 ```
 
 | 프로세스 | 명령 | 책임 | 하지 않는 것 |
@@ -118,7 +119,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 플래너 : OpenRouter 소형·저지연 후보
 임베딩 : Gemini gemini-embedding-001 고정
 ```
-- `core/llm/router.py`가 후보를 만들고 순차 폴백한다. `openrouter-scouter`(별도 프로젝트, 모델 헬스 API 제공)를 조회해 후보를 좁히고, 실패 시 정적 목록으로 대체한다(10분 TTL 캐시, 타임아웃 3초).
+- `core/llm/router.py`가 후보를 만들고 순차 폴백한다. `core/llm/model_scan.py`가 `worker`에서 1시간마다 OpenRouter의 `:free` 모델 전체에 짧은 요청을 보내 살아있는지 확인하고 `llm_model_checks`에 쌓는다. `ScouterClient`가 최근 24시간 기록으로 모델별 uptime·연속 실패를 계산해 후보를 좁히고(10분 TTL 캐시), 기록이 없으면 정적 목록으로 대체한다.
 - 한 프로세스가 요청에 따라 provider가 다른 모델(Gemini ↔ OpenRouter) 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 정확한 provider 클라이언트로 라우팅한다.
 - `llm_model_stats`에 모델×용도별 성적(성공률·JSON 실패·429·지연)을 기록해 자동 강등하고, 어드민 대시보드에 노출한다.
 - `llm_daily_usage`로 provider별 일일 사용량을 기록한다(`LLM_QUOTA_RESET_UTC_HOUR` 기준 리셋).

@@ -29,14 +29,14 @@ flowchart LR
 
     subgraph img1["image: techletter"]
         API["api<br/>FastAPI · uvicorn"]
-        W["worker<br/>RSS 스케줄러 · 잡 컨슈머<br/>스테일 락 회수"]
+        W["worker<br/>RSS 스케줄러 · 잡 컨슈머<br/>스테일 락 회수 · 모델 헬스 스캔"]
         EW["embedding-worker"]
     end
     subgraph img2["image: techletter-browser"]
         SW["summary-worker<br/>async_playwright + Chromium"]
     end
 
-    API -->|enqueue / read| M[("MongoDB<br/>도메인 데이터 + jobs 큐")]
+    API -->|enqueue / read| M[("MongoDB<br/>도메인 데이터 + jobs 큐 + 모델 헬스")]
     W -->|claim / update| M
     SW -->|claim / update| M
     EW -->|claim / update| M
@@ -46,11 +46,12 @@ flowchart LR
 
     API -->|chat · plan| R{{"LLM 모델 라우터"}}
     W -->|context compression| R
+    W -->|1시간마다 헬스체크| OR
     SW -->|summarize| R
     EW -->|embed: Gemini 고정| G[Gemini Embeddings]
+    R -.->|헬스 조회| M
     R --> OR[OpenRouter]
     R --> GG[Gemini]
-    R -.->|헬스 조회| SC["openrouter-scouter"]
 ```
 
 | 프로세스 | 명령 | 책임 |
@@ -106,7 +107,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 임베딩 : Gemini gemini-embedding-001 고정
 ```
 
-같은 프로세스가 provider가 다른 후보들 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 Gemini 클라이언트와 OpenRouter 클라이언트 중 하나로 정확히 라우팅한다. `openrouter-free-model-scouter`(별도 개인 프로젝트)가 후보 모델의 실시간 헬스를 제공하고, 실패 시 정적 폴백 목록으로 계속 동작한다. 모델별 성적은 `llm_model_stats`에 기록되어 자동 강등되고 어드민 화면(`/admin/llm-models`)에 노출된다.
+같은 프로세스가 provider가 다른 후보들 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 Gemini 클라이언트와 OpenRouter 클라이언트 중 하나로 정확히 라우팅한다. `worker`가 1시간마다 OpenRouter의 `:free` 모델 전체를 자체적으로 헬스체크해 후보를 좁히고, 기록이 없으면 정적 폴백 목록으로 계속 동작한다. 모델별 성적은 `llm_model_stats`에 기록되어 자동 강등되고 어드민 화면(`/admin/llm-models`)에 노출된다.
 
 ## API
 

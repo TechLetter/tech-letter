@@ -35,8 +35,9 @@ tech-letter/
 │   │   ├── llm/
 │   │   │   ├── chat.py           # LangChainChatClient, RoutingChatClient, LlmGateway
 │   │   │   ├── embeddings.py     # LangChainEmbedder
-│   │   │   ├── router.py         # 모델 라우터: 큐레이션 ∩ scouter 헬스, 순차 폴백
-│   │   │   ├── scouter.py        # scouter HTTP 클라이언트 + TTL 캐시 + 정적 폴백
+│   │   │   ├── router.py         # 모델 라우터: 큐레이션 ∩ 헬스, 순차 폴백
+│   │   │   ├── scouter.py        # 최근 헬스 기록 집계 + TTL 캐시 + 정적 폴백
+│   │   │   ├── model_scan.py     # OpenRouter :free 모델 헬스체크(주기 스캔) + 저장
 │   │   │   ├── stats.py          # llm_model_stats 기록/조회, 자동 강등 판정
 │   │   │   ├── budget.py         # llm_daily_usage, 쿼터 리셋 계산
 │   │   │   └── errors.py         # provider 예외 → Quota/Retryable/Permanent 분류
@@ -154,7 +155,7 @@ addopts = "-m 'not integration and not e2e and not network' --strict-markers"
 class Settings(BaseSettings):
     mongo:      MongoSettings         # MONGO_URI, MONGO_DB_NAME=techletter
     qdrant:     QdrantSettings        # QDRANT_HOST/PORT, QDRANT_COLLECTION_NAME=tech_letter_posts
-    router:     RouterSettings        # SCOUTER_BASE_URL, *_MODEL_PREFERENCE, LLM_STATIC_FALLBACK_MODELS,
+    router:     RouterSettings        # SCOUTER_SCAN_INTERVAL_HOURS=1, *_MODEL_PREFERENCE, LLM_STATIC_FALLBACK_MODELS,
                                       # LLM_MIN_SUCCESS_RATE, LLM_QUOTA_RESET_UTC_HOUR=7,
                                       # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20, CHAT_GEMINI_FALLBACK=true
     jobs:       JobSettings           # JOB_POLL_INTERVAL_SECONDS=2, JOB_LOCK_TIMEOUT_MINUTES=30,

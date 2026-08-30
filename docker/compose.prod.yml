@@ -27,23 +27,21 @@ x-app-env: &app-env
   QDRANT_HOST: qdrant
   QDRANT_PORT: "6333"
   QDRANT_COLLECTION_NAME: tech_letter_posts
-  SCOUTER_BASE_URL: ${SCOUTER_BASE_URL:-http://openrouter-scouter:8000}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
   JWT_ISSUER: tech-letter
 
 x-llm-env: &llm-env
+  # Gemini/OpenRouter는 역할별이 아니라 provider당 계정 하나뿐이라 키를 공유한다.
+  GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}
   SUMMARY_WORKER_LLM_PROVIDER: ${SUMMARY_WORKER_LLM_PROVIDER:-google}
   SUMMARY_WORKER_LLM_MODEL_NAME: ${SUMMARY_WORKER_LLM_MODEL_NAME:-gemini-3-flash-preview}
-  SUMMARY_WORKER_LLM_API_KEY: ${SUMMARY_WORKER_LLM_API_KEY:?SUMMARY_WORKER_LLM_API_KEY is required}
   EMBEDDING_WORKER_LLM_PROVIDER: ${EMBEDDING_WORKER_LLM_PROVIDER:-google}
   EMBEDDING_WORKER_LLM_MODEL_NAME: ${EMBEDDING_WORKER_LLM_MODEL_NAME:-gemini-embedding-001}
-  EMBEDDING_WORKER_LLM_API_KEY: ${EMBEDDING_WORKER_LLM_API_KEY:?EMBEDDING_WORKER_LLM_API_KEY is required}
   CHATBOT_LLM_PROVIDER: ${CHATBOT_LLM_PROVIDER:-openrouter}
-  CHATBOT_LLM_API_KEY: ${CHATBOT_LLM_API_KEY:?CHATBOT_LLM_API_KEY is required}
   CHATBOT_EMBEDDING_PROVIDER: ${CHATBOT_EMBEDDING_PROVIDER:-google}
   CHATBOT_EMBEDDING_MODEL_NAME: ${CHATBOT_EMBEDDING_MODEL_NAME:-gemini-embedding-001}
-  CHATBOT_EMBEDDING_API_KEY: ${CHATBOT_EMBEDDING_API_KEY:?CHATBOT_EMBEDDING_API_KEY is required}
-  # 모델 선호 목록은 실측으로 정한다(ADR-0008, scripts/eval_models.py).
+  # 모델 선호 목록은 실측으로 정한다(scripts/eval_models.py).
   SUMMARY_MODEL_PREFERENCE: ${SUMMARY_MODEL_PREFERENCE:-}
   CHAT_MODEL_PREFERENCE: ${CHAT_MODEL_PREFERENCE:-}
   CHAT_PLANNER_MODEL_PREFERENCE: ${CHAT_PLANNER_MODEL_PREFERENCE:-}
@@ -169,6 +167,6 @@ services:
 
 networks:
   default:
-    # mongo·qdrant·traefik·scouter 가 사는 네트워크. iac 가 만든다.
+    # mongo·qdrant·traefik 가 사는 네트워크. iac 가 만든다.
     name: tech-letter_default
     external: true

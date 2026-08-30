@@ -1,11 +1,7 @@
-"""openrouter-scouter 클라이언트.
+"""OpenRouter 무료 모델 헬스 정보.
 
-같은 호스트에서 사용자가 운영하는 서비스로, 매시간 OpenRouter의 모든 `:free`
-모델을 헬스체크한다. 무료 모델은 예고 없이 사라지므로 설정에 모델을
-박아두면 챗봇이 죽는다.
-
-접근 경로: `tech-letter_default` 네트워크에 연결된 컨테이너명. 호스트 IP
-방식은 클라우드 방화벽의 iptables INPUT REJECT 때문에 동작하지 않는다.
+`core/llm/model_scan.py`가 주기적으로 쌓는 헬스체크 기록을 집계해 라우터에
+넘긴다. TTL 캐시로 들고 있어 매 LLM 호출마다 DB를 다시 조회하지 않는다.
 """
 
 from __future__ import annotations
@@ -13,12 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import httpx
-
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
 
 if TYPE_CHECKING:  # pragma: no cover
+    from pymongo.asynchronous.database import AsyncDatabase
+
     from techletter.settings import RouterSettings
 
 __all__ = ["ModelHealth", "ScouterClient"]
@@ -50,11 +46,11 @@ class ModelHealth:
 
 
 class ScouterClient:
-    """헬스 목록을 TTL 캐시로 들고 있는다. scouter가 죽어도 서비스는 계속 돈다."""
+    """헬스 목록을 TTL 캐시로 들고 있는다. 조회 실패해도 서비스는 계속 돈다."""
 
-    def __init__(self, settings: RouterSettings, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, settings: RouterSettings, db: AsyncDatabase) -> None:
         self._settings = settings
-        self._client = client
+        self._db = db
         self._cache: list[ModelHealth] = []
         self._fetched_at: float = 0.0
 
@@ -68,36 +64,23 @@ class ScouterClient:
         if self._cache and now - self._fetched_at < self._settings.scouter_cache_ttl_seconds:
             return self._cache
 
+        from techletter.core.llm.model_scan import compute_health  # noqa: PLC0415
+
         try:
-            payload = await self._fetch()
-        except (httpx.HTTPError, ValueError) as exc:
+            payload = await compute_health(self._db)
+        except Exception as exc:
             logger.warning(
-                "scouter fetch failed; using fallback",
+                "model health query failed; using cache",
                 extra={"error": str(exc)[:200], "cached": len(self._cache)},
             )
             return self._cache
 
-        models = [ModelHealth.from_payload(item) for item in payload if isinstance(item, dict)]
+        models = [ModelHealth.from_payload(item) for item in payload]
         healthy = [
             m for m in models if m.is_healthy and m.uptime_24h >= self._settings.min_uptime_24h
         ]
         healthy.sort(key=lambda m: (-m.uptime_24h, m.avg_latency_ms or 1e9))
         self._cache = healthy
         self._fetched_at = now
-        logger.info("scouter fetch ok", extra={"total": len(models), "healthy": len(healthy)})
+        logger.info("model health computed", extra={"total": len(models), "healthy": len(healthy)})
         return healthy
-
-    async def _fetch(self) -> list[Any]:
-        url = f"{self._settings.scouter_base_url.rstrip('/')}/api/models"
-        timeout = self._settings.scouter_timeout_seconds
-        if self._client is not None:
-            response = await self._client.get(url, timeout=timeout)
-        else:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(url)
-        response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, list):
-            msg = f"unexpected scouter payload: {type(data).__name__}"
-            raise ValueError(msg)
-        return data

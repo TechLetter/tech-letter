@@ -1,7 +1,6 @@
 # 배포 · 운영
 
 - 운영 서버: 셀프호스팅 GitHub Actions 러너가 상주하는 ARM64 클라우드 인스턴스 한 대(라벨 `techletter-prod`).
-- 같은 호스트에 `openrouter-scouter`(+postgres)가 공존한다. `tech-letter_default` 네트워크에 연결돼 있어야 `http://openrouter-scouter:8000`으로 접근 가능하다.
 - 인프라 compose(`mongo/qdrant/traefik`)는 별도 리포(`tech-letter_iac`)가 관리한다. 네트워크는 `tech-letter_default`.
 - 배포 절차 요약은 워크스페이스 루트 `AGENTS.md`에도 기록돼 있다("변경사항 배포").
 
@@ -33,7 +32,7 @@ main push (docs/**·*.md 제외)
 공통: `restart: unless-stopped`, `logging: json-file max-size=20m max-file=5`, non-root, `networks: [tech-letter_default]`. `summary_worker`는 Chromium용 `shm_size: 256m`.
 
 ### 1.2 환경변수
-공통: `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `SCOUTER_BASE_URL`, `SUMMARY_WORKER_LLM_*`, `EMBEDDING_WORKER_LLM_*`, `CHATBOT_LLM_*`, `CHATBOT_EMBEDDING_*`, `*_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
+공통: `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `SUMMARY_WORKER_LLM_*`, `EMBEDDING_WORKER_LLM_*`, `CHATBOT_LLM_*`, `CHATBOT_EMBEDDING_*`, `*_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
 `api`만 추가로: `JWT_SECRET`, `JWT_ISSUER`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
 `worker`만 추가로: `CONTENT_BLOG_FETCH_BATCH_SIZE`, `JOB_*`.
 `summary_worker`만 추가로: `RENDERER_STRATEGY`, `SCRAPERAPI_KEY`, `SUMMARY_DAILY_BUDGET`.
@@ -49,7 +48,7 @@ main push (docs/**·*.md 제외)
 | RSS 사이클 | worker 로그 `rss cycle completed` 30분마다 | 일부 피드 상시 실패는 정상(깨진 외부 피드) |
 | 요약률 | `/admin/backfill/summary` | 신규는 24시간 내 처리 |
 | 모델 성적 | `/admin/llm-models` | 1순위 성공률 ≥ 0.8, 강등 발생 시 선호 목록 재검토 |
-| scouter | worker 로그 `scouter fetch ok/fallback` | fallback 연속 발생 시 scouter 점검 |
+| 모델 헬스 스캔 | worker 로그 `model scan complete` 1시간마다 | `ok` 건수가 0 근처면 OpenRouter 자체 장애 의심 |
 | heartbeat | compose healthcheck | healthy 4/4 |
 | 메모리 | `docker stats` | §1.1의 reservation 근처에서 안정 |
 | 디스크 | `docker system df` | 로그 ≤ 100MB/컨테이너(20m×5) |
@@ -62,7 +61,7 @@ main push (docs/**·*.md 제외)
 - **요약 백필**: `techletter backfill summaries --limit N --priority 10 --dry-run` → 실행. 신규 포스트(priority 0)가 항상 먼저 처리된다.
 - **무료 모델 소멸**: 모델 라우터가 자동으로 폴백하므로 조치가 필요 없다. `/admin/llm-models`에서 성적을 확인하고 `*_MODEL_PREFERENCE`를 갱신하면 더 나은 후보를 우선순위에 둘 수 있다.
 - **LLM 일일 예산 소진**: 정상 동작이다. 초과분은 OpenRouter로 흐르고, 다음 리셋(`LLM_QUOTA_RESET_UTC_HOUR`)에 다시 1순위 모델을 쓴다.
-- **scouter 장애**: 정적 폴백 목록으로 계속 동작한다. `docker logs openrouter-scouter`, `docker restart openrouter-scouter`.
+- **모델 헬스 기록 없음/오래됨**: 라우터가 정적 폴백 목록으로 계속 동작한다. `docker logs techletter_worker | grep "model scan"`으로 스캔이 도는지 확인한다.
 - **블로그 피드 장애**: 어드민에서 `last_fetch_error` 확인 → RSS URL 수정 또는 `is_active=false`. 연속 실패가 임계치를 넘으면 자동으로 비활성화된다.
 - **LLM 키 교체**: GitHub Environment secret 갱신 → `deploy.yml`을 `workflow_dispatch`로 재실행.
 - **Mongo 백업**: `mongodump --archive --gzip` 정기 백업을 권장한다.

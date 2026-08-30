@@ -52,7 +52,7 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
     llm = LlmGateway(
         ModelRouter(
             settings.router,
-            ScouterClient(settings.router, container.http.get()),
+            ScouterClient(settings.router, container.db),
             container.model_stats,
         ),
         RoutingChatClient(

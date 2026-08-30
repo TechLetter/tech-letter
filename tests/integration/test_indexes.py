@@ -55,3 +55,13 @@ async def test_registry_contains_jobs_collection():
     from techletter.core.jobs import queue as _queue  # noqa: F401
 
     assert COLLECTION in registered()
+
+
+async def test_model_checks_indexes_are_created(mongo_db):
+    from techletter.core.llm import model_scan
+
+    await ensure_indexes(mongo_db)
+    info = await mongo_db[model_scan.COLLECTION].index_information()
+
+    assert "idx_model_checks_model_time" in info
+    assert info["idx_model_checks_ttl"]["expireAfterSeconds"] == 3 * 24 * 3600
