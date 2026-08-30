@@ -169,6 +169,9 @@ class JobSettings(BaseSettings):
     )
     done_ttl_days: int = 14
     quota_max_wait_hours: int = 30
+    dead_retryable_alert_threshold: int = Field(
+        default=5, alias="JOB_DEAD_RETRYABLE_ALERT_THRESHOLD"
+    )
 
     @field_validator("backoff_minutes", mode="before")
     @classmethod

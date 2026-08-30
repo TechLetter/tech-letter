@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from techletter.core.errors import PermanentError, QuotaExceededError, RetryableError
-from techletter.core.jobs.policy import RetryPolicy, next_quota_reset
+from techletter.core.jobs.policy import RetryPolicy, dead_retryable_alert, next_quota_reset
 from techletter.core.jobs.types import ErrorKind
 from techletter.settings import JobSettings
 
@@ -137,3 +137,15 @@ def test_quota_gives_up_after_max_total_wait(policy):
     )
     assert d.dead is True
     assert d.error_kind is ErrorKind.QUOTA
+
+
+def test_dead_retryable_alert_is_silent_within_threshold():
+    assert dead_retryable_alert(5, threshold=5) is None
+    assert dead_retryable_alert(0, threshold=5) is None
+
+
+def test_dead_retryable_alert_fires_over_threshold():
+    message = dead_retryable_alert(6, threshold=5)
+    assert message is not None
+    assert "6" in message
+    assert "5" in message

@@ -19,9 +19,22 @@ from techletter.core.time import utcnow
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.settings import JobSettings
 
-__all__ = ["Decision", "RetryPolicy", "next_quota_reset"]
+__all__ = ["Decision", "RetryPolicy", "dead_retryable_alert", "next_quota_reset"]
 
 _JITTER_SECONDS = 120
+
+
+def dead_retryable_alert(count: int, threshold: int) -> str | None:
+    """`retryable`로 dead 처리된 잡이 임계치를 넘으면 경고 문구를 준다.
+
+    `permanent`(봇 차단·404)는 상시 발생하는 정상 노이즈지만(08 §4),
+    `retryable`이 dead까지 간 건 재시도를 다 써도 안 풀린 문제라 사람이
+    봐야 한다(ISSUE-002). 알림 채널이 따로 없어 구조화 로그로 낸다 —
+    운영자가 `docker logs | grep WARNING`으로 잡는다(AGENTS.md 3단계).
+    """
+    if count <= threshold:
+        return None
+    return f"dead retryable jobs {count} exceeds threshold {threshold}"
 
 
 def next_quota_reset(now: datetime, reset_utc_hour: int) -> datetime:

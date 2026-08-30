@@ -14,8 +14,9 @@ from techletter.chat.memory import MemoryBuilder
 from techletter.chat.repositories import ChatSessionRepository
 from techletter.content.handlers import EmbeddingCompletedHandler, SummaryCompletedHandler
 from techletter.content.rss import Aggregator, RssFeeder
+from techletter.core.jobs.policy import dead_retryable_alert
 from techletter.core.jobs.runner import JobRunner
-from techletter.core.jobs.types import JobType
+from techletter.core.jobs.types import ErrorKind, JobType
 from techletter.core.logging import get_logger
 from techletter.workers.runtime import Heartbeat
 from techletter.workers.scheduler import PeriodicTask, Scheduler
@@ -65,7 +66,7 @@ def build_core_worker(container: Container) -> CoreWorker:
         await aggregator.run()
 
     async def maintenance() -> None:
-        """죽은 워커가 잡고 있던 잡을 회수한다.
+        """죽은 워커가 잡고 있던 잡을 회수하고, dead 잡이 쌓이는지 살핀다.
 
         워커가 SIGKILL로 죽으면 `running` 상태의 잡이 영원히 남는다.
         Kafka 시절에는 컨슈머 그룹 리밸런스가 해 주던 일이다.
@@ -73,6 +74,11 @@ def build_core_worker(container: Container) -> CoreWorker:
         recovered = await queue.recover_stale()
         if recovered:
             logger.info("stale jobs recovered", extra={"count": recovered})
+
+        dead_retryable = await queue.count_dead(ErrorKind.RETRYABLE)
+        alert = dead_retryable_alert(dead_retryable, settings.jobs.dead_retryable_alert_threshold)
+        if alert:
+            logger.warning(alert, extra={"dead_retryable": dead_retryable})
 
     # LLM은 대화 압축에만 쓴다. 요약·임베딩은 전용 워커가 담당한다.
     from techletter.core.llm.chat import LangChainChatClient, LlmGateway  # noqa: PLC0415

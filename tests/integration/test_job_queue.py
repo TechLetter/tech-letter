@@ -216,3 +216,21 @@ async def test_stats(queue):
     assert stats["by_status"][JobStatus.DEAD.value] == 1
     assert stats["by_status"][JobStatus.PENDING.value] == 1
     assert stats["oldest_pending_at"] is not None
+
+
+async def test_count_dead(queue, mongo_db):
+    """11.4 알림·`/metrics`가 쓰는 집계. `error_kind`로 구분한다."""
+    permanent = await queue.enqueue(SUMMARY, "permanent")
+    assert permanent is not None
+    await queue.fail(await queue.claim([SUMMARY], "w1"), PermanentError("영구"))
+
+    retryable = await queue.enqueue(SUMMARY, "retryable")
+    assert retryable is not None
+    for _ in range(5):
+        job = await queue.claim([SUMMARY], "w1")
+        await queue.fail(job, RetryableError("계속 실패"))
+        await mongo_db["jobs"].update_one({"_id": retryable.id}, {"$set": {"run_at": utcnow()}})
+
+    assert await queue.count_dead() == 2
+    assert await queue.count_dead(ErrorKind.PERMANENT) == 1
+    assert await queue.count_dead(ErrorKind.RETRYABLE) == 1

@@ -12,7 +12,7 @@ from techletter import __version__
 from techletter.api.errors import register_error_handlers
 from techletter.api.middleware import RequestTraceMiddleware
 from techletter.api.schemas import ErrorBody
-from techletter.api.v1 import health
+from techletter.api.v1 import health, metrics
 from techletter.api.v1.router import api_router
 from techletter.container import Container
 from techletter.core.logging import get_logger, setup_logging
@@ -63,5 +63,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(metrics.router)
     app.include_router(api_router)
     return app

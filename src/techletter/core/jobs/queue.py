@@ -253,6 +253,13 @@ class JobQueue:
             "oldest_pending_at": oldest.get("run_at") if oldest else None,
         }
 
+    async def count_dead(self, error_kind: ErrorKind | None = None) -> int:
+        """dead 잡 개수. `error_kind` 지정 시 그 성격만(11.4 알림·`/metrics`용)."""
+        query: dict[str, Any] = {"status": JobStatus.DEAD.value}
+        if error_kind is not None:
+            query["error_kind"] = error_kind.value
+        return await self._col.count_documents(query)
+
     async def list_jobs(
         self,
         page: Page,
