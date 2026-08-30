@@ -1,6 +1,6 @@
-"""잡 큐 — 실제 MongoDB로 검증한다 (ADR-0004).
+"""잡 큐 — 실제 MongoDB로 검증한다.
 
-Kafka를 대체하는 핵심이라 동시성·재시도·회수를 실제 DB에서 확인한다.
+동시성·재시도·회수는 실제 DB로 확인해야 신뢰할 수 있다.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ async def test_many_jobs_are_distributed_without_duplication(queue):
 
 
 async def test_priority_orders_claims(queue):
-    """신규(priority 0)가 백필(10)보다 항상 먼저 처리된다 (ADR-0004 §7)."""
+    """신규(priority 0)가 백필(10)보다 항상 먼저 처리된다."""
     await queue.enqueue(SUMMARY, "backfill", priority=PRIORITY_BACKFILL)
     await queue.enqueue(SUMMARY, "fresh", priority=PRIORITY_NORMAL)
     first = await queue.claim([SUMMARY], "w1")
@@ -141,7 +141,7 @@ async def test_permanent_failure_goes_dead(queue, mongo_db):
 
 
 async def test_quota_failure_does_not_consume_attempt(queue, mongo_db):
-    """ISSUE-001: 쿼터 실패가 재시도 횟수를 먹으면 안 된다."""
+    """쿼터 실패가 재시도 횟수를 먹으면 안 된다."""
     await queue.enqueue(SUMMARY, "post-1")
     job = await queue.claim([SUMMARY], "w1")
     assert job.attempt == 1

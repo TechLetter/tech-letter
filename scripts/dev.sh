@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# 로컬 개발 명령 모음. Makefile 대신 (ADR-0006 이후 변경, 2026-08-30).
-#
 #   ./scripts/dev.sh <command>
-#
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -1,7 +1,6 @@
-"""관용적 쿼리 파싱 — 현행 gin 동작을 재현해야 한다.
+"""관용적 쿼리 파싱 — 잘못된 값이 와도 에러 없이 기본값으로 넘어가야 한다.
 
-골든 스냅샷(`tests/contract/snapshots/current/posts__bad_page.json`)에서
-`page=abc&page_size=xyz` 요청이 422가 아니라 200을 반환하는 것이 확인됐다.
+`page=abc&page_size=xyz` 같은 요청은 422가 아니라 200을 반환해야 한다.
 """
 
 from __future__ import annotations
@@ -74,7 +73,7 @@ def test_page_parse_garbage_does_not_raise():
 
 
 def test_page_parse_respects_custom_default_size():
-    # 트렌드 포스트 목록은 기본 10이다(04 §4.1).
+    # 트렌드 포스트 목록은 기본 10이다.
     assert Page.parse(None, None, default_size=10).page_size == 10
 
 

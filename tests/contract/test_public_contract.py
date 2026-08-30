@@ -1,4 +1,4 @@
-"""공개 API 계약 (04 §4.1)."""
+"""공개 API 계약."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ POST_KEYS = {
 
 # ── 봉투 ────────────────────────────────────────────────────────────
 async def test_every_list_uses_one_envelope(client, seeded) -> None:
-    """현행은 목록 봉투가 7종이었다. 하나여야 한다."""
+    """모든 목록 응답이 같은 봉투를 써야 한다."""
     for path in ("/api/v1/posts", "/api/v1/blogs", "/api/v1/trends/posts"):
         body = (await client.get(path)).json()
         assert set(body) == PAGED_KEYS, path
@@ -65,7 +65,7 @@ async def test_post_fields_match_the_contract(client, seeded) -> None:
 
 
 async def test_anonymous_requests_get_is_bookmarked_false(client, seeded) -> None:
-    """현행은 키 자체가 없어 3상태였다."""
+    """키 자체가 없는 3번째 상태로 새지 않아야 한다."""
     items = (await client.get("/api/v1/posts")).json()["items"]
 
     assert all(item["is_bookmarked"] is False for item in items)
@@ -97,7 +97,7 @@ async def test_timestamps_carry_an_offset_and_milliseconds(client, seeded) -> No
 
 
 async def test_the_public_list_hides_unsummarized_posts(client, seeded) -> None:
-    """공개 API는 요약 완료 글만 준다(04 §4.1)."""
+    """공개 API는 요약 완료 글만 준다."""
     titles = [item["title"] for item in (await client.get("/api/v1/posts")).json()["items"]]
 
     assert "아직 요약 안 됨" not in titles
@@ -122,7 +122,7 @@ async def test_a_malformed_post_id_is_also_404(client) -> None:
 
 # ── 관용 파싱 ───────────────────────────────────────────────────────
 async def test_garbage_paging_falls_back_instead_of_422(client, seeded) -> None:
-    """현행 gin의 동작이다. 프론트가 이것에 기대고 있다(04 §1.1)."""
+    """프론트가 이 관용적 파싱 동작에 기대고 있다."""
     response = await client.get("/api/v1/posts?page=abc&page_size=xyz")
 
     assert response.status_code == 200

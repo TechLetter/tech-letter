@@ -107,8 +107,7 @@ class Aggregator:
         except Exception as exc:
             outcome.error = str(exc)
             failures = await self._blogs.record_fetch_result(blog.id, outcome.error)
-            # 영구 실패(404 등)가 계속되는 피드는 자동으로 끈다. 현행은 끄지
-            # 않아서 죽은 피드 4개가 30분마다 계속 에러를 냈다(ISSUE-005).
+            # 영구 실패(404 등)가 계속되는 피드는 자동으로 끈다.
             if isinstance(exc, PermanentError) and failures >= self._failure_threshold:
                 await self._blogs.deactivate(
                     blog.id, f"auto-disabled after {failures} failures: {outcome.error}"
@@ -150,8 +149,7 @@ class Aggregator:
             blog_name=blog.name,
             title=item.title,
             link=item.link,
-            # 발행일이 없는 피드가 있다. 수집 시각을 쓰면 목록 정렬이 무너지지
-            # 않는다(현행과 동일).
+            # 발행일이 없는 피드가 있다. 수집 시각을 쓰면 목록 정렬이 무너지지 않는다.
             published_at=item.published_at or utcnow(),
             thumbnail_url=None,
             status=StatusFlags(),

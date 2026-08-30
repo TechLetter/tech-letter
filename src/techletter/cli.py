@@ -1,14 +1,13 @@
 """`techletter` 단일 진입점.
 
-프로세스 4종이 전부 여기서 나온다(01 §1).
+프로세스 4종이 전부 여기서 나온다.
     techletter api               HTTP 서버
     techletter worker            RSS 스케줄러 · 잡 컨슈머 · 유지보수
     techletter summary-worker    요약 파이프라인 (Playwright)
     techletter embedding-worker  임베딩 파이프라인
     techletter all               api + worker (로컬 개발용)
 
-운영 명령(`jobs`, `backfill`)도 같은 바이너리에 있다. 현행은 큐를 들여다볼
-방법이 서버 접속 후 Kafka CLI뿐이었다(ISSUE-002).
+운영 명령(`jobs`, `backfill`)도 같은 바이너리에 있다.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-jobs_app = typer.Typer(help="잡 큐 조회·재처리 (ADR-0004)", no_args_is_help=True)
+jobs_app = typer.Typer(help="잡 큐 조회·재처리", no_args_is_help=True)
 backfill_app = typer.Typer(help="누락분 백필", no_args_is_help=True)
 settings_app = typer.Typer(help="설정 점검", no_args_is_help=True)
 app.add_typer(jobs_app, name="jobs")
@@ -185,7 +184,7 @@ def run_all() -> None:
 
 @app.command(name="ensure-indexes")
 def ensure_indexes() -> None:
-    """MongoDB 인덱스를 생성한다(05 §1.3~1.4)."""
+    """MongoDB 인덱스를 생성한다."""
 
     async def body(container: Container) -> None:
         from techletter.core.db.indexes import ensure_indexes as apply  # noqa: PLC0415
@@ -422,8 +421,8 @@ def settings_example() -> None:
         ("임베딩 워커 LLM", EmbeddingLlmSettings),
         ("챗봇 LLM", ChatLlmSettings),
         ("챗봇 임베딩", ChatEmbeddingSettings),
-        ("LLM 모델 라우터 (ADR-0008)", RouterSettings),
-        ("잡 큐 (ADR-0004)", JobSettings),
+        ("LLM 모델 라우터", RouterSettings),
+        ("잡 큐", JobSettings),
         ("RSS 수집", RssSettings),
         ("요약 파이프라인", SummarySettings),
         ("임베딩 파이프라인", EmbeddingSettings),

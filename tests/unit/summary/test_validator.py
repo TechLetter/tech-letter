@@ -19,7 +19,7 @@ GOOD = "Kafka 컨슈머 그룹의 리밸런싱은 파티션 재할당 과정에�
 def test_every_marker_is_lowercase() -> None:
     """대문자가 섞이면 `html.lower()`와 비교할 때 영원히 매칭되지 않는다.
 
-    현행 `RETRY_MARKERS`의 `"Out of nothing, something."`이 그랬다(ISSUE-007 #1).
+    `RETRY_MARKERS`에 `"Out of nothing, something."`처럼 대문자가 섞인 적이 있다.
     """
     for markers in (
         BLOCK_MARKERS_STRONG,
@@ -54,7 +54,7 @@ def test_a_too_short_text_is_permanent() -> None:
 
 
 def test_a_long_bot_challenge_is_caught() -> None:
-    """현행은 1000자 이상이면 검사조차 하지 않아 통과시켰다(ISSUE-007 #2)."""
+    """1000자 이상이면 검사조차 하지 않고 통과시키면 안 된다."""
     page = "Checking your browser. " + ("padding text " * 300) + "verify you are human"
 
     assert len(page) > 1000

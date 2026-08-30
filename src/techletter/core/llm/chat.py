@@ -4,9 +4,8 @@
 호출은 여기서 한다.
 
 무료 모델은 대부분 추론(reasoning) 모델이라 기본 설정으로 부르면 절반이
-빈 응답을 준다 — 추론 토큰만 쓰고 `max_tokens`에 걸리기 때문이다.
-ADR-0008 실측에서 나온 결론이라 `reasoning.exclude`와 넉넉한 `max_tokens`를
-**기본값**으로 둔다.
+빈 응답을 준다 — 추론 토큰만 쓰고 `max_tokens`에 걸리기 때문이다. 그래서
+`reasoning.exclude`와 넉넉한 `max_tokens`를 **기본값**으로 둔다.
 """
 
 from __future__ import annotations
@@ -114,7 +113,7 @@ class LangChainChatClient(ChatClient):
         extra: dict[str, Any] = {}
         if provider == "openrouter":
             # 추론 토큰을 응답에 포함하지 않는다. 켜 두면 max_tokens를 추론에
-            # 다 쓰고 본문이 비어 나온다(ADR-0008 실측: 무료 모델 18개 전부 추론형).
+            # 다 쓰고 본문이 비어 나온다(무료 모델은 대부분 추론형이다).
             extra["reasoning"] = {"exclude": True}
         return ChatOpenAI(
             model=model_id,
@@ -143,7 +142,7 @@ class LangChainChatClient(ChatClient):
         )
         usage = getattr(response, "usage_metadata", None) or {}
         if usage:
-            # 토큰 폭주를 눈에 보이게 둔다(ADR-0008 §4).
+            # 토큰 폭주를 눈에 보이게 둔다.
             logger.debug(
                 "llm usage",
                 extra={"model_id": model_id, "output_tokens": usage.get("output_tokens")},
@@ -161,11 +160,10 @@ class LangChainChatClient(ChatClient):
 class RoutingChatClient(ChatClient):
     """모델 하나에 provider 하나뿐인 클라이언트를 여러 개 묶어, model_id로 골라 쓴다.
 
-    요약 워커는 Gemini를 1순위로 쓰고(D13) 예산이 다하면 OpenRouter 무료
-    모델로 넘어간다(ADR-0008). 그런데 `LangChainChatClient` 하나는 provider가
-    설정 시점에 고정된다 — Google용으로 만든 클라이언트에 OpenRouter 모델
-    id(`nvidia/...:free`)를 넣으면 Gemini API가 "그런 모델 없다"며 404를
-    준다. 실제로 컷오버 백필 중 이 경로로 여러 건이 영구 실패로 죽었다.
+    요약 워커는 Gemini를 1순위로 쓰고 예산이 다하면 OpenRouter 무료 모델로
+    넘어간다. 그런데 `LangChainChatClient` 하나는 provider가 설정 시점에
+    고정된다 — Google용으로 만든 클라이언트에 OpenRouter 모델 id
+    (`nvidia/...:free`)를 넣으면 Gemini API가 "그런 모델 없다"며 404를 준다.
 
     `primary_model`과 정확히 일치하는 model_id만 `primary`로 보내고, 나머지는
     전부 `fallback`(OpenRouter)으로 보낸다 — 후보 목록의 나머지는 전부

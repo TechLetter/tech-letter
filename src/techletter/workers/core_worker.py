@@ -69,7 +69,6 @@ def build_core_worker(container: Container) -> CoreWorker:
         """죽은 워커가 잡고 있던 잡을 회수하고, dead 잡이 쌓이는지 살핀다.
 
         워커가 SIGKILL로 죽으면 `running` 상태의 잡이 영원히 남는다.
-        Kafka 시절에는 컨슈머 그룹 리밸런스가 해 주던 일이다.
         """
         recovered = await queue.recover_stale()
         if recovered:

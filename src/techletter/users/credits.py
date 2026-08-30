@@ -1,12 +1,10 @@
 """크레딧 서비스.
 
-정책(현행 유지): 로그인 시 일일 10크레딧, 채팅 1회당 1크레딧, 다음 UTC 자정에
-소멸. 중복 지급은 식별자 해시 기준 정책으로 막는다(계정을 다시 만들어도 동일).
+정책: 로그인 시 일일 10크레딧, 채팅 1회당 1크레딧, 다음 UTC 자정에 소멸.
+중복 지급은 식별자 해시 기준 정책으로 막는다(계정을 다시 만들어도 동일).
 
-고친 것(ISSUE-012)
-- 차감이 원자적이다. 현행은 조회 → 루프 `$inc` → 재조회라 동시 요청 시
-  잔액이 음수가 될 수 있었다.
-- 환불에 상한이 있다. 현행은 `$inc +amount`뿐이라 중복 환불이 잔액을 부풀렸다.
+차감은 원자적이다 — 동시 요청에도 잔액이 음수가 되지 않는다. 환불에는
+상한이 있어 중복 환불로 잔액이 부풀지 않는다.
 """
 
 from __future__ import annotations
@@ -140,7 +138,7 @@ class CreditService:
 
     @staticmethod
     def _next_midnight() -> datetime:
-        """다음 UTC 자정. 현행 만료 규칙을 그대로 유지한다."""
+        """다음 UTC 자정."""
         today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         return today + timedelta(days=1)
 

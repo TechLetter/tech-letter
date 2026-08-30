@@ -1,4 +1,4 @@
-"""에이전트 프롬프트. 현행 문안을 유지한다."""
+"""에이전트 프롬프트."""
 
 from __future__ import annotations
 

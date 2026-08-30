@@ -1,7 +1,7 @@
-"""재시도 정책 — ISSUE-001의 구조적 원인을 막는 규칙들.
+"""재시도 정책 — 쿼터 실패는 재시도 횟수를 소모하지 않고 리셋 시각까지 대기해야 한다.
 
-현행: 재시도 창 1h46m < 일일 쿼터 리셋 24h → 쿼터 실패는 100% DLQ.
-새 정책: 쿼터는 리셋 시각까지 대기하고 재시도 횟수를 소모하지 않는다.
+재시도 창이 쿼터 리셋 주기보다 짧으면, 쿼터로 실패한 잡이 재시도를 다
+쓰고 죽어버린다.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def test_permanent_dies_immediately(policy):
 
 
 def test_quota_waits_until_reset_without_consuming_attempt(policy):
-    """ISSUE-001의 핵심 수정."""
+    """쿼터 실패는 리셋 시각까지 대기하고, 재시도 횟수를 소모하지 않는다."""
     d = policy.decide(
         QuotaExceededError("일일 한도"), attempt=1, max_attempt=5, quota_waited_seconds=0, now=NOW
     )

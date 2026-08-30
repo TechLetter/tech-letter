@@ -1,42 +1,18 @@
 # Tech-Letter 문서
 
-> **2026-08-29 — 백엔드 대격변(Great Rewrite) 컷오버 완료.** Go 게이트웨이 + Python 마이크로서비스 4개 + Kafka 구조를 **FastAPI 모듈러 모놀리스 + Mongo 잡 큐**로 전환했다. 아래 계획 문서는 이제 **현재 아키텍처를 설명하는 문서**다(작업 중 발견한 버그·수정 내역까지 포함). 최신 개요는 루트 [README.md](../README.md) 참조.
+프로젝트 개요는 루트 [README.md](../README.md) 참조. 여기는 아키텍처·운영 상세 문서다.
 
-## 읽는 순서
-1. [01-target-architecture](plan/01-target-architecture.md) — 프로세스 4종, 모듈러 모놀리스, Mongo 잡 큐, LLM 라우터
-2. [04-api-v2](plan/04-api-v2.md) — 현재 API 계약: 경로·스키마·에러 체계
-3. [06-migration-steps](plan/06-migration-steps.md) — Phase 0~11, 85스텝, 진행 보드(실행 과정에서 발견·수정한 버그 포함)
-
-## 계획 (`plan/`)
+## 아키텍처 (`architecture/`)
 | 문서 | 내용 |
 |---|---|
-| [00-overview](plan/00-overview.md) | 목표·비목표·**결정 로그**·제약·토폴로지·DoD·리스크 |
-| [01-target-architecture](plan/01-target-architecture.md) | 프로세스 4종, 모듈러 모놀리스, **Mongo 잡 큐**, LLM 라우터, 관측 |
-| [02-directory-structure](plan/02-directory-structure.md) | `src/techletter` 트리, `pyproject.toml`, 설정 트리, 코드 규약 |
-| [04-api-v2](plan/04-api-v2.md) | ⭐ **현재 API 계약**: 봉투 통일, 에러 코드 체계, 경로 정리, 어드민 운영 API |
-| [05-data-contract](plan/05-data-contract.md) | MongoDB 컬렉션·인덱스, Qdrant, **Kafka 삭제 절차**, 시크릿 이름 |
-| [06-migration-steps](plan/06-migration-steps.md) | Phase 0~11 실행 스텝(**프론트 Phase 8** 포함) |
-| [07-testing-strategy](plan/07-testing-strategy.md) | 단위·계약·통합·**Playwright E2E**, 컷오버 스모크 |
-| [08-deployment-and-ops](plan/08-deployment-and-ops.md) | 운영 현황, 파이프라인, compose, 관측 기준선, 런북, 롤백, IaC 정리 |
-
-## 결정 기록 (`plan/adr/`)
-| ADR | 결정 |
-|---|---|
-| [0001](plan/adr/0001-modular-monolith.md) | FastAPI 모듈러 모놀리스 + 워커 프로세스 분리 |
-| [0002](plan/adr/0002-drop-go.md) | Go 전면 제거, Python 단일 언어 |
-| [0003](plan/adr/0003-async-stack.md) | asyncio 단일 스택(PyMongo Async, AsyncQdrantClient, httpx, async_playwright) |
-| [0004](plan/adr/0004-mongo-job-queue.md) | **Kafka 전면 제거 → MongoDB `jobs` 단일 잡 큐** |
-| [0005](plan/adr/0005-project-layout.md) | `src/techletter` 단일 패키지, 도메인 패키지 |
-| [0006](plan/adr/0006-tooling.md) | Python 3.12, uv, ruff, pyright, pytest, pre-commit, CI |
-| [0007](plan/adr/0007-api-contract-redesign.md) | **API 계약 전면 재설계 + 프론트 동시 수정** |
-| [0008](plan/adr/0008-llm-model-router.md) | **LLM 모델 라우터**(큐레이션 ∩ scouter 헬스, Gemini 우선 이중화) |
-
-## 이슈 (`issues/`)
-[issues/README.md](issues/README.md) — 25건. 결정으로 해소된 6건(요약 쿼터·임베딩 캐시·Kafka 3종·챗봇 장애·프론트)과 범위 제외 1건([ISSUE-018](issues/ISSUE-018-iac-hardcoded-secrets.md) Mongo 비밀번호)을 표시.
+| [architecture](architecture/architecture.md) | 프로세스 4종, 모듈러 모놀리스 레이아웃, 잡 큐, LLM 라우터, 관측, 보안 |
+| [directory-structure](architecture/directory-structure.md) | `src/techletter` 트리, `pyproject.toml`, 설정 트리, 코드 규약 |
+| [api-contract](architecture/api-contract.md) | API 계약: 봉투·에러 코드·리소스 스키마·엔드포인트·SSE |
+| [data-model](architecture/data-model.md) | MongoDB 컬렉션·인덱스, Qdrant, 환경변수 이름 |
+| [testing-strategy](architecture/testing-strategy.md) | 단위·계약·통합·E2E, CI 구성, 배포 스모크 |
+| [deployment-and-ops](architecture/deployment-and-ops.md) | 배포 파이프라인, compose 구성, 관측 기준선, 런북, 롤백 |
 
 ## 기타
-- [PRIVACY_POLICY.md](PRIVACY_POLICY.md) — 개인정보처리방침(현행 유지)
+- [PRIVACY_POLICY.md](PRIVACY_POLICY.md) — 개인정보처리방침
 - `images/` — README 이미지
-- 배포 절차: 워크스페이스 루트 `AGENTS.md`("변경사항 배포")
-
-`legacy/`(구 설계 문서)와 Go swag 산출물(`swagger.json`/`swagger.yaml`/`docs.go`)은 Phase 11.1에서 삭제됐다 — Go 코드 자체가 사라져 더는 참조되지 않는다.
+- 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포")

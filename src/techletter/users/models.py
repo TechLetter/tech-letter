@@ -1,6 +1,6 @@
 """users 도메인 문서 모델.
 
-**필드명은 기존 컬렉션 그대로다**(제약 C1). DTO에서만 이름을 바꾼다.
+**필드명은 운영 컬렉션과 정확히 같아야 한다.** DTO에서만 이름을 바꾼다.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class CreditTransaction(BaseDocument):
 class Bookmark(BaseDocument):
     user_code: str
     post_id: str
-    """`posts._id`의 문자열 표현. 기존 저장 형식을 유지한다."""
+    """`posts._id`의 문자열 표현."""
 
 
 class LoginSession(BaseDocument):

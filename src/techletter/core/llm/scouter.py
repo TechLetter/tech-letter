@@ -1,11 +1,11 @@
-"""openrouter-scouter 클라이언트 (ADR-0008).
+"""openrouter-scouter 클라이언트.
 
 같은 호스트에서 사용자가 운영하는 서비스로, 매시간 OpenRouter의 모든 `:free`
-모델을 헬스체크한다. 무료 모델은 예고 없이 사라지므로(실측 3회) 설정에 모델을
-박아두면 챗봇이 죽는다 — 지금 겪고 있는 장애다.
+모델을 헬스체크한다. 무료 모델은 예고 없이 사라지므로 설정에 모델을
+박아두면 챗봇이 죽는다.
 
-접근 경로: `tech-letter_default` 네트워크에 연결된 컨테이너명(D15 정정).
-호스트 IP 방식은 the cloud provider의 iptables INPUT REJECT 때문에 동작하지 않는다.
+접근 경로: `tech-letter_default` 네트워크에 연결된 컨테이너명. 호스트 IP
+방식은 클라우드 방화벽의 iptables INPUT REJECT 때문에 동작하지 않는다.
 """
 
 from __future__ import annotations

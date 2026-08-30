@@ -1,8 +1,7 @@
 """의존성 조립.
 
 프로세스 하나가 API도 워커도 될 수 있으므로 조립을 한 곳에 모은다.
-연결(Mongo, Qdrant, HTTP)은 **앱 수명 동안 하나**만 만든다 — 현행은 요청마다
-클라이언트를 새로 만들었다.
+연결(Mongo, Qdrant, HTTP)은 **앱 수명 동안 하나**만 만든다.
 
 무거운 의존(langchain, playwright)은 실제로 필요할 때 올린다. API 프로세스가
 요약용 브라우저를 import할 이유가 없다.
@@ -77,7 +76,7 @@ class Container:
         )
         container._db = db
         if create_indexes:
-            # 부팅 때 한 번만. 현행은 레포지토리 생성마다 호출했다(ISSUE-025).
+            # 부팅 때 한 번만 실행한다.
             await ensure_indexes(db)
         return container
 

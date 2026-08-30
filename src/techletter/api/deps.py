@@ -1,7 +1,6 @@
 """FastAPI 의존성.
 
-컨테이너는 앱 수명주기에서 만들어 `app.state`에 둔다. 요청마다 다시 만들지
-않는다 — 현행은 요청마다 Mongo 클라이언트를 새로 열었다.
+컨테이너는 앱 수명주기에서 만들어 `app.state`에 두고, 요청마다 다시 만들지 않는다.
 """
 
 from __future__ import annotations

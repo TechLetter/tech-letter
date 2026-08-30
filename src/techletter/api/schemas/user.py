@@ -1,4 +1,4 @@
-"""사용자·인증·북마크 DTO (04 §3.4, §4.2)."""
+"""사용자·인증·북마크 DTO."""
 
 from __future__ import annotations
 
@@ -25,8 +25,6 @@ __all__ = [
 
 
 class CreditsOut(BaseModel):
-    """정수였던 `credits`를 객체로 (04 §3.4)."""
-
     remaining: int
     granted_today: int = 0
 
@@ -57,7 +55,7 @@ class MeOut(BaseModel):
             created_at=to_iso_z(user.created_at),
             updated_at=to_iso_z(user.updated_at),
         )
-        # provider / provider_sub 는 내보내지 않는다(04 §3.4).
+        # provider / provider_sub 는 내보내지 않는다.
 
 
 class AdminUserOut(BaseModel):

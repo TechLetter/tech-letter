@@ -1,7 +1,5 @@
 """Google OAuth 로그인 흐름.
 
-현행 게이트웨이(`cmd/api/services/auth_service.go`)의 동작을 유지한다.
-
 1. `/auth/google/login` → state 쿠키(300초) 설정 후 Google로 302
 2. Google → `/auth/google/callback?state&code`
 3. state 검증 → code 교환 → userinfo → 유저 upsert → JWT 발급
@@ -9,7 +7,7 @@
 4. 프론트가 `POST /auth/token`으로 JWT를 교환
 
 **모든 실패는 쿼리 없는 302다.** JSON 에러를 내지 않는다 — 프론트가 그 동작에
-기대고 있다(04 §4.2).
+기대고 있다.
 """
 
 from __future__ import annotations
@@ -100,7 +98,7 @@ class AuthService:
         session_id = random_token(16)
         await self._sessions.create(session_id, token, self._settings.login_session_ttl_seconds)
 
-        # 크레딧 지급 실패가 로그인을 막지 않는다(현행 동작 유지).
+        # 크레딧 지급 실패가 로그인을 막지 않는다.
         try:
             await self._credits.grant_daily(user.user_code, profile.provider, profile.provider_sub)
         except Exception:
@@ -109,11 +107,7 @@ class AuthService:
         return self._redirect_with_session(session_id)
 
     async def exchange_session(self, session_id: str) -> str:
-        """1회용 세션을 JWT로 교환한다.
-
-        빈 문자열·공백도 400으로 처리한다. 현행은 이 입력에서 nil 역참조로
-        500이 났다(ISSUE-009 #1).
-        """
+        """1회용 세션을 JWT로 교환한다. 빈 문자열·공백도 400으로 처리한다."""
         token = await self._sessions.consume(session_id.strip()) if session_id.strip() else None
         if not token:
             raise SessionExpiredError
@@ -124,11 +118,7 @@ class AuthService:
         return self._settings.login_success_redirect_url
 
     def _redirect_with_session(self, session_id: str) -> str:
-        """`?session=`을 붙인다. 기존 쿼리가 있어도 깨지지 않게 조립한다.
-
-        현행은 `fmt.Sprintf("%s?session=%s")`라 리다이렉트 URL에 이미 쿼리가
-        있으면 잘못된 URL이 됐다(ISSUE-009 #8).
-        """
+        """`?session=`을 붙인다. 기존 쿼리가 있어도 깨지지 않게 조립한다."""
         parts = urlparse(self._settings.login_success_redirect_url)
         query = f"{parts.query}&session={session_id}" if parts.query else f"session={session_id}"
         return urlunparse(parts._replace(query=query))

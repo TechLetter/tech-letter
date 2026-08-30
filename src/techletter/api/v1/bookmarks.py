@@ -1,8 +1,4 @@
-"""북마크 (04 §4.1).
-
-현행은 `/posts/{id}/bookmark`이라 `/posts/bookmarks`가 `/posts/{id}`와
-충돌했다. 독립 리소스로 옮겨 그 원인을 없앴다.
-"""
+"""북마크."""
 
 from __future__ import annotations
 

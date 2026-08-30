@@ -1,7 +1,4 @@
-"""JWT — 기존 운영 토큰과 호환되어야 한다(제약 C3).
-
-Go `cmd/api/auth/jwt_test.go`와 `http_test.go`의 케이스를 이식했다.
-"""
+"""JWT — 이미 발급된 운영 토큰과 호환되어야 한다."""
 
 from __future__ import annotations
 
@@ -33,7 +30,7 @@ def auth() -> AuthSettings:
 
 
 def _legacy_token(payload: dict, secret: str = SECRET, alg: str = "HS256") -> str:
-    """현행 Go 구현이 만드는 것과 같은 모양의 토큰을 직접 만든다."""
+    """이미 발급된 것과 같은 모양의 토큰을 직접 만든다."""
 
     def b64(raw: bytes) -> bytes:
         return base64.urlsafe_b64encode(raw).rstrip(b"=")
@@ -61,7 +58,7 @@ def test_ttl_is_24h(auth):
 
 
 def test_accepts_existing_production_shaped_token(auth):
-    """현행 Go가 발급한 것과 같은 클레임(sub/role/iss/exp)만 가진 토큰."""
+    """이미 발급된 것과 같은 클레임(sub/role/iss/exp)만 가진 토큰."""
     token = _legacy_token(
         {
             "sub": "google:legacy-user",
@@ -75,7 +72,7 @@ def test_accepts_existing_production_shaped_token(auth):
 
 
 def test_missing_role_is_allowed(auth):
-    """현행은 role이 없어도 빈 문자열로 통과시켰다."""
+    """role이 없으면 빈 문자열로 통과시킨다."""
     token = _legacy_token(
         {"sub": "google:abc", "iss": "tech-letter", "exp": int(time.time()) + 3600}
     )
@@ -105,7 +102,7 @@ def test_wrong_secret_is_rejected(auth):
 
 
 def test_wrong_issuer_is_rejected(auth):
-    """현행은 iss를 검증하지 않았다. v2에서 검증을 추가한다(기존 토큰은 통과)."""
+    """iss가 다르면 거부한다(이미 발급된 토큰의 iss 값과는 다른 경우만 해당)."""
     token = _legacy_token({"sub": "a", "iss": "someone-else", "exp": int(time.time()) + 3600})
     with pytest.raises(InvalidTokenError):
         verify_token(auth, token)

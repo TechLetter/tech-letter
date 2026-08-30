@@ -1,7 +1,7 @@
 """쿼리 파라미터 파싱.
 
-FastAPI 기본 검증에 맡기면 `page=abc`가 422가 된다. 현행 gin은 조용히
-기본값을 쓰고 프론트가 그 동작에 기대고 있어(04 §1.1) 직접 파싱한다.
+FastAPI 기본 검증에 맡기면 `page=abc`가 422가 된다. 프론트는 잘못된 값이 오면
+조용히 기본값을 쓰는 관용적 파싱을 기대하므로 직접 파싱한다.
 빈 문자열도 "값 없음"으로 본다 — 프론트가 `categories=`를 보낸다.
 """
 
@@ -49,7 +49,6 @@ def _date(raw: str | None, field: str, *, end_of_day: bool = False) -> datetime 
     if parsed is None:
         # 숫자와 달리 날짜는 조용히 무시하지 않는다. 오타 하나로 필터가
         # 통째로 사라지면 사용자는 "전체 글"을 받고도 걸러진 줄 안다.
-        # 현행 게이트웨이도 400을 냈다.
         raise InvalidRequestError(
             "날짜 형식이 올바르지 않습니다. YYYY-MM-DD 또는 ISO-8601을 사용해 주세요.",
             details={"field": field},

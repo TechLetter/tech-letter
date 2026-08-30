@@ -1,7 +1,7 @@
-"""E2E 시나리오 9종 (07 §2.2).
+"""E2E 시나리오 9종.
 
-실제 브라우저가 실제 API 를 친다. 계약을 전면 재설계했으므로 이 통과가
-"프론트가 v2 를 제대로 쓰고 있다"는 최종 판정이다.
+실제 브라우저가 실제 API를 친다. 프론트가 API 계약을 제대로 쓰고 있다는
+최종 판정이다.
 """
 
 from __future__ import annotations
@@ -130,7 +130,7 @@ async def test_no_credits_yields_402(page, ui_server, broke, sign_in) -> None:
     """크레딧이 없으면 스트림을 열기 전에 402 가 나와야 한다.
 
     스트림을 열어 버리면 HTTP 상태가 이미 200 이라 프론트가 크레딧 부족을
-    구분하지 못한다(04 §5).
+    구분하지 못한다.
     """
     await sign_in()
     await page.goto(f"{ui_server}/chatbot", wait_until="networkidle")
@@ -180,7 +180,7 @@ async def test_admin_lists_posts_with_v2_fields(
 
 
 async def test_admin_ops_tab_shows_the_job_queue(page, ui_server, seeded, sign_in) -> None:
-    """Kafka 시절에는 서버에 접속해야 볼 수 있던 화면이다(ISSUE-002)."""
+    """서버에 접속하지 않고도 잡 큐 상태를 볼 수 있어야 한다."""
     await sign_in(ADMIN_CODE, "admin")
     await page.goto(f"{ui_server}/admin", wait_until="networkidle")
 

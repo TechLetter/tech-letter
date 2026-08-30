@@ -1,7 +1,5 @@
-"""크레딧 정합성 — ISSUE-012.
-
-현행은 조회 → 루프 `$inc` → 재조회라 동시 요청 시 잔액이 음수가 될 수 있었고,
-환불에 상한이 없어 중복 환불이 잔액을 부풀릴 수 있었다.
+"""크레딧 정합성 — 동시 요청에서도 잔액이 음수가 되면 안 되고, 중복 환불이
+잔액을 부풀려도 안 된다.
 """
 
 from __future__ import annotations
@@ -70,7 +68,7 @@ async def test_consume_without_credits_raises(credit_service):
 
 
 async def test_concurrent_consume_never_goes_negative(credit_service, credits_repo):
-    """ISSUE-012의 핵심. 잔액 3에 동시 요청 10건이면 정확히 3건만 성공해야 한다."""
+    """잔액 3에 동시 요청 10건이면 정확히 3건만 성공해야 한다."""
     await _give(credits_repo, 3)
 
     results = await asyncio.gather(
@@ -122,7 +120,7 @@ async def test_refund_restores(credit_service, credits_repo):
 
 
 async def test_refund_cannot_exceed_original_amount(credit_service, credits_repo):
-    """중복 환불이 잔액을 부풀리면 안 된다(현행은 상한이 없었다)."""
+    """중복 환불이 잔액을 부풀리면 안 된다."""
     await _give(credits_repo, 2)
     result = await credit_service.consume(USER)
 

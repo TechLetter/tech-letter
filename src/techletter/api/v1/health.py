@@ -1,7 +1,7 @@
 """헬스체크.
 
-계약(04 §4.1)은 현행과 같다: `200 {"status":"ok"}` 또는
-`503 {"status":"degraded", "checks": {...}}`. compose healthcheck가 이 경로를 본다.
+`200 {"status":"ok"}` 또는 `503 {"status":"degraded", "checks": {...}}`를 낸다.
+compose healthcheck가 이 경로를 본다.
 
 의존성이 죽었을 때 **503을 내는 것이 목적**이다. 그래야 배포가 멈춘다.
 """

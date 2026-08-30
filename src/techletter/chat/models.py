@@ -1,8 +1,7 @@
 """chat 도메인 문서 모델.
 
-DB 필드명은 기존 그대로다(제약 C1). `memory.status`의 값도 저장된 문자열
-(`none`/`pending`/`completed`/`failed`)을 유지하고, 04 §3.6의 `ready` 표기는
-DTO에서만 쓴다.
+`memory.status`는 저장된 문자열(`none`/`pending`/`completed`/`failed`) 그대로
+쓴다. API 응답의 `ready` 표기는 DTO에서만 만든다.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ TITLE_MAX_CHARS = 30
 
 
 def title_from(first_message: str) -> str:
-    """첫 질문에서 제목을 만든다. 30자를 넘으면 잘라 `...`을 붙인다(현행과 동일)."""
+    """첫 질문에서 제목을 만든다. 30자를 넘으면 잘라 `...`을 붙인다."""
     text = first_message.strip()
     if not text:
         return DEFAULT_TITLE
@@ -43,15 +42,14 @@ def title_from(first_message: str) -> str:
 class ChatMessage(SubDocument):
     """대화 한 줄. `chat_sessions.messages[]`의 원소다.
 
-    기존 문서에 `created_at`만 있고 `updated_at`은 없다. 메시지는 고쳐 쓰지
-    않으니 그대로 둔다.
+    메시지는 고쳐 쓰지 않으므로 `created_at`만 있고 `updated_at`은 없다.
     """
 
     role: ChatRole = "user"
     content: str = ""
     created_at: MongoDateTime = Field(default_factory=utcnow)
     metadata: dict[str, Any] | None = None
-    """`sources`/`agent`/`guard`/`memory`. DTO에서는 평탄화한다(04 §3.5)."""
+    """`sources`/`agent`/`guard`/`memory`. DTO에서는 평탄화한다."""
 
 
 class SessionMemory(SubDocument):
@@ -95,6 +93,6 @@ class ChatSession(BaseDocument):
 class SuggestedQuestion(BaseDocument):
     text: str = ""
     normalized_text: str = ""
-    """중복 검사용 키. 유니크 인덱스가 걸린다(05 §1.4)."""
+    """중복 검사용 키. 유니크 인덱스가 걸린다."""
     sort_order: int = 0
     is_active: bool = True

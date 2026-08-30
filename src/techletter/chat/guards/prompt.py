@@ -1,9 +1,4 @@
-"""입력 가드.
-
-**평가 지점은 한 곳이다.** 현행은 Go 게이트웨이와 Python 챗봇이 각각
-평가해서 규칙이 어긋났고, 크레딧 차감 전후 순서도 달랐다(ISSUE-013).
-여기서는 크레딧을 깎기 전에 한 번만 본다.
-"""
+"""입력 가드. 크레딧을 깎기 전에 한 번만 평가한다."""
 
 from __future__ import annotations
 
@@ -27,11 +22,7 @@ ELLIPSIS = "..."
 
 
 def clip(text: str, max_length: int) -> str:
-    """`max_length`를 **넘지 않게** 자른다. 말줄임표 길이까지 계산에 넣는다.
-
-    현행은 `text[: max_length - 1] + "..."`라 결과가 항상 2자 초과했다.
-    프롬프트 예산을 세는 쪽에서 조용히 어긋난다.
-    """
+    """`max_length`를 **넘지 않게** 자른다. 말줄임표 길이까지 계산에 넣는다."""
     if len(text) <= max_length:
         return text
     if max_length <= len(ELLIPSIS):

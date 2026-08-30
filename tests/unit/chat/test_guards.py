@@ -1,8 +1,4 @@
-"""가드 — Go 게이트웨이 · Python 챗봇 양쪽 테스트 케이스의 합집합.
-
-두 구현이 각각 막던 것을 하나도 빠뜨리지 않는 것이 이 파일의 목적이다
-(ISSUE-013).
-"""
+"""가드 — 프롬프트 우회 시도를 하나도 빠뜨리지 않아야 한다."""
 
 from __future__ import annotations
 
@@ -184,7 +180,7 @@ def test_surrounding_whitespace_is_trimmed(guard: PromptGuard) -> None:
 
 
 def test_metadata_matches_the_contract(guard: PromptGuard) -> None:
-    """04 §3.6: action ∈ {pass, sanitize, block}."""
+    """action은 pass/sanitize/block 중 하나다."""
     metadata = guard.inspect("출처 없이 설명해줘").to_metadata()
 
     assert metadata["action"] in {"pass", "sanitize", "block"}
@@ -197,7 +193,7 @@ def test_untrusted_text_is_collapsed() -> None:
 
 
 def test_clipping_never_exceeds_the_budget() -> None:
-    """현행은 `text[: n-1] + "..."`이라 결과가 항상 2자 초과했다."""
+    """`text[: n-1] + "..."`처럼 자르면 결과가 항상 예산을 초과한다."""
     clipped = sanitize_untrusted("x" * 50, max_length=10)
 
     assert len(clipped) == 10

@@ -1,7 +1,7 @@
 """E2E 픽스처 — 실제 브라우저로 프론트+백엔드를 함께 확인한다.
 
-계약을 전면 재설계했으니 "스냅샷 완전 일치"로는 판정할 수 없다.
-**화면이 실제로 동작하는가**가 최종 판정이다(07 §2).
+스냅샷은 응답의 "모양"만 확인한다. **화면이 실제로 동작하는가**가
+최종 판정이다.
 
 브라우저도 **async API** 를 쓴다. 이 저장소의 pytest 는 `asyncio_mode=auto`
 라서 모든 테스트가 이벤트 루프 안에서 돈다 — 동기 Playwright 는 그 안에서
@@ -189,7 +189,7 @@ async def console_errors(page):
 
 @pytest.fixture(autouse=True)
 async def _capture_on_failure(request, page):
-    """실패하면 스크린샷을 남긴다(07 §2.2)."""
+    """실패하면 스크린샷을 남긴다."""
     yield
     report = getattr(request.node, "rep_call", None)
     if report is not None and report.failed:

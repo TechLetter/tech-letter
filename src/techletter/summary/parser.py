@@ -1,8 +1,8 @@
 """HTML에서 본문과 썸네일을 뽑는다.
 
-현행은 `<img>` 후보를 **개수 제한 없이** 순차로 내려받아 크기를 쟀고
-`Image.MAX_IMAGE_PIXELS`를 설정하지 않았다(ISSUE-007 #10). 이미지가 수백 개인
-페이지에서 요약 하나가 몇 분씩 걸렸고 decompression bomb에도 노출됐다.
+`<img>` 후보 다운로드에는 개수 제한(`MAX_IMAGE_CANDIDATES`)과 픽셀 상한
+(`Image.MAX_IMAGE_PIXELS`)을 둔다 — 제한이 없으면 이미지가 수백 개인
+페이지에서 요약 하나가 몇 분씩 걸리고 decompression bomb에도 노출된다.
 """
 
 from __future__ import annotations

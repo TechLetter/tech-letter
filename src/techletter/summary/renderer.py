@@ -1,11 +1,7 @@
 """페이지 렌더링.
 
-브라우저를 **한 번만 띄우고 재사용**한다. 현행은 이벤트마다
-`chromium.launch()`/`close()`를 해서 건당 1초 이상을 기동에 썼다(ISSUE-007 #6).
-
-재시도 대기도 줄였다. 현행은 최대 570초를 동기 `time.sleep`으로 기다려
-컨슈머 스레드가 멈췄고, 그걸 버티려고 Kafka `max.poll.interval.ms`를 53분으로
-늘려 놨다(#5). 여기서는 `asyncio.sleep`이고 상한이 훨씬 낮다.
+브라우저를 **한 번만 띄우고 재사용**한다. 재시도 대기는 `asyncio.sleep`을
+쓰고 상한이 낮다(`RETRY_WAIT_SECONDS`).
 """
 
 from __future__ import annotations
@@ -53,10 +49,7 @@ class Renderer(Protocol):
 
 
 class ScraperApiRenderer:
-    """외부 렌더링 서비스. API 키가 URL에 들어가므로 **https만** 쓴다.
-
-    현행은 `http://api.scraperapi.com`이라 키가 평문으로 나갔다(ISSUE-007 #7).
-    """
+    """외부 렌더링 서비스. API 키가 URL에 들어가므로 **https만** 쓴다."""
 
     def __init__(self, api_key: str, client: httpx.AsyncClient) -> None:
         self._api_key = api_key

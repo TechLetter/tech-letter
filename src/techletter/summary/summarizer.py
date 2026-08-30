@@ -1,11 +1,8 @@
 """요약 생성.
 
-ADR-0008 실측의 결론: **길이·개수 제약은 프롬프트로 지켜지지 않는다.**
-무료 모델 11개 중 200자(±20) 요구를 지킨 모델은 하나뿐이었다. 그래서 제약은
-프롬프트로 "요청"하되 최종 보장은 코드가 한다.
-
-프롬프트 자체의 결함도 고쳤다 — 현행은 "five keys"라고 쓰고 키를 4개만
-정의했다(ISSUE-007 #4).
+**길이·개수 제약은 프롬프트로 지켜지지 않는다.** 무료 모델 11개 중
+200자(±20) 요구를 지킨 모델은 하나뿐이었다. 그래서 제약은 프롬프트로
+"요청"하되 최종 보장은 코드가 한다.
 """
 
 from __future__ import annotations
@@ -124,9 +121,9 @@ def normalize_tags(values: Any, limit: int) -> list[str]:
 class Summarizer:
     """요약 한 건.
 
-    `budget`과 `primary_model`을 주면 **1순위 모델을 예산 안에서만** 쓴다
-    (결정 D13). Gemini 무료 티어는 하루 20회라, 다 쓰고 나서 429를 맞고
-    재시도하는 대신 미리 무료 모델로 흘린다.
+    `budget`과 `primary_model`을 주면 **1순위 모델을 예산 안에서만** 쓴다.
+    Gemini 무료 티어는 하루 20회라, 다 쓰고 나서 429를 맞고 재시도하는
+    대신 미리 무료 모델로 흘린다.
     """
 
     def __init__(
@@ -188,8 +185,7 @@ class Summarizer:
             self._settings.summary_tolerance_chars,
         )
         if not summary:
-            # `error`가 비어 있어도 요약이 없으면 실패다. 현행은 이걸
-            # 통과시켜 빈 요약이 `ai_summarized=true`로 저장됐다(ISSUE-007 #3).
+            # `error`가 비어 있어도 요약이 없으면 실패다.
             raise PermanentError("model returned an empty summary", reason="empty_summary")
 
         return SummaryResult(

@@ -91,8 +91,8 @@ ban-relative-imports = "all"
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "datetime.datetime.utcnow".msg = "techletter.core.time.utcnow() 를 사용한다 (naive datetime 금지)"
 "motor".msg = "pymongo.asynchronous 를 사용한다"
-"confluent_kafka".msg = "Kafka는 제거되었다 (ADR-0004). techletter.core.jobs 를 사용한다"
-"aiokafka".msg = "Kafka는 제거되었다 (ADR-0004). techletter.core.jobs 를 사용한다"
+"confluent_kafka".msg = "Kafka는 쓰지 않는다. techletter.core.jobs 를 사용한다"
+"aiokafka".msg = "Kafka는 쓰지 않는다. techletter.core.jobs 를 사용한다"
 "os.environ.setdefault".msg = "프로세스 환경을 변경하지 않는다. 자격증명은 인자로 전달한다"
 
 [tool.pyright]

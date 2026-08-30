@@ -1,7 +1,4 @@
-"""Mongo 문서 모델 공통 타입.
-
-주의: 기존 컬렉션의 필드명은 그대로 둔다(제약 C1). DTO에서만 이름을 바꾼다.
-"""
+"""Mongo 문서 모델 공통 타입."""
 
 from __future__ import annotations
 
@@ -75,9 +72,9 @@ class BaseDocument(BaseModel):
     def to_mongo(self, *, exclude_id: bool = True) -> dict[str, Any]:
         """삽입용 dict.
 
-        현행 `to_mongo_record()`는 `exclude_none=True`를 써서 `_id`를 빼려다가
-        **모든 None 필드를 함께 지웠다**. 그래서 "필드를 null로 지우는 갱신"이
-        불가능했다(09 §3.2). 여기서는 `_id`만 명시적으로 제외한다.
+        `exclude_none=True`는 쓰지 않는다 — `_id`뿐 아니라 값이 `None`인 다른
+        필드까지 함께 지워져서, "필드를 null로 지우는 갱신"이 불가능해진다.
+        `_id`만 명시적으로 제외한다.
         """
         data = self.model_dump(by_alias=True)
         if exclude_id or data.get("_id") is None:

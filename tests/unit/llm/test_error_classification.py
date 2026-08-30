@@ -1,7 +1,7 @@
-"""LLM 예외 분류 — ISSUE-001의 핵심.
+"""LLM 예외 분류 — 쿼터 소진과 일시 오류를 구분해야 한다.
 
-현행은 모든 LLM 실패를 똑같이 다뤄 "일일 쿼터 소진"도 5회 재시도 후 DLQ로
-보냈다. 실측 메시지로 회귀 테스트를 고정한다.
+구분하지 않으면 "일일 쿼터 소진"도 5회 재시도 후 DLQ로 보내게 된다.
+실측 메시지로 회귀 테스트를 고정한다.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import pytest
 from techletter.core.errors import PermanentError, QuotaExceededError, RetryableError
 from techletter.core.llm.errors import classify_llm_error, is_quota_error
 
-# 운영 로그에서 그대로 가져온 문자열 (09 §6)
+# 운영 로그에서 그대로 가져온 문자열
 GEMINI_DAILY_QUOTA = (
     "ChatGoogleGenerativeAIError: Error calling model 'gemini-3-flash-preview' "
     "(RESOURCE_EXHAUSTED): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, "

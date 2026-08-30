@@ -65,7 +65,7 @@ async def test_a_malformed_session_id_is_not_found(sessions) -> None:
 
 # ── 목록 ────────────────────────────────────────────────────────────
 async def test_the_list_carries_counts_but_not_message_bodies(sessions) -> None:
-    """현행은 메시지를 빼면서 개수도 잃어 프론트가 알 방법이 없었다(04 §3.5)."""
+    """메시지 본문은 빼도 개수는 프론트가 알 수 있어야 한다."""
     session = await sessions.create(USER, "첫 질문")
     await sessions.append(session, "assistant", "답변")
 
@@ -309,7 +309,7 @@ async def test_the_list_is_ordered_by_sort_order(questions) -> None:
 
 
 async def test_updating_only_the_flag_keeps_the_sort_order(questions) -> None:
-    """현행은 전체 교체라 순번을 안 보내면 0으로 밀렸다."""
+    """전체 교체로 처리하면 순번을 안 보냈을 때 0으로 밀린다."""
     question = await questions.create("질문", sort_order=50)
 
     updated = await questions.update(str(question.id), is_active=False)

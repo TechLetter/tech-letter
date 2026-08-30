@@ -1,7 +1,6 @@
-"""포스트 (04 §4.1).
+"""포스트.
 
-공개 API는 **요약이 끝난 포스트만** 준다. 현행의 `status_ai_summarized`
-파라미터를 없앤 이유다 — 프론트가 항상 `true`를 보냈다.
+공개 API는 **요약이 끝난 포스트만** 준다.
 """
 
 from __future__ import annotations
@@ -63,6 +62,6 @@ async def get_post(ctx: Ctx, user: MaybeUser, post_id: str) -> PostOut:
 
 @router.post("/{post_id}/views", status_code=status.HTTP_204_NO_CONTENT)
 async def add_view(ctx: Ctx, post_id: str) -> Response:
-    """조회수 +1. 본문이 필요 없어 204를 준다(04 §2)."""
+    """조회수 +1. 본문이 필요 없어 204를 준다."""
     await ctx.post_service.view(post_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,7 +1,7 @@
 """추천 질문 관리(어드민).
 
-중복 검사는 **유니크 인덱스**에 맡긴다. 현행은 `find_one` 후 `insert`라
-동시 요청 두 개가 같은 질문을 나란히 넣을 수 있었다.
+중복 검사는 **유니크 인덱스**에 맡긴다 — `find_one` 후 `insert`로 하면
+동시 요청 두 개가 같은 질문을 나란히 넣을 수 있다.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class SuggestedQuestionService:
         sort_order: int | None = None,
         is_active: bool | None = None,
     ) -> SuggestedQuestion:
-        """부분 갱신. 현행은 전체 교체라 순번을 안 보내면 0으로 밀렸다."""
+        """부분 갱신 — 보낸 필드만 바뀐다."""
         fields: dict[str, object] = {}
         if text is not None:
             cleaned = clean_text(text)

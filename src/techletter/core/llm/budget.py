@@ -1,8 +1,8 @@
-"""provider별 일일 사용량 예산 (ADR-0008 §4).
+"""provider별 일일 사용량 예산.
 
 요약은 Gemini를 1순위로 쓰되 일일 20회(무료 티어 한도)까지만 쓰고,
-초과분은 OpenRouter로 흘린다(결정 D13). 예산을 넘기면 429를 맞고 잡이
-재시도되는 낭비를 미리 막는다.
+초과분은 OpenRouter로 흘린다. 예산을 넘기면 429를 맞고 잡이 재시도되는
+낭비를 미리 막는다.
 """
 
 from __future__ import annotations

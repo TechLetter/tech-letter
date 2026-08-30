@@ -1,4 +1,4 @@
-"""API DTO — 04 문서와 1:1로 대응한다.
+"""API DTO.
 
 도메인 모델을 그대로 내보내지 않는 이유: DB 필드명(`aisummary`,
 `status.ai_summarized`)이 계약과 다르고, 내부 식별자(`provider_sub`,

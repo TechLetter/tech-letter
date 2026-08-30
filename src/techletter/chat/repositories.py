@@ -81,8 +81,7 @@ class ChatSessionRepository:
         """목록에서는 본문을 빼고 개수만 센다.
 
         세션 하나에 메시지가 수십 개고 각 메시지에 답변 전문이 들어 있다.
-        현행은 `{"messages": 0}`으로 빼고 빈 배열을 채워 넣어 프론트가 개수를
-        알 방법이 없었다(04 §3.5). `$size`로 서버에서 센다.
+        `$size`로 서버에서 개수만 세고 `messages` 자체는 응답에서 뺀다.
         """
         query = {"user_code": user_code}
         total = await self._col.count_documents(query)
@@ -138,7 +137,7 @@ class ChatSessionRepository:
         """압축 메모리를 갱신한다. `updated_at`은 건드리지 않는다.
 
         압축은 백그라운드 잡이다. 여기서 `updated_at`을 올리면 세션 목록의
-        정렬이 사용자가 만지지도 않은 세션 때문에 뒤바뀐다(현행 버그).
+        정렬이 사용자가 만지지도 않은 세션 때문에 뒤바뀐다.
         """
         oid = to_object_id(session_id)
         if oid is None:

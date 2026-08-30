@@ -56,7 +56,7 @@ def renderer(handler) -> tuple[ScraperApiRenderer, list[httpx.Request]]:
 
 
 async def test_scraperapi_is_called_over_https() -> None:
-    """현행은 http 라서 API 키가 평문으로 나갔다(ISSUE-007 #7)."""
+    """http로 나가면 API 키가 평문으로 노출된다."""
     render, seen = renderer(lambda r: httpx.Response(200, text="<html>ok</html>"))
 
     await render.render("https://blog.test/post")

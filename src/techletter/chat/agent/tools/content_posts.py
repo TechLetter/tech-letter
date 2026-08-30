@@ -1,8 +1,7 @@
 """포스트 조회 도구.
 
-현행은 챗봇이 content-service에 HTTP로 물었고, 본문은 **포스트마다 한 번씩**
-더 요청했다(N+1). 같은 프로세스가 됐으니 저장소를 직접 부르고 본문은 한 번에
-가져온다.
+저장소를 직접 불러 조회한다. 본문은 포스트마다 따로 요청하지 않고
+한 번에 가져온다(N+1 방지).
 """
 
 from __future__ import annotations
@@ -94,7 +93,7 @@ class PostLookupTool:
         )
 
     async def hydrate(self, records: list[PostRecord]) -> list[PostRecord]:
-        """본문을 한 번의 질의로 채운다. 현행은 포스트마다 HTTP를 쳤다."""
+        """본문을 한 번의 질의로 채운다."""
         bodies = await self._posts.get_plain_texts([record.id for record in records])
         for record in records:
             record.plain_text = bodies.get(record.id)

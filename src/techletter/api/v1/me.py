@@ -1,4 +1,4 @@
-"""내 정보 (04 §4.2)."""
+"""내 정보."""
 
 from __future__ import annotations
 

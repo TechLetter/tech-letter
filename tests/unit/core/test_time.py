@@ -43,7 +43,7 @@ def test_parse_date_only_start_of_day():
 
 
 def test_parse_date_only_end_of_day():
-    """`published_to`에 날짜만 오면 그 날의 끝까지 포함한다(현행 게이트웨이 동작)."""
+    """`published_to`에 날짜만 오면 그 날의 끝까지 포함한다."""
     parsed = parse_rfc3339_or_date("2026-08-29", end_of_day=True)
     assert parsed is not None
     assert parsed.hour == 23

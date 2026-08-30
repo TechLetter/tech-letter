@@ -1,4 +1,4 @@
-"""트렌드 (04 §4.1, §3.7)."""
+"""트렌드."""
 
 from __future__ import annotations
 

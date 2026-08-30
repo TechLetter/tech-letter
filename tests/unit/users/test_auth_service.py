@@ -1,4 +1,4 @@
-"""OAuth 흐름 — 실패는 전부 쿼리 없는 302여야 한다(04 §4.2)."""
+"""OAuth 흐름 — 실패는 전부 쿼리 없는 302여야 한다."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def test_redirect_appends_session():
 
 
 def test_redirect_preserves_existing_query():
-    """현행은 문자열 포맷이라 기존 쿼리가 있으면 URL이 깨졌다(ISSUE-009 #8)."""
+    """문자열 포맷으로 조립하면 기존 쿼리가 있을 때 URL이 깨진다."""
     service, _ = make_service("http://localhost:5173/login/success?from=app")
     url = service._redirect_with_session("sid-123")
     query = parse_qs(urlparse(url).query)

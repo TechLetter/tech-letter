@@ -1,4 +1,4 @@
-"""어드민 계약 (04 §4.4)."""
+"""어드민 계약."""
 
 from __future__ import annotations
 
@@ -193,7 +193,7 @@ async def test_an_unknown_blog_type_is_400(client, admin_headers) -> None:
 
 
 async def test_updating_a_blog_keeps_the_fetch_history(client, admin_headers, ctx, seeded) -> None:
-    """현행은 전체 교체라 `last_fetched_at`이 날아갔다."""
+    """전체 교체로 처리하면 `last_fetched_at`이 날아간다."""
     assert seeded["blog"].id is not None
     await ctx.blogs.record_fetch_result(seeded["blog"].id, None)
 

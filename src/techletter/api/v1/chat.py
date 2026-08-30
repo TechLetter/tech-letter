@@ -1,7 +1,7 @@
-"""채팅 (04 §4.3, §5).
+"""채팅.
 
 스트리밍은 SSE다. 프레이밍(`event:`/`data:`, `\\n\\n` 구분)은 프론트 파서가
-그대로 쓰므로 유지하고, 페이로드만 v2 계약으로 바꾼다.
+그대로 쓰므로 유지한다.
 """
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ async def stream_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> Stream
 
 def _activity_payload(activity: Activity) -> dict[str, str]:
     payload = activity.to_dict()
-    # 계약은 `done`, 내부는 `completed`다(04 §5).
+    # 계약은 `done`, 내부는 `completed`다.
     if payload["status"] == "completed":
         payload["status"] = "done"
     return payload

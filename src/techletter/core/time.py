@@ -40,7 +40,7 @@ def parse_rfc3339_or_date(raw: str | None, *, end_of_day: bool = False) -> datet
     """RFC3339 우선, 실패하면 `YYYY-MM-DD`로 파싱한다. 둘 다 실패하면 None.
 
     `end_of_day=True`이고 날짜만 주어지면 그 날의 끝(23:59:59.999999)으로 올린다.
-    현행 게이트웨이의 `published_to` 동작을 유지하기 위한 것이다.
+    `published_to` 같은 상한 필터에 날짜만 넘어와도 그 날 전체를 포함시키기 위해서다.
     """
     text = (raw or "").strip()
     if not text:

@@ -1,4 +1,4 @@
-"""요약 후처리 — 프롬프트로 지켜지지 않는 제약을 코드가 보장한다(ADR-0008)."""
+"""요약 후처리 — 프롬프트로 지켜지지 않는 제약을 코드가 보장한다."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def payload(**overrides) -> dict:
 
 # ── 프롬프트 ────────────────────────────────────────────────────────
 def test_the_prompt_declares_the_right_number_of_keys() -> None:
-    """현행은 "five keys"라고 쓰고 4개만 정의해 환각을 유도했다(ISSUE-007 #4)."""
+    """ "five keys"라고 쓰고 4개만 정의하면 모델이 다섯 번째 키를 환각한다."""
     assert "four keys" in SYSTEM_INSTRUCTION
     for key in ("summary", "categories", "tags", "error"):
         assert f'"{key}"' in SYSTEM_INSTRUCTION
@@ -151,7 +151,7 @@ async def test_an_error_field_is_a_permanent_failure(settings) -> None:
 
 
 async def test_an_empty_summary_is_rejected_even_without_an_error(settings) -> None:
-    """현행은 `error`만 보고 빈 요약을 통과시켰다(ISSUE-007 #3)."""
+    """`error`만 보고 빈 요약을 통과시키면 안 된다."""
     llm = FakeLlm(payload(summary="   "))
 
     with pytest.raises(PermanentError) as excinfo:
@@ -170,7 +170,7 @@ async def test_a_huge_body_is_truncated(settings) -> None:
     assert len(llm.calls[0]["user"]) == 100
 
 
-# ── 예산 (D13) ──────────────────────────────────────────────────────
+# ── 예산 ────────────────────────────────────────────────────────────
 class FakeBudget:
     def __init__(self, has_room: bool = True) -> None:
         self._has_room = has_room

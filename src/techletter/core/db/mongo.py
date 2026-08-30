@@ -1,9 +1,4 @@
-"""MongoDB 비동기 클라이언트 수명주기.
-
-현행 문제(09 §3.2): 동기 pymongo를 async 라우트에서 호출해 이벤트 루프를
-막았고, 타임아웃·`tz_aware`가 설정돼 있지 않았으며, 클라이언트 생성 함수가
-"indexes ensured"라는 거짓 로그를 남겼다(인덱스를 만들지 않았다).
-"""
+"""MongoDB 비동기 클라이언트 수명주기."""
 
 from __future__ import annotations
 

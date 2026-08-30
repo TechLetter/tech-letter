@@ -1,8 +1,4 @@
-"""어드민 추천 질문 (04 §4.4).
-
-경로가 `/admin/chatbot/suggested-questions`에서 `/admin/suggested-questions`로
-바뀌었다.
-"""
+"""어드민 추천 질문."""
 
 from __future__ import annotations
 

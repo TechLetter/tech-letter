@@ -51,11 +51,7 @@ class ChatSessionService:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ChatSession:
-        """메시지를 붙인다. 첫 사용자 메시지면 제목도 정한다.
-
-        제목은 `messages`를 읽어 판단한다. 현행은 세션을 한 번 더 조회해서
-        같은 문서를 두 번 읽었다.
-        """
+        """메시지를 붙인다. 첫 사용자 메시지면 제목도 정한다."""
         if role == "user" and session.title == DEFAULT_TITLE and not session.messages:
             await self._sessions.set_title(str(session.id), _title_from(content))
 

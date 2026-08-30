@@ -1,7 +1,7 @@
 """users 도메인 저장소.
 
-인덱스 **이름은 기존과 동일해야 한다**(05 §1.3). 이름이 다르면 운영 DB에
-같은 키의 중복 인덱스가 생긴다.
+인덱스 **이름은 운영 DB와 동일해야 한다**. 이름이 다르면 같은 키의
+중복 인덱스가 생긴다.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ register_indexes(
         )
     ],
 )
-# ── 신규 인덱스 (05 §1.4) ────────────────────────────────────────────
+# ── 신규 인덱스 ──────────────────────────────────────────────────────
 register_indexes(
     "credit_transactions",
     [
@@ -234,7 +234,7 @@ class CreditRepository:
         return credit
 
     async def granted_today(self, user_code: str, source: str = "daily") -> bool:
-        """오늘(UTC) 이미 같은 source로 지급됐는지. 현행 동작을 유지한다."""
+        """오늘(UTC) 이미 같은 source로 지급됐는지."""
         today_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         doc = await self._col.find_one(
             {"user_code": user_code, "source": source, "created_at": {"$gte": today_start}},
@@ -245,9 +245,8 @@ class CreditRepository:
     async def take_one(self, user_code: str) -> ObjectId | None:
         """만료 임박 크레딧에서 1을 **원자적으로** 뺀다.
 
-        현행은 조회 → 루프 `$inc` → 재조회라 동시 요청 시 잔액이 음수가 될 수
-        있었다(ISSUE-012). 여기서는 `amount >= 1` 조건을 건 단일 연산이라
-        경쟁이 나도 초과 차감이 생기지 않는다.
+        `amount >= 1` 조건을 건 단일 연산이라 경쟁이 나도 초과 차감이
+        생기지 않는다.
         """
         doc = await self._col.find_one_and_update(
             {"user_code": user_code, "expired_at": {"$gt": utcnow()}, "amount": {"$gte": 1}},
@@ -259,10 +258,7 @@ class CreditRepository:
         return doc["_id"] if doc else None
 
     async def give_back(self, credit_id: ObjectId | str, amount: int = 1) -> bool:
-        """환불. `original_amount`를 넘지 않는 선에서만 되돌린다.
-
-        현행 `refund`는 상한이 없어 중복 환불이 잔액을 부풀릴 수 있었다.
-        """
+        """환불. `original_amount`를 넘지 않는 선에서만 되돌린다."""
         from bson import ObjectId as Oid  # noqa: PLC0415
 
         oid = credit_id if not isinstance(credit_id, str) else Oid(credit_id)

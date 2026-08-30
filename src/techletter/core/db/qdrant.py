@@ -2,9 +2,6 @@
 
 컬렉션 이름 규칙은 **운영 데이터에 이미 박혀 있어** 바꿀 수 없다:
 `{base}__{model_key}__{dim}` (예: `tech_letter_posts__gemini-embedding-001__3072`).
-
-현행은 동기 클라이언트를 이벤트 루프에서 그대로 호출했다(ISSUE-022).
-여기서는 `AsyncQdrantClient`를 쓴다.
 """
 
 from __future__ import annotations

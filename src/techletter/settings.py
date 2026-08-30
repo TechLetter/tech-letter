@@ -1,10 +1,7 @@
 """설정 단일 트리 (pydantic-settings).
 
-원칙
-- **시크릿 환경변수 이름은 기존 그대로다**(제약 C2). 값을 옮길 필요가 없다.
-- 필수값이 없으면 **부팅 즉시** 실패한다. 현행처럼 런타임 중간에 RuntimeError를
-  내지 않는다(ISSUE-023).
-- 현행에 흩어져 있던 하드코딩 상수를 전부 필드로 올리되 기본값은 현행 값이다.
+필수값이 없으면 **부팅 즉시** 실패한다. 런타임 중간에 갑자기 RuntimeError를
+내지 않는다.
 """
 
 from __future__ import annotations
@@ -115,7 +112,7 @@ class ChatEmbeddingSettings(LlmSettings):
 
 
 class RouterSettings(BaseSettings):
-    """LLM 모델 라우터 (ADR-0008)."""
+    """LLM 모델 라우터."""
 
     model_config = _BASE
     scouter_base_url: str = Field(
@@ -156,7 +153,7 @@ class RouterSettings(BaseSettings):
 
 
 class JobSettings(BaseSettings):
-    """Mongo 잡 큐 (ADR-0004)."""
+    """Mongo 잡 큐."""
 
     model_config = _BASE
     poll_interval_seconds: float = Field(default=2.0, alias="JOB_POLL_INTERVAL_SECONDS")
@@ -213,7 +210,7 @@ class SummarySettings(BaseSettings):
 
 
 class EmbeddingSettings(BaseSettings):
-    """청킹·임베딩 (ISSUE-003: 캐시 폐지, D17)."""
+    """청킹·임베딩."""
 
     model_config = _BASE
     chunk_size: int = Field(default=1000, alias="EMBEDDING_WORKER_CHUNK_SIZE")

@@ -203,7 +203,7 @@ async def test_expired_session_is_rejected_even_before_ttl_sweep(sessions_repo, 
 
 
 async def test_exchange_session_rejects_blank(mongo_db, user_service, sessions_repo):
-    """현행은 빈 문자열에서 nil 역참조로 500이 났다(ISSUE-009 #1)."""
+    """빈 문자열이 와도 500으로 죽으면 안 된다."""
     from tests.factories import make_auth_settings
 
     from techletter.users.auth_service import AuthService

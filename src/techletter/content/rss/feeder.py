@@ -49,8 +49,7 @@ def _to_datetime(value: struct_time | None) -> datetime | None:
 def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]:
     """RSS/Atom 본문을 항목 목록으로 바꾼다.
 
-    `bozo`는 대부분 "조금 어긋났지만 읽을 수 있음"이다. 현행은 이걸 매번
-    WARNING으로 찍어 로그의 최다 라인이 됐다(ISSUE-006). 여기서는 **항목을
+    `bozo`는 대부분 "조금 어긋났지만 읽을 수 있음"이다. 여기서는 **항목을
     하나도 못 얻었을 때만** 경고한다.
     """
     parsed: Any = feedparser.parse(_INVALID_CONTROL_CHARS.sub("", text))
@@ -97,8 +96,7 @@ class RssFeeder:
             raise RetryableError(f"rss fetch failed: {type(exc).__name__}: {exc}") from exc
 
         if response.status_code != 200:
-            # 응답 본문은 로그에도 DB에도 넣지 않는다. 현행은 500자를 잘라
-            # blogs.last_fetch_error에 저장해 어드민 화면에 404 HTML이 떴다.
+            # 응답 본문은 로그에도 DB에도 넣지 않는다.
             message = f"rss fetch failed: HTTP {response.status_code}"
             if response.status_code in _PERMANENT_STATUS:
                 raise PermanentError(message, reason=f"http_{response.status_code}")

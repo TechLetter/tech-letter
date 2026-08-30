@@ -5,7 +5,7 @@ core-worker → embedding.requested → (가짜 임베더) → Qdrant →
 embedding.completed → core-worker → `GET /posts`.
 
 각 단계를 개별 테스트가 이미 검증한다. 여기서 확인하는 것은 **잡이 실제로
-서로를 이어 주는가**다. Kafka 토픽 6개를 잡 큐 하나로 바꾼 것의 핵심이다.
+서로를 이어 주는가**다.
 """
 
 from __future__ import annotations
@@ -243,7 +243,7 @@ async def test_a_second_collection_cycle_does_nothing(pipeline_env) -> None:
 
 # ── 실패 경로 ───────────────────────────────────────────────────────
 async def test_a_bot_blocked_page_dies_without_retrying(pipeline_env, mongo_db) -> None:
-    """영구 실패는 5번 재시도하지 않는다(ISSUE-001)."""
+    """영구 실패는 최대 재시도 횟수만큼 재시도하지 않고 바로 dead 처리한다."""
     pipeline_env["renderer"].html = (FIXTURES / "html" / "cloudflare.html").read_text(
         encoding="utf-8"
     )
@@ -263,7 +263,7 @@ async def test_a_bot_blocked_page_dies_without_retrying(pipeline_env, mongo_db) 
 
 
 async def test_a_permanent_failure_leaves_a_reason_on_the_post(pipeline_env) -> None:
-    """어드민이 "왜 요약이 안 됐나"를 볼 수 있어야 한다(ISSUE-008)."""
+    """어드민이 "왜 요약이 안 됐나"를 볼 수 있어야 한다."""
     pipeline_env["renderer"].html = (FIXTURES / "html" / "cloudflare.html").read_text(
         encoding="utf-8"
     )

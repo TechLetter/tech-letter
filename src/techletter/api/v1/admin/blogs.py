@@ -1,4 +1,4 @@
-"""어드민 블로그 (04 §4.4)."""
+"""어드민 블로그."""
 
 from __future__ import annotations
 

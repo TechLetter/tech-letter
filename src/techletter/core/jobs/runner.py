@@ -1,10 +1,7 @@
 """잡 러너 — 클레임 → 핸들러 → 상태 전이 루프.
 
-현행 컨슈머의 문제(ISSUE-011, ISSUE-022)를 구조적으로 없앤다.
-- `stop_flag: list[bool]` 폴링 대신 `asyncio.Event`
-- 예외를 삼키지 않는다. 삼키면 재시도·DLQ가 통째로 무력화된다
-  (현행 `chat_handler`가 그랬다).
-- 종료 신호를 받으면 처리 중인 잡을 끝내고 나간다(drain).
+핸들러 예외를 삼키지 않는다 — 삼키면 재시도·dead 처리가 통째로 무력화된다.
+종료 신호를 받으면 처리 중인 잡을 끝내고 나간다(drain).
 """
 
 from __future__ import annotations

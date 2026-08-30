@@ -1,8 +1,4 @@
-"""주기 작업.
-
-Kafka 시절에는 별도 스케줄러 스레드가 RSS를 돌렸고 재시도 워커가 따로
-있었다. 이제는 core-worker 안에서 같은 이벤트 루프가 처리한다.
-"""
+"""주기 작업 스케줄러."""
 
 from __future__ import annotations
 

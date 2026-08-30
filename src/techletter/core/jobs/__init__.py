@@ -1,4 +1,4 @@
-"""MongoDB 잡 큐 (ADR-0004). Kafka를 대체한다."""
+"""MongoDB 잡 큐."""
 
 from techletter.core.jobs.models import PRIORITY_BACKFILL, PRIORITY_NORMAL, Job
 from techletter.core.jobs.policy import RetryPolicy

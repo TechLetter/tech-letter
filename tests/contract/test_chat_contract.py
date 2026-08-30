@@ -1,4 +1,4 @@
-"""채팅 계약 (04 §4.3, §5)."""
+"""채팅 계약."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ async def test_creating_a_session_returns_201(client, user_headers) -> None:
 async def test_the_session_list_omits_messages_but_keeps_the_count(
     client, ctx, user_headers
 ) -> None:
-    """현행은 개수를 알 방법이 없었다(04 §3.5)."""
+    """메시지 본문은 빼도 개수는 프론트가 알 수 있어야 한다."""
     session = await ctx.sessions.create("google:alice", "첫 질문")
     await ctx.sessions.append(session, "assistant", "답변")
 
@@ -298,7 +298,7 @@ async def test_the_stream_emits_activities_then_done(
 async def test_activity_completion_is_reported_as_done(
     client, user_headers, stub_chat, funded
 ) -> None:
-    """계약은 `done`, 내부는 `completed`다(04 §5)."""
+    """계약은 `done`, 내부는 `completed`다."""
     response = await client.post(
         "/api/v1/chat/messages/stream", json={"query": "질문"}, headers=user_headers
     )

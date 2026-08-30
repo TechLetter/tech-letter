@@ -1,7 +1,7 @@
 """summary-worker — 브라우저를 띄우는 유일한 프로세스.
 
 한 번에 잡 하나만 처리한다(동시성 1). 브라우저가 메모리를 많이 쓰고
-a cloud instance 인스턴스에 요약·임베딩·API가 함께 올라가 있다.
+같은 호스트에 요약·임베딩·API가 함께 올라가 있다.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def build_renderer(container: Container) -> Renderer:
         if key is not None:
             return ScraperApiRenderer(key.get_secret_value(), container.http.get())
         # 키 없이 scraperapi를 고른 설정 실수. 요약을 통째로 멈추느니
-        # 브라우저로 떨어진다(현행 동작과 같다).
+        # 브라우저로 떨어진다.
         logger.warning("RENDERER_STRATEGY=scraperapi but no key; using playwright")
     return PlaywrightRenderer(settings)
 
@@ -45,8 +45,8 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
     settings = container.settings
     heartbeat = Heartbeat()
 
-    # 요약은 Gemini를 1순위로 쓰고(D13) 예산이 다하면 OpenRouter 무료 모델로
-    # 넘어간다(ADR-0008). 후보 목록에 두 provider의 모델 id가 섞여 오므로,
+    # 요약은 Gemini를 1순위로 쓰고 예산이 다하면 OpenRouter 무료 모델로
+    # 넘어간다. 후보 목록에 두 provider의 모델 id가 섞여 오므로,
     # 하나의 provider만 아는 LangChainChatClient 로는 처리할 수 없다 —
     # `RoutingChatClient`가 model_id를 보고 알맞은 클라이언트로 나눠 보낸다.
     llm = LlmGateway(

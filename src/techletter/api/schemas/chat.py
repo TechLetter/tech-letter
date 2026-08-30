@@ -1,4 +1,4 @@
-"""채팅 DTO (04 §3.5, §3.6).
+"""채팅 DTO.
 
 메시지 메타데이터를 `metadata` 중첩이 아니라 **평탄화**해서 내보낸다.
 `memory.status`는 DB의 `none`/`completed`를 계약의 `ready`로 바꾼다.
@@ -79,7 +79,7 @@ class ChatSessionOut(BaseModel):
             updated_at=to_iso_z(session.updated_at),
             messages=[ChatMessageOut.of(m) for m in session.messages] if with_messages else None,
         )
-        # user_code 는 내보내지 않는다 — 자기 세션만 조회한다(04 §3.5).
+        # user_code 는 내보내지 않는다 — 자기 세션만 조회한다.
 
     @classmethod
     def summary(cls, session: ChatSession, message_count: int) -> ChatSessionOut:
@@ -148,5 +148,5 @@ class SuggestedQuestionOut(BaseModel):
 
     @classmethod
     def public(cls, question: SuggestedQuestion) -> dict[str, str]:
-        """공개 응답은 id와 text만 준다(04 §4.3)."""
+        """공개 응답은 id와 text만 준다."""
         return {"id": str(question.id), "text": question.text}

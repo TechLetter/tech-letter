@@ -1,4 +1,4 @@
-"""인증·나·북마크 계약 (04 §4.1, §4.2)."""
+"""인증·나·북마크 계약."""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ async def test_exchanging_an_unknown_session_is_a_typed_400(client) -> None:
 
 
 async def test_a_blank_session_does_not_crash(client) -> None:
-    """현행은 이 입력에서 nil 역참조로 500이 났다(ISSUE-009)."""
+    """공백뿐인 세션 값이 500으로 죽으면 안 된다."""
     response = await client.post("/api/v1/auth/token", json={"session": " "})
 
     assert response.status_code == 400
@@ -185,7 +185,7 @@ async def test_login_redirects_and_sets_a_state_cookie(client) -> None:
 
 
 async def test_a_callback_without_state_redirects_without_a_query(client) -> None:
-    """실패 사유를 URL에 싣지 않는다(04 §4.2)."""
+    """실패 사유를 URL에 싣지 않는다."""
     response = await client.get("/api/v1/auth/google/callback?code=x&state=y")
 
     assert response.status_code == 302

@@ -1,8 +1,8 @@
 """예외 → HTTP 응답 변환.
 
-04 §1.3의 단일 에러 봉투 `{"error": {code, message, details?}}`로 통일한다.
+단일 에러 봉투 `{"error": {code, message, details?}}`로 통일한다.
 FastAPI의 기본 422(RequestValidationError)도 400 `request.invalid`로 바꾼다 —
-현행 게이트웨이가 422를 내지 않았고 프론트도 다루지 않기 때문이다.
+프론트가 422를 별도로 다루지 않기 때문이다.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ async def http_error_handler(_: Request, exc: Exception) -> JSONResponse:
 
 
 async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
-    """예상 못 한 예외. 내부 정보를 응답에 노출하지 않는다(ISSUE-009 #2)."""
+    """예상 못 한 예외. 내부 정보를 응답에 노출하지 않는다."""
     logger.error("unhandled error", exc_info=exc)
     fallback = InternalError()
     return JSONResponse(status_code=fallback.status, content=fallback.to_body())

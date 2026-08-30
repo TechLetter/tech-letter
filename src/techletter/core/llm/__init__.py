@@ -1,7 +1,7 @@
 """LLM 접근 계층.
 
 모든 LLM 호출은 `ModelRouter`를 거친다. 모델명을 코드나 설정에 박아두면
-무료 모델이 사라질 때마다 배포가 필요하다(ADR-0008).
+무료 모델이 사라질 때마다 배포가 필요해진다.
 """
 
 from techletter.core.llm.budget import DailyBudget

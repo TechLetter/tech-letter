@@ -1,6 +1,6 @@
-"""04 계약 문서와 실제 라우트 집합을 대조한다.
+"""API 계약 문서와 실제 라우트 집합을 대조한다.
 
-계약 문서의 엔드포인트 표(§4)에서 `메서드 | 경로`를 뽑아 FastAPI 앱의
+계약 문서의 엔드포인트 표에서 `메서드 | 경로`를 뽑아 FastAPI 앱의
 라우트와 비교한다. 문서에만 있으면 구현 누락, 앱에만 있으면 문서 누락이다.
 
     uv run python scripts/check_routes.py
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CONTRACT = ROOT / "docs" / "plan" / "04-api-v2.md"
+CONTRACT = ROOT / "docs" / "architecture" / "api-contract.md"
 PREFIX = "/api/v1"
 
 # 문서 표의 한 줄: | ➕ GET | `/admin/jobs` | ... |
@@ -33,10 +33,6 @@ APP_ONLY_OK = {
     ("GET", "/docs/oauth2-redirect"),
     ("GET", "/redoc"),
     ("GET", "/openapi.json"),
-    # 계약 문서에 없는 편의 경로. 어드민이 자동 비활성화된 블로그를 되살린다.
-    ("POST", f"{PREFIX}/admin/blogs/{{}}/activate"),
-    # 백필은 문서에 요약만 적혀 있으나 임베딩도 같은 모양으로 제공한다.
-    ("POST", f"{PREFIX}/admin/backfill/embeddings"),
 }
 
 
@@ -93,7 +89,7 @@ def main() -> int:
     if missing or extra:
         print(f"\n불일치 {len(missing) + len(extra)}건 (문서 {len(docs)} · 앱 {len(app)})")
         return 1
-    print(f"라우트 {len(docs)}개가 04 계약과 일치한다.")
+    print(f"라우트 {len(docs)}개가 API 계약과 일치한다.")
     return 0
 
 

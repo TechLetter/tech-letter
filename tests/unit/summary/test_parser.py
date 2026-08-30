@@ -72,7 +72,7 @@ async def test_without_a_client_no_image_is_downloaded() -> None:
 
 
 async def test_image_downloads_are_capped() -> None:
-    """현행은 후보 개수 제한이 없어 이미지가 많은 페이지에서 몇 분씩 걸렸다."""
+    """후보 개수 제한이 없으면 이미지가 많은 페이지에서 몇 분씩 걸린다."""
     import httpx
 
     requested: list[str] = []

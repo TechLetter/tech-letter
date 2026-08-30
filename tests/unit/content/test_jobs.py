@@ -1,10 +1,9 @@
 """잡 enqueue 헬퍼 — 특히 우선순위 전달.
 
-컷오버 중 실측: 어드민 API와 CLI 백필 명령이 `priority`를 받아 놓고도
+어드민 API와 CLI 백필 명령이 `priority`를 받아 놓고도
 `enqueue_summary_requested`/`enqueue_embedding_requested` 호출에서 조용히
-버리고 있었다. 그래서 526건 백필이 신규 수집물과 같은 우선순위로 큐에
-쌓일 뻔했다(ADR-0004 §7 위반). 헬퍼가 `priority`를 그대로 넘기는지 여기서
-고정한다.
+버린 적이 있다. 그러면 백필이 신규 수집물과 같은 우선순위로 큐에 쌓여버린다.
+헬퍼가 `priority`를 그대로 넘기는지 여기서 고정한다.
 """
 
 from __future__ import annotations

@@ -1,8 +1,4 @@
-"""잡 큐 운영 (04 §4.4, D20).
-
-Kafka 시절에는 큐 상태를 보려면 서버에 들어가 CLI를 쳐야 했고 DLQ에는
-소비자가 없었다(ISSUE-002). 이제 화면에서 보고 버튼으로 되살린다.
-"""
+"""잡 큐 운영. 화면에서 상태를 보고 버튼으로 되살린다."""
 
 from __future__ import annotations
 
@@ -20,7 +16,7 @@ from techletter.core.time import to_iso_z
 router = APIRouter(prefix="/jobs", tags=["admin:jobs"])
 
 
-# 계약(04 §4.4)의 쿼리 이름은 `status`, `type`이다. 파이썬 쪽에서는 그 이름이
+# 쿼리 이름은 `status`, `type`이다. 파이썬 쪽에서는 그 이름이
 # `fastapi.status`와 겹치므로 alias로 받는다.
 StatusQ = Annotated[str | None, Query(alias="status")]
 TypeQ = Annotated[str | None, Query(alias="type")]

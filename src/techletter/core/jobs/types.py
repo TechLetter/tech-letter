@@ -1,4 +1,4 @@
-"""잡 타입·상태 정의 (ADR-0004)."""
+"""잡 타입·상태 정의."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ COLLECTION = "jobs"
 
 
 class JobType(StrEnum):
-    """잡 종류. Kafka 토픽 6개를 대체한다."""
+    """잡 종류."""
 
     SUMMARY_REQUESTED = "summary.requested"
     SUMMARY_COMPLETED = "summary.completed"

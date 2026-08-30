@@ -164,7 +164,7 @@ class BlogService:
         )
 
     async def update(self, blog_id: str, changes: dict[str, object]) -> Blog:
-        """부분 갱신. 현행은 전체 교체라 `last_fetched_at` 같은 필드가 날아갔다."""
+        """부분 갱신 — 전달된 필드만 바뀐다."""
         existing = await self.get(blog_id)
         fields: dict[str, object] = {}
         for key in ("name", "url", "rss_url", "blog_type", "is_active", "tls_insecure"):

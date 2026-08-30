@@ -1,4 +1,4 @@
-"""어드민 API (04 §4.4). 전부 `role=admin`을 요구한다."""
+"""어드민 API. 전부 `role=admin`을 요구한다."""
 
 from fastapi import APIRouter
 

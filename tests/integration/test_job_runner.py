@@ -43,7 +43,7 @@ async def test_run_once_returns_false_when_queue_empty(queue, job_settings):
 
 
 async def test_handler_exception_is_not_swallowed(queue, job_settings, mongo_db):
-    """현행 chat_handler는 예외를 삼켜 재시도·DLQ가 통째로 죽어 있었다(ISSUE-011)."""
+    """핸들러가 예외를 삼키면 재시도·dead 처리가 통째로 죽는다."""
 
     async def handler(job):
         raise RetryableError("일시 오류")

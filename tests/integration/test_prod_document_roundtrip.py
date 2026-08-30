@@ -63,7 +63,7 @@ def test_summarized_post_keeps_its_summary_and_embedding_metadata() -> None:
 
 
 def test_unsummarized_post_carries_empty_strings_not_nulls() -> None:
-    """현행 수집기가 빈 문자열로 채운다. 모델이 이를 그대로 받아야 한다."""
+    """수집기가 빈 문자열로 채운 문서를 모델이 그대로 받아야 한다."""
     doc = SAMPLE["unsummarized"][0]
     post = Post.model_validate(doc)
 

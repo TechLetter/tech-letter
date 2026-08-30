@@ -124,7 +124,7 @@ async def test_one_broken_feed_does_not_stop_the_others(mongo_db, queue, blog) -
 
 
 async def test_failure_message_does_not_leak_the_response_body(mongo_db, queue, blog) -> None:
-    """어드민 화면에 404 HTML 이 그대로 뜨던 문제(ISSUE-005)."""
+    """어드민 화면에 404 HTML이 그대로 뜨면 안 된다."""
     await Aggregator(
         BlogRepository(mongo_db),
         PostRepository(mongo_db),

@@ -1,4 +1,4 @@
-"""잡 문서 모델 (ADR-0004 §1)."""
+"""잡 문서 모델."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ PRIORITY_NORMAL = 0
 """신규 포스트 등 평상시 작업. 낮을수록 먼저 처리된다."""
 
 PRIORITY_BACKFILL = 10
-"""백필. 신규 작업이 항상 앞선다(ADR-0004 §7)."""
+"""백필. 신규 작업이 항상 앞선다."""
 
 
 class Job(BaseDocument):

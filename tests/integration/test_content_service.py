@@ -381,7 +381,7 @@ async def test_embedding_result_does_not_clear_the_summary_flag(
 
 
 async def test_permanent_summary_failure_leaves_a_reason(post_service, posts, blog) -> None:
-    """요약 안 된 포스트가 왜 그런지 어드민에서 보여야 한다(ISSUE-008)."""
+    """요약 안 된 포스트가 왜 그런지 어드민에서 보여야 한다."""
     post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
 
     await record_summary_failure(posts, str(post.id), "render failed: HTTP 404")

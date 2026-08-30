@@ -1,10 +1,10 @@
 """`RoutingChatClient` — model_id로 provider를 나눠 보낸다.
 
-컷오버 중 실측한 실제 결함을 고정한다: 요약은 Gemini 1순위(D13) +
-OpenRouter 폴백(ADR-0008)인데, 단일 provider짜리 `LangChainChatClient` 하나만
-썼더니 라우터가 고른 OpenRouter 후보 model_id(`nvidia/...:free`)가 그대로
-Gemini API로 가서 "그런 모델 없다"는 404 `PermanentError`로 죽었다. 실제
-프로덕션 백필에서 526건 중 여러 건이 이 경로로 영구 실패했다.
+요약은 Gemini 1순위 + OpenRouter 폴백을 쓰는데, 단일 provider짜리
+`LangChainChatClient` 하나만 쓰면 라우터가 고른 OpenRouter 후보
+model_id(`nvidia/...:free`)가 그대로 Gemini API로 가서 "그런 모델 없다"는
+404 `PermanentError`로 죽는다. 실제 운영 백필에서 이 경로로 여러 건이
+영구 실패한 적이 있다.
 """
 
 from __future__ import annotations

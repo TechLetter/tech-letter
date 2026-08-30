@@ -1,6 +1,7 @@
 """content 도메인 저장소.
 
-인덱스 이름은 05 §1.3과 정확히 같아야 한다.
+인덱스 이름은 운영 DB에 이미 있는 이름과 정확히 같아야 한다 — 이름이
+다르면 같은 키의 중복 인덱스가 생긴다.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ __all__ = ["BlogRepository", "PostRepository"]
 register_indexes(
     "posts",
     [
-        # 기존 (05 §1.3) — 이름 고정
+        # 기존 인덱스 — 이름을 바꾸지 않는다
         IndexSpec("idx_published_at_desc", [("published_at", DESCENDING)]),
         IndexSpec("idx_categories", [("aisummary.categories", ASCENDING)]),
         IndexSpec("idx_tags", [("aisummary.tags", ASCENDING)]),
@@ -70,7 +71,7 @@ def _falsy(field: str) -> dict[str, Any]:
 
 
 def _exact_ci(values: list[str]) -> list[re.Pattern[str]]:
-    """대소문자를 무시하는 완전일치 패턴. 현행 필터 동작을 유지한다."""
+    """대소문자를 무시하는 완전일치 패턴."""
     return [re.compile(f"^{re.escape(v.strip())}$", re.IGNORECASE) for v in values if v.strip()]
 
 
@@ -83,7 +84,7 @@ class PostRepository:
     def build_query(flt: ListPostsFilter) -> dict[str, Any]:
         """필터를 Mongo 쿼리로 바꾼다.
 
-        `categories`와 `tags`가 함께 오면 **OR**다(현행 동작).
+        `categories`와 `tags`가 함께 오면 **OR**다.
         상태 플래그의 `False`는 "필드가 없는 경우"도 포함한다 — 오래된 문서에
         `status.embedded`가 아예 없기 때문이다.
         """
@@ -158,7 +159,7 @@ class PostRepository:
         return Post.model_validate(doc) if doc else None
 
     async def get_many(self, post_ids: list[str]) -> dict[str, Post]:
-        """id → Post. 북마크 목록 조립용(현행 `/posts/batch`)."""
+        """id → Post. 북마크 목록 조립용."""
         oids = [oid for oid in (to_object_id(p) for p in post_ids) if oid is not None]
         if not oids:
             return {}
@@ -173,7 +174,7 @@ class PostRepository:
         return (doc or {}).get("plain_text")
 
     async def get_plain_texts(self, post_ids: list[str]) -> dict[str, str]:
-        """본문 벌크 조회. 챗봇이 포스트마다 HTTP를 치던 N+1을 없앤다."""
+        """본문 벌크 조회. 포스트마다 개별 조회하는 N+1을 없앤다."""
         oids = [oid for oid in (to_object_id(p) for p in post_ids) if oid is not None]
         if not oids:
             return {}
@@ -186,8 +187,7 @@ class PostRepository:
     async def existing_links(self, links: list[str]) -> set[str]:
         """이미 저장된 링크만 골라낸다.
 
-        현행 수집기는 항목마다 `find_one`을 날려 블로그 하나당 수십 번 왕복했다.
-        한 번에 묻는다.
+        항목마다 개별 조회하면 블로그 하나당 수십 번 왕복한다. 한 번에 묻는다.
         """
         if not links:
             return set()
@@ -226,11 +226,7 @@ class PostRepository:
         return result.matched_count > 0
 
     async def mark_summary_failed(self, post_id: str, reason: str) -> bool:
-        """영구 실패 사유를 남긴다. 어드민이 "왜 요약이 안 됐나"를 볼 수 있게.
-
-        현행은 아무것도 남기지 않아 요약 안 된 포스트 1,110건의 원인을 알 수
-        없었다(ISSUE-001/008).
-        """
+        """영구 실패 사유를 남긴다. 어드민이 "왜 요약이 안 됐나"를 볼 수 있게."""
         return await self.apply_summary(post_id, {"status.failed_reason": reason[:300]})
 
     async def apply_embedding_meta(
@@ -503,10 +499,8 @@ class BlogRepository:
         return Blog.model_validate(doc) if doc else None
 
     async def record_fetch_result(self, blog_id: ObjectId, error: str | None) -> int:
-        """수집 결과를 기록한다. 에러 메시지는 200자로 자른다.
-
-        현행은 HTTP 응답 본문 500자를 그대로 넣어 어드민 화면에 404 페이지
-        HTML이 노출됐다(ISSUE-005).
+        """수집 결과를 기록한다. 에러 메시지는 200자로 자른다 — HTTP 응답
+        본문을 그대로 넣으면 404 페이지 HTML이 어드민 화면에 그대로 노출된다.
         """
         now = utcnow()
         if error is None:

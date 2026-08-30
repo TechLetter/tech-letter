@@ -1,4 +1,4 @@
-"""청킹·임베딩 — 캐시 없이 (D17)."""
+"""청킹·임베딩 — 캐시 없이."""
 
 from __future__ import annotations
 

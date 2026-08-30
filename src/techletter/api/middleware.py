@@ -1,11 +1,11 @@
 """요청 추적 미들웨어.
 
-`BaseHTTPMiddleware`가 아니라 **순수 ASGI**로 쓴다. 현행 미들웨어는
-BaseHTTPMiddleware라서 요청 본문을 선행 소비했고(JWT 유출, ISSUE-014)
-SSE 스트리밍과도 상성이 나쁘다.
+`BaseHTTPMiddleware`가 아니라 **순수 ASGI**로 쓴다. `BaseHTTPMiddleware`는
+요청 본문을 선행 소비해 버려서 SSE 스트리밍과 상성이 나쁘고, 로깅을 위해
+바디에 손대면 JWT 같은 민감 값이 로그로 새어나갈 위험도 생긴다.
 
 - `X-Request-Id`가 오면 그대로 쓰고, 없으면 생성한다. 응답에도 에코한다.
-- 같은 값을 `trace_id`로도 두어 잡 큐까지 전파한다(01 §6).
+- 같은 값을 `trace_id`로도 두어 잡 큐까지 전파한다.
 - **본문은 절대 읽지 않는다.**
 """
 

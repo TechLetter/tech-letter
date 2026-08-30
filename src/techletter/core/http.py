@@ -1,9 +1,5 @@
 """공유 HTTP 클라이언트.
 
-현행은 RSS 요청마다 `httpx.Client`를 새로 만들고 버려서 커넥션 풀이 전혀
-동작하지 않았다(ISSUE-006). 여기서는 프로세스 수명 동안 클라이언트를
-재사용한다.
-
 TLS 검증을 끈 클라이언트는 **따로** 둔다. 인증서가 깨진 블로그 몇 개 때문에
 전체 수집의 검증을 끄는 일이 없도록.
 """
@@ -23,8 +19,7 @@ __all__ = ["HttpClients", "default_headers"]
 
 logger = get_logger(__name__)
 
-# 봇 차단을 우회하려고 현행이 쓰던 브라우저 위장 헤더. 이걸 빼면 일부 블로그가
-# 403을 준다(Go 시절부터 이어진 문자열이라 그대로 둔다).
+# 봇 차단을 우회하려는 브라우저 위장 헤더. 이걸 빼면 일부 블로그가 403을 준다.
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "

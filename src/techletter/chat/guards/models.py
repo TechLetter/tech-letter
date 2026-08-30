@@ -1,8 +1,4 @@
-"""가드 결과 타입.
-
-`action`은 04 §3.6의 DTO 값(`pass`/`sanitize`/`block`)을 그대로 쓴다.
-현행 내부 값은 `allow`였는데, 도메인과 계약에서 이름이 다를 이유가 없다.
-"""
+"""가드 결과 타입. `action`은 API 응답 DTO와 같은 값(`pass`/`sanitize`/`block`)을 쓴다."""
 
 from __future__ import annotations
 

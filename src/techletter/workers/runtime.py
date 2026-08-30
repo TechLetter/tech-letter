@@ -1,8 +1,4 @@
-"""워커 프로세스 런타임 — heartbeat와 graceful shutdown.
-
-현행 워커는 daemon 스레드 + `stop_flag` 리스트로 종료를 처리했고,
-컨테이너 healthcheck가 없어 컨슈머가 멈춰도 healthy로 보였다(09 §4).
-"""
+"""워커 프로세스 런타임 — heartbeat와 graceful shutdown."""
 
 from __future__ import annotations
 

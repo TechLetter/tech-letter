@@ -26,7 +26,7 @@ async def test_request_id_is_generated_when_absent(client):
 
 
 async def test_unknown_route_uses_error_envelope(client):
-    """404도 04 §1.3의 단일 봉투를 쓴다."""
+    """404도 같은 단일 에러 봉투를 쓴다."""
     response = await client.get("/api/v1/does-not-exist")
     assert response.status_code == 404
     body = response.json()
@@ -48,7 +48,7 @@ async def test_app_error_is_converted(app, client):
 
 
 async def test_validation_error_becomes_400_not_422(app, client):
-    """FastAPI 기본 422를 쓰지 않는다 — 현행 계약에 422가 없다."""
+    """FastAPI 기본 422를 쓰지 않는다 — 계약에 422가 없다."""
     from pydantic import BaseModel
 
     class Body(BaseModel):

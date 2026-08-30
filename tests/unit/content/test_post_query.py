@@ -16,7 +16,7 @@ def test_no_filter_is_an_empty_query() -> None:
 
 
 def test_categories_and_tags_together_are_a_union() -> None:
-    """현행 동작이다. 교집합으로 바꾸면 프론트 필터 결과가 통째로 달라진다."""
+    """교집합으로 바꾸면 프론트 필터 결과가 통째로 달라진다."""
     query = build(ListPostsFilter(categories=["Backend"], tags=["Kafka"]))
 
     assert set(query) == {"$or"}

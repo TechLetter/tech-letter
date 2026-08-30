@@ -1,11 +1,8 @@
 """구조화 JSON 로깅.
 
-현행과 달라지는 점(09 §3.1, ISSUE-014):
-- 타임스탬프가 **UTC ISO-8601 + 밀리초 + `Z`**. 현행은 TZ 없는 로컬 시각이라
-  데이터(UTC)와 로그(KST)가 섞여 있었다.
-- **요청 본문을 로깅하지 않는다.** 현행 미들웨어가 본문 1024자를 남겨
-  `/login-sessions`의 JWT가 로그에 그대로 들어갔다.
-- `request_id`/`trace_id`/`job_id`를 contextvar로 전파해 HTTP→잡→워커를 잇는다.
+타임스탬프는 **UTC ISO-8601 + 밀리초 + `Z`**로 고정한다. **요청 본문은 로깅하지
+않는다** — 세션·인증 관련 요청에 토큰이 실려 있을 수 있어서다. `request_id`/
+`trace_id`/`job_id`는 contextvar로 전파해 HTTP→잡→워커 흐름을 하나로 잇는다.
 """
 
 from __future__ import annotations

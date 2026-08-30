@@ -1,4 +1,4 @@
-"""포스트·블로그·필터·트렌드 DTO (04 §3.1–3.3, 3.7, 3.8).
+"""포스트·블로그·필터·트렌드 DTO.
 
 DB 필드명과 다른 부분이 여기서 바뀐다: `aisummary` → `ai_summary`,
 `status.ai_summarized` → `status.summarized`.
@@ -39,7 +39,7 @@ __all__ = [
 
 
 class PostOut(BaseModel):
-    """공개 포스트 (04 §3.1)."""
+    """공개 포스트."""
 
     id: str
     blog_id: str | None
@@ -64,7 +64,7 @@ class PostOut(BaseModel):
             title=post.title,
             link=post.link,
             published_at=to_iso_z(post.published_at),
-            # 현행은 빈 문자열을 그대로 내보내 프론트가 깨진 이미지를 그렸다.
+            # 빈 문자열을 그대로 내보내면 프론트가 깨진 이미지를 그린다.
             thumbnail_url=post.thumbnail_url or None,
             view_count=post.view_count,
             summary=(summary.summary or None) if summary else None,
@@ -77,7 +77,7 @@ class PostOut(BaseModel):
 
 
 class BlogOut(BaseModel):
-    """공개 블로그 (04 §3.2)."""
+    """공개 블로그."""
 
     id: str
     name: str
@@ -146,7 +146,7 @@ class EmbeddingOut(BaseModel):
 
 
 class AdminPostOut(BaseModel):
-    """어드민 포스트 (04 §3.3)."""
+    """어드민 포스트."""
 
     id: str
     title: str

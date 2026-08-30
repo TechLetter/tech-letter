@@ -1,4 +1,4 @@
-"""어드민 포스트 (04 §4.4)."""
+"""어드민 포스트."""
 
 from __future__ import annotations
 

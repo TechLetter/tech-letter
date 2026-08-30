@@ -1,4 +1,4 @@
-"""운영 대시보드 DTO (04 §3.9, §3.10)."""
+"""운영 대시보드 DTO."""
 
 from __future__ import annotations
 

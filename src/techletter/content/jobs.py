@@ -1,7 +1,6 @@
 """content 도메인의 잡 페이로드와 enqueue 헬퍼.
 
-페이로드를 dataclass로 고정해 둔다. 현행은 Kafka 이벤트 dict를 그대로
-넘겨서 필드 이름이 바뀔 때마다 조용히 깨졌다.
+페이로드를 dataclass로 고정해 둔다 — 필드 이름이 바뀌면 타입 체크에서 잡힌다.
 
 `key`는 잡 중복 억제의 기준이라 잡 종류마다 유일해야 한다. post_id를 쓴다.
 """
@@ -55,8 +54,7 @@ class SummaryRequestedPayload:
 class SummaryCompletedPayload:
     """요약 워커가 만든 결과. 본문(`plain_text`)까지 담는다.
 
-    페이로드가 커지지만(수십 KB) Mongo 문서 한도(16MB)에는 한참 못 미치고,
-    Kafka 시절처럼 메시지 크기 제한을 신경 쓸 필요가 없다.
+    페이로드가 커지지만(수십 KB) Mongo 문서 한도(16MB)에는 한참 못 미친다.
     """
 
     post_id: str
@@ -141,7 +139,7 @@ async def enqueue_summary_requested(
     """요약 잡을 건다. 이미 대기 중이면 None(중복 억제).
 
     `priority`는 백필 호출자가 `PRIORITY_BACKFILL`을 넘긴다 — 신규 수집
-    포스트가 항상 먼저 처리되게 하기 위해서다(ADR-0004 §7).
+    포스트가 항상 먼저 처리되게 하기 위해서다.
     """
     if post.id is None:
         return None

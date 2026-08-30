@@ -1,8 +1,7 @@
 """/api/v1 라우터 조립.
 
 **선언 순서가 중요하다.** FastAPI는 선언 순서로 매칭하므로 고정 경로를
-경로 변수보다 먼저 등록해야 한다. v2에서는 북마크를 `/bookmarks`로 옮겨
-`/posts/bookmarks` vs `/posts/{id}` 충돌 자체를 없앴다(04 §2).
+경로 변수보다 먼저 등록해야 한다.
 """
 
 from __future__ import annotations

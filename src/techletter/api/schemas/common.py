@@ -1,7 +1,7 @@
-"""공통 응답 봉투 (04 §1.2).
+"""공통 응답 봉투.
 
-현행은 목록 봉투가 7종이었다. 여기서는 하나다. 페이지네이션이 의미 없는
-목록(필터 등)은 `page`·`page_size`·`total_pages`를 생략한다.
+목록 응답은 봉투 하나로 통일한다. 페이지네이션이 의미 없는 목록(필터 등)은
+`page`·`page_size`·`total_pages`를 생략한다.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class ErrorDetail(BaseModel):
 
 
 class ErrorBody(BaseModel):
-    """04 §1.3. 문서화용 — 실제 응답은 `AppError.to_body()`가 만든다."""
+    """문서화용 — 실제 응답은 `AppError.to_body()`가 만든다."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -61,6 +61,6 @@ class ErrorBody(BaseModel):
 
 
 class JobAccepted(BaseModel):
-    """202 응답 (04 §1.5)."""
+    """202 응답."""
 
     job_id: str | None

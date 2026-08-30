@@ -467,7 +467,7 @@ async def test_backfill_queries_find_the_right_posts(posts, blogs) -> None:
 
 
 async def test_indexes_use_the_existing_names(mongo_db) -> None:
-    """이름이 다르면 같은 키에 중복 인덱스가 생긴다(05 §1.3)."""
+    """이름이 다르면 같은 키에 중복 인덱스가 생긴다."""
     names = {idx["name"] async for idx in await mongo_db["posts"].list_indexes()}
 
     assert {

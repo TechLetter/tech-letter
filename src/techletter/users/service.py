@@ -1,7 +1,6 @@
 """사용자 서비스.
 
-현행 게이트웨이가 하던 "프로필 + 크레딧 합성"(user_handlers.go)을 여기서 한
-함수로 처리한다. 내부 HTTP 홉이 사라진다.
+프로필과 크레딧 잔액을 합성해 제공한다.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ class OAuthProfile:
 
 @dataclass(frozen=True, slots=True)
 class UserProfile:
-    """`GET /me` 응답의 재료 (04 §3.4)."""
+    """`GET /me` 응답의 재료."""
 
     user: User
     credits_remaining: int
@@ -68,8 +67,8 @@ class UserService:
     async def get_profile(self, user_code: str) -> UserProfile:
         """프로필과 크레딧을 합쳐서 준다.
 
-        크레딧 조회가 실패해도 프로필은 준다 — 현행 게이트웨이 동작을 유지한다
-        (크레딧 서비스 장애로 로그인 상태가 깨지지 않게 하려는 것).
+        크레딧 조회가 실패해도 프로필은 준다 — 크레딧 서비스 장애로 로그인
+        상태가 깨지지 않게 하려는 것이다.
         """
         user = await self._users.get_by_user_code(user_code)
         if user is None:
