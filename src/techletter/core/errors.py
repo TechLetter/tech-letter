@@ -3,9 +3,8 @@
 두 축이 있다.
 
 1. `AppError` — HTTP 경계로 나가는 도메인 오류. 에러 코드와 상태 코드를 가진다.
-   코드 목록은 `docs/plan/04-api-v2.md` §1.4가 원본이다.
 2. `JobError` — 잡 처리 실패의 성격 분류. 잡 큐가 재시도/영구실패/쿼터대기를
-   구분하는 데 쓴다(`docs/plan/adr/0004-mongo-job-queue.md`).
+   구분하는 데 쓴다.
 
 도메인 코드는 `HTTPException`을 직접 던지지 않는다. api 레이어가 변환한다.
 """
@@ -56,7 +55,7 @@ class AppError(Exception):
         super().__init__(self.message)
 
     def to_body(self) -> dict[str, Any]:
-        """04 §1.3의 에러 봉투로 직렬화한다."""
+        """에러 봉투로 직렬화한다."""
         error: dict[str, Any] = {"code": self.code, "message": self.message}
         if self.details:
             error["details"] = self.details

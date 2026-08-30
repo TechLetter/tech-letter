@@ -44,7 +44,6 @@ register_indexes(
             "idx_categories_published_at",
             [("aisummary.categories", ASCENDING), ("published_at", DESCENDING)],
         ),
-        # 신규 (05 §1.4)
         IndexSpec(
             "idx_posts_blog_published", [("blog_id", ASCENDING), ("published_at", DESCENDING)]
         ),

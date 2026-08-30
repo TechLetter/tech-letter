@@ -224,7 +224,7 @@
 | GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 404 |
 | DELETE | `/chat/sessions/{id}` | | `204` |
 | POST | `/chat/messages` | `{query, session_id?}` | `200 ChatAnswer` |
-| POST | `/chat/messages/stream` | `{query, session_id?}` | SSE (§4) |
+| POST | `/chat/messages/stream` | `{query, session_id?}` | SSE |
 
 처리 순서: 프롬프트 가드 → 세션 검증 → 크레딧 1 차감 → 에이전트 → 성공 시 메시지 저장 / 실패 시 환불.
 에러: `policy.blocked`(403) · `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).

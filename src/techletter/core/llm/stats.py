@@ -117,7 +117,7 @@ class ModelStatsStore:
         return demoted
 
     async def all_stats(self, purpose: ModelPurpose | None = None) -> list[dict[str, Any]]:
-        """어드민 대시보드용(04 §3.10)."""
+        """어드민 대시보드용."""
         query = {"purpose": purpose.value} if purpose else {}
         rows: list[dict[str, Any]] = []
         cursor = self._col.find(query)

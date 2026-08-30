@@ -230,7 +230,7 @@ class JobQueue:
         return result.modified_count
 
     async def stats(self) -> dict[str, Any]:
-        """운영 대시보드용 집계(04 §4.4 `/admin/jobs/stats`)."""
+        """운영 대시보드용 집계."""
         by_status: dict[str, int] = {}
         by_type: dict[str, int] = {}
         async for row in await self._col.aggregate(
