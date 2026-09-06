@@ -221,6 +221,131 @@ async def test_an_unknown_interval_is_a_typed_400(client) -> None:
     assert response.json()["error"]["code"] == "request.invalid"
 
 
+# ── 모델 상태 ───────────────────────────────────────────────────────
+async def _seed_model_check(ctx, model_id: str, *, ok: bool = True) -> None:
+    from techletter.core.llm.model_scan import COLLECTION
+    from techletter.core.time import utcnow
+
+    await ctx.db[COLLECTION].insert_one(
+        {
+            "model_id": model_id,
+            "ok": ok,
+            "http_status": 200 if ok else 429,
+            "latency_ms": 500,
+            "error_category": None if ok else "rate_limited",
+            "checked_at": utcnow(),
+        }
+    )
+
+
+async def test_model_summary_shape(client, ctx) -> None:
+    await _seed_model_check(ctx, "a/free")
+
+    body = (await client.get("/api/v1/llm-models/summary")).json()
+
+    assert set(body) == {
+        "total_models",
+        "healthy_count",
+        "degraded_count",
+        "down_count",
+        "last_checked_at",
+    }
+    assert body["total_models"] == 1
+    assert body["healthy_count"] == 1
+
+
+async def test_model_list_shape_has_no_internal_usage_fields(client, ctx) -> None:
+    """어드민 전용 실사용 성적(json_failures 등)이 공개 API로 새면 안 된다."""
+    await _seed_model_check(ctx, "a/free")
+
+    body = (await client.get("/api/v1/llm-models")).json()
+
+    assert set(body) == {"items", "total"}
+    assert set(body["items"][0]) == {
+        "model_id",
+        "uptime_24h",
+        "avg_latency_ms",
+        "consecutive_failures",
+        "latest_status",
+    }
+
+
+async def test_model_list_sorts_worst_first(client, ctx) -> None:
+    await _seed_model_check(ctx, "healthy/free", ok=True)
+    await _seed_model_check(ctx, "broken/free", ok=False)
+
+    body = (await client.get("/api/v1/llm-models")).json()
+
+    assert body["items"][0]["model_id"] == "broken/free"
+
+
+async def test_model_events_shape(client, ctx) -> None:
+    await _seed_model_check(ctx, "a/free")
+    from techletter.core.llm.model_events import detect_and_record
+    from techletter.core.llm.model_scan import ModelCheck
+    from techletter.core.time import utcnow
+
+    await detect_and_record(
+        ctx.db,
+        [ModelCheck("a/free", True, 200, 500, None, utcnow())],
+    )
+
+    body = (await client.get("/api/v1/llm-models/events")).json()
+
+    assert set(body) == {"items", "total"}
+    assert set(body["items"][0]) == {"model_id", "type", "detected_at", "reason"}
+    assert body["items"][0]["type"] == "model_added"
+
+
+async def test_model_events_filter_by_model_id(client, ctx) -> None:
+    from techletter.core.llm.model_events import detect_and_record
+    from techletter.core.llm.model_scan import ModelCheck
+    from techletter.core.time import utcnow
+
+    now = utcnow()
+    await detect_and_record(
+        ctx.db,
+        [
+            ModelCheck("a/free", True, 200, 500, None, now),
+            ModelCheck("b/free", True, 200, 500, None, now),
+        ],
+    )
+
+    body = (await client.get("/api/v1/llm-models/events?model_id=a/free")).json()
+
+    assert all(e["model_id"] == "a/free" for e in body["items"])
+
+
+async def test_model_history_shape(client, ctx) -> None:
+    from techletter.core.llm.model_history import rollup_daily
+
+    await _seed_model_check(ctx, "a/free")
+    await rollup_daily(ctx.db)
+
+    body = (await client.get("/api/v1/llm-models/a%2Ffree/history")).json()
+
+    assert set(body) == {"items", "total"}
+    assert set(body["items"][0]) == {
+        "date",
+        "checks",
+        "successes",
+        "uptime",
+        "rate_limited",
+        "avg_latency_ms",
+    }
+
+
+async def test_model_history_accepts_a_period_query(client, ctx) -> None:
+    from techletter.core.llm.model_history import rollup_daily
+
+    await _seed_model_check(ctx, "a/free")
+    await rollup_daily(ctx.db)
+
+    response = await client.get("/api/v1/llm-models/a%2Ffree/history?period=1y")
+
+    assert response.status_code == 200
+
+
 # ── 헬스 ────────────────────────────────────────────────────────────
 async def test_health_reports_ok(client) -> None:
     response = await client.get("/health")

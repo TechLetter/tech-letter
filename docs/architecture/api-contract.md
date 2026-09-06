@@ -184,6 +184,23 @@
   "last_used_at": "…", "last_error": null }
 ```
 
+### 2.11 모델 상태(공개)
+어드민용과 달리 테크레터 내부 실사용 성적(`json_failures`·`rate_limited`·성공률)은 없다 — OpenRouter 쪽 헬스만 보여준다.
+```json
+// GET /llm-models/summary
+{ "total_models": 42, "healthy_count": 30, "degraded_count": 8, "down_count": 4,
+  "last_checked_at": "…" }
+// GET /llm-models → items: ModelHealth[]
+{ "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+  "uptime_24h": 96.5, "avg_latency_ms": 1180, "consecutive_failures": 0, "latest_status": "OK" }
+// GET /llm-models/{model_id}/history?period=1d|1w|1m|1y → items: 일별 집계[]
+{ "date": "2026-09-06", "checks": 24, "successes": 23, "uptime": 95.8,
+  "rate_limited": 1, "avg_latency_ms": 1150 }
+// GET /llm-models/events?model_id=&limit= → items: ModelEvent[]
+{ "model_id": "…", "type": "model_degraded", "detected_at": "…", "reason": "rate_limited" }
+```
+`type ∈ {model_added, model_removed, model_degraded, model_recovered}`.
+
 ## 3. 엔드포인트
 
 ### 3.1 공개
@@ -203,6 +220,10 @@
 | GET | `/trends/rising` | - | `period, limit` | 2.7 |
 | GET | `/trends/series` | - | `tags[], period, interval` | 2.7 |
 | GET | `/trends/posts` | - | `tags[], period, page, page_size` | 목록 + `Post[]` |
+| GET | `/llm-models/summary` | - | | 2.11 |
+| GET | `/llm-models` | - | | 목록 + `ModelHealth[]`(2.11) |
+| GET | `/llm-models/{model_id}/history` | - | `period` | 목록 + 일별 집계[](2.11) |
+| GET | `/llm-models/events` | - | `model_id, limit` | 목록 + `ModelEvent[]`(2.11) |
 
 공개 `/posts`는 요약이 완료된 포스트만 반환한다.
 

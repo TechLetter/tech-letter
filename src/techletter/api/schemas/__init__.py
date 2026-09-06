@@ -37,6 +37,12 @@ from techletter.api.schemas.content import (
     SourceOut,
     TrendSeriesOut,
 )
+from techletter.api.schemas.llm import (
+    ModelEventOut,
+    ModelHealthOut,
+    ModelHealthSummaryOut,
+    ModelHistoryPointOut,
+)
 from techletter.api.schemas.user import (
     AdminUserOut,
     BookmarkIn,
@@ -75,6 +81,10 @@ __all__ = [
     "LlmModelStatOut",
     "MeOut",
     "MessageIn",
+    "ModelEventOut",
+    "ModelHealthOut",
+    "ModelHealthSummaryOut",
+    "ModelHistoryPointOut",
     "Paged",
     "PostIn",
     "PostOut",
