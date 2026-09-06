@@ -139,6 +139,7 @@ async def ensure_indexes(db: AsyncDatabase) -> dict[str, list[str]]:
             created[collection] = names
         logger.info(
             "indexes ensured",
-            extra={"collection": collection, "total": len(specs), "created": len(pending)},
+            # `created`는 LogRecord 예약 속성이라 extra에 쓰면 KeyError로 죽는다.
+            extra={"collection": collection, "total": len(specs), "created_count": len(pending)},
         )
     return created
