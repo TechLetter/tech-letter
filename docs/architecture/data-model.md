@@ -20,6 +20,8 @@
 | `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 30일 |
 | `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 원시 기록(1시간 주기). TTL 30일 |
 | `llm_model_daily` | `core.llm` | 위 기록의 날짜×모델 집계. `_id = "{date}:{model_id}"`, TTL 400일 |
+| `llm_model_catalog` | `core.llm` | 모델별 "지금까지 알던 상태" 1건씩(카탈로그 변동 감지용) |
+| `llm_model_events` | `core.llm` | 모델 추가·삭제·저하·복구 이벤트. TTL 90일 |
 
 ### 1.2 인덱스
 ```
@@ -45,6 +47,8 @@ llm_model_checks  idx_model_checks_model_time {model_id:1,checked_at:-1}
                   idx_model_checks_ttl {checked_at:1} TTL 30일
 llm_model_daily   idx_model_daily_model_date {model_id:1,date:-1} · idx_model_daily_date {date:-1}
                   idx_model_daily_ttl {date_at:1} TTL 400일
+llm_model_events  idx_model_events_detected {detected_at:-1} · idx_model_events_model {model_id:1,detected_at:-1}
+                  idx_model_events_ttl {detected_at:1} TTL 90일
 ```
 인덱스는 부팅 시 `IndexRegistry`가 한 번 생성한다(요청마다 만들지 않는다).
 

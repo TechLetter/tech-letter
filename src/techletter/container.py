@@ -66,6 +66,7 @@ class Container:
         import techletter.chat.repositories  # noqa: PLC0415
         import techletter.content.repositories  # noqa: PLC0415
         import techletter.core.jobs.queue  # noqa: PLC0415
+        import techletter.core.llm.model_events  # noqa: PLC0415
         import techletter.core.llm.model_history  # noqa: PLC0415
         import techletter.core.llm.model_scan  # noqa: PLC0415
         import techletter.core.llm.stats  # noqa: PLC0415

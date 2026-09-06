@@ -197,6 +197,8 @@ async def run_scan(
     client: httpx.AsyncClient | None = None,
 ) -> int:
     """스캔을 돌리고 결과를 저장한다. 저장한 건수를 준다."""
+    from techletter.core.llm.model_events import detect_and_record  # noqa: PLC0415
+
     checks = await ModelScanner(settings, api_key, client).scan()
     if checks:
         await db[COLLECTION].insert_many(
@@ -211,6 +213,11 @@ async def run_scan(
                 }
                 for c in checks
             ]
+        )
+        # 카탈로그 변동 감지는 이번 스캔 원시 결과가 있어야 의미가 있다 —
+        # 같은 사이클 안에서 저장 직후 바로 한다.
+        await detect_and_record(
+            db, checks, degrade_threshold=settings.model_event_degrade_threshold
         )
     logger.info(
         "model scan complete",

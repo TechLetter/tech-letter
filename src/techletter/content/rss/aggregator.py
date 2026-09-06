@@ -144,13 +144,18 @@ class Aggregator:
 
     @staticmethod
     def _build(blog: Blog, item: FeedItem) -> Post:
+        now = utcnow()
+        # 피드가 발행일을 미래로 잘못 주는 경우가 있다(관측: 올리브영이 실제로는
+        # 오늘 올린 글에 며칠 뒤 날짜를 달아 준 적이 있다). 그대로 두면
+        # published_at desc 정렬 맨 위에 눌러앉아 그 뒤로 올라오는 진짜 새
+        # 글을 계속 가린다.
+        published_at = min(item.published_at or now, now)
         return Post(
             blog_id=blog.id,
             blog_name=blog.name,
             title=item.title,
             link=item.link,
-            # 발행일이 없는 피드가 있다. 수집 시각을 쓰면 목록 정렬이 무너지지 않는다.
-            published_at=item.published_at or utcnow(),
+            published_at=published_at,
             thumbnail_url=None,
             status=StatusFlags(),
             # 요약 전에도 aisummary 키가 있어야 프론트의 옵셔널 체이닝이 단순해진다.

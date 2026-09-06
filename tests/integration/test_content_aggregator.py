@@ -222,3 +222,38 @@ async def test_items_without_a_publish_date_still_get_one(mongo_db, queue, blog)
 
     found, _ = await PostRepository(mongo_db).list_posts(ListPostsFilter(), Page(1, 10))
     assert all(post.published_at is not None for post in found)
+
+
+async def test_a_future_publish_date_is_clamped_to_now(mongo_db, queue, blog) -> None:
+    """일부 피드가 발행일을 미래로 잘못 준다(관측: 올리브영).
+
+    그대로 두면 published_at desc 정렬 맨 위에 눌러앉아 진짜 새 글을 가린다.
+    """
+    from techletter.core.time import utcnow
+
+    future = "Mon, 01 Jan 2099 00:00:00 GMT"
+    feed = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>미래에서 온 글</title>
+      <link>https://alpha.test/blog/from-the-future</link>
+      <pubDate>{future}</pubDate>
+    </item>
+  </channel>
+</rss>"""
+
+    before = utcnow()
+    await Aggregator(
+        BlogRepository(mongo_db),
+        PostRepository(mongo_db),
+        feeder_for({"https://alpha.test/rss": httpx.Response(200, text=feed)}),
+        queue,
+    ).run()
+    after = utcnow()
+
+    found, _ = await PostRepository(mongo_db).list_posts(ListPostsFilter(), Page(1, 10))
+    assert len(found) == 1
+    published_at = found[0].published_at
+    assert published_at is not None
+    assert before <= published_at <= after

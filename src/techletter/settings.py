@@ -147,6 +147,10 @@ class RouterSettings(BaseSettings):
     scouter_scan_request_delay_seconds: float = 0.3
     scouter_scan_prompt: str = "Respond with the exact text: OK"
     min_uptime_24h: float = 90.0
+    # 스캔 1회 실패로 바로 "저하" 이벤트를 내면 단발성 네트워크 blip에도
+    # 매시간 저하/복구가 반복된다(옛 스카우터가 별도로 "flapping" 이벤트까지
+    # 만들어야 했던 문제). 연속 실패 횟수로 완충한다.
+    model_event_degrade_threshold: int = 2
     max_model_attempts: int = 3
     min_success_rate: float = Field(default=0.6, alias="LLM_MIN_SUCCESS_RATE")
     min_attempts_for_demotion: int = 10
