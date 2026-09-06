@@ -78,6 +78,16 @@ def build_core_worker(container: Container) -> CoreWorker:
         )
         logger.info("model scan finished", extra={"checked": checked})
 
+    async def rollup_model_history() -> None:
+        """원시 체크 기록을 일별로 접는다. 추이 차트가 이걸 읽는다.
+
+        스캔과 따로 도는 이유는 서로 실패에 말려들지 않게 하려는 것이다.
+        멱등하므로 스캔보다 먼저 돌아도 다음 회차가 메운다.
+        """
+        from techletter.core.llm.model_history import rollup_daily  # noqa: PLC0415
+
+        await rollup_daily(container.db)
+
     async def maintenance() -> None:
         """죽은 워커가 잡고 있던 잡을 회수하고, dead 잡이 쌓이는지 살핀다.
 
@@ -102,6 +112,7 @@ def build_core_worker(container: Container) -> CoreWorker:
             settings.router,
             ScouterClient(settings.router, container.db),
             container.model_stats,
+            container.model_preferences,
         ),
         LangChainChatClient(settings.chat_llm),
     )
@@ -128,6 +139,12 @@ def build_core_worker(container: Container) -> CoreWorker:
                 "model_scan",
                 settings.router.scouter_scan_interval_hours * 3600,
                 scan_models,
+                run_at_start=True,
+            ),
+            PeriodicTask(
+                "model_history_rollup",
+                settings.router.scouter_scan_interval_hours * 3600,
+                rollup_model_history,
                 run_at_start=True,
             ),
         ]

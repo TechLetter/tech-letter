@@ -39,9 +39,11 @@ register_indexes(
         IndexSpec(
             "idx_model_checks_model_time", [("model_id", ASCENDING), ("checked_at", DESCENDING)]
         ),
-        # TTL. uptime 계산은 24시간 창만 보므로 며칠만 남겨도 충분하다.
+        # TTL. 라우팅에는 24시간 창이면 충분하지만, 원시 기록은 일별 집계
+        # (`model_history`)의 재료이기도 하다. 집계가 며칠 밀려도 메울 수 있게
+        # 한 달은 남긴다 — 모델 하나당 하루 24건이라 보관 비용이 크지 않다.
         IndexSpec(
-            "idx_model_checks_ttl", [("checked_at", ASCENDING)], expire_after_seconds=3 * 24 * 3600
+            "idx_model_checks_ttl", [("checked_at", ASCENDING)], expire_after_seconds=30 * 24 * 3600
         ),
     ],
 )

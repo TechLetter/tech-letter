@@ -64,4 +64,5 @@ async def test_model_checks_indexes_are_created(mongo_db):
     info = await mongo_db[model_scan.COLLECTION].index_information()
 
     assert "idx_model_checks_model_time" in info
-    assert info["idx_model_checks_ttl"]["expireAfterSeconds"] == 3 * 24 * 3600
+    # 원시 기록은 일별 집계(`model_history`)의 재료라 한 달 남긴다.
+    assert info["idx_model_checks_ttl"]["expireAfterSeconds"] == 30 * 24 * 3600

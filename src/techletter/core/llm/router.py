@@ -32,6 +32,12 @@ class HealthSource(Protocol):
     async def healthy_models(self) -> list[ModelHealth]: ...
 
 
+class PreferenceSource(Protocol):
+    """용도별 선호목록 공급자(`ModelPreferenceStore`)."""
+
+    async def preference(self, purpose: ModelPurpose) -> list[str]: ...
+
+
 class StatsSink(Protocol):
     """모델 성적 기록소."""
 
@@ -69,12 +75,17 @@ class ModelRouter:
         settings: RouterSettings,
         scouter: HealthSource,
         stats: StatsSink | None = None,
+        preferences: PreferenceSource | None = None,
     ) -> None:
         self._settings = settings
         self._scouter = scouter
         self._stats = stats
+        self._preferences = preferences
 
-    def _preference(self, purpose: ModelPurpose) -> list[str]:
+    async def _preference(self, purpose: ModelPurpose) -> list[str]:
+        """선호목록은 어드민이 DB에서 정한다. 저장소가 없으면 설정값을 쓴다."""
+        if self._preferences is not None:
+            return await self._preferences.preference(purpose)
         if purpose is ModelPurpose.SUMMARY:
             return self._settings.summary_preference
         if purpose is ModelPurpose.PLANNER:
@@ -91,7 +102,7 @@ class ModelRouter:
         """
         healthy = await self._scouter.healthy_models()
         healthy_ids = [m.model_id for m in healthy]
-        preference = self._preference(purpose)
+        preference = await self._preference(purpose)
 
         ordered = [m for m in preference if m in healthy_ids]
         if not ordered:

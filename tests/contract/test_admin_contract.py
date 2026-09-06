@@ -18,6 +18,7 @@ ADMIN_PATHS = [
     ("GET", "/api/v1/admin/jobs"),
     ("GET", "/api/v1/admin/jobs/stats"),
     ("GET", "/api/v1/admin/llm-models"),
+    ("GET", "/api/v1/admin/llm-models/preferences"),
     ("GET", "/api/v1/admin/backfill/summary"),
 ]
 
@@ -445,3 +446,60 @@ async def test_llm_model_stats_shape(client, admin_headers, ctx) -> None:
     item = body["items"][0]
     assert item["model_id"] == "x/model:free"
     assert item["success_rate"] == 1.0
+
+
+# ── 모델 선호목록 ───────────────────────────────────────────────────
+async def test_preferences_default_to_settings(client, admin_headers) -> None:
+    body = (await client.get("/api/v1/admin/llm-models/preferences", headers=admin_headers)).json()
+
+    rows = {row["purpose"]: row for row in body["items"]}
+    assert set(rows) == {"summary", "chat", "planner"}
+    # 아무도 고르지 않았으면 환경변수 기본값이어야 한다.
+    assert rows["chat"]["source"] == "settings"
+
+
+async def test_setting_a_preference_takes_effect_without_redeploy(
+    client, admin_headers, ctx
+) -> None:
+    from techletter.core.llm.stats import ModelPurpose
+
+    response = await client.put(
+        "/api/v1/admin/llm-models/preferences/chat",
+        headers=admin_headers,
+        json={"models": ["picked/one:free", "picked/two:free"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["models"] == ["picked/one:free", "picked/two:free"]
+    assert response.json()["source"] == "database"
+    # 라우터가 읽는 저장소에도 곧바로 보여야 한다.
+    assert await ctx.model_preferences.preference(ModelPurpose.CHAT) == [
+        "picked/one:free",
+        "picked/two:free",
+    ]
+
+
+async def test_clearing_a_preference_reverts_to_settings(client, admin_headers) -> None:
+    await client.put(
+        "/api/v1/admin/llm-models/preferences/chat",
+        headers=admin_headers,
+        json={"models": ["picked/one:free"]},
+    )
+
+    response = await client.put(
+        "/api/v1/admin/llm-models/preferences/chat", headers=admin_headers, json={"models": []}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "settings"
+
+
+async def test_unknown_purpose_is_rejected(client, admin_headers) -> None:
+    response = await client.put(
+        "/api/v1/admin/llm-models/preferences/nonsense",
+        headers=admin_headers,
+        json={"models": ["x/y:free"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request.invalid"

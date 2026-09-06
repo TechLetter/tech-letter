@@ -40,7 +40,17 @@ class FakeStats:
         self.records.append((model_id, success))
 
 
-def make_router(scouter=None, stats=None, **overrides) -> ModelRouter:
+class FakePreferences:
+    """어드민이 DB에 저장해 둔 선호목록."""
+
+    def __init__(self, by_purpose: dict[ModelPurpose, list[str]]) -> None:
+        self._by_purpose = by_purpose
+
+    async def preference(self, purpose: ModelPurpose) -> list[str]:
+        return self._by_purpose.get(purpose, [])
+
+
+def make_router(scouter=None, stats=None, preferences=None, **overrides) -> ModelRouter:
     settings = RouterSettings(
         SUMMARY_MODEL_PREFERENCE=overrides.pop(
             "summary_preference",
@@ -49,7 +59,7 @@ def make_router(scouter=None, stats=None, **overrides) -> ModelRouter:
         LLM_STATIC_FALLBACK_MODELS=overrides.pop("static_fallback", "minimax/minimax-m3:free"),
         **overrides,
     )
-    return ModelRouter(settings, scouter or FakeScouter(), stats)
+    return ModelRouter(settings, scouter or FakeScouter(), stats, preferences)
 
 
 async def test_candidates_are_preference_intersect_healthy():
@@ -71,6 +81,24 @@ async def test_candidates_widen_when_preference_all_gone():
     scouter = FakeScouter([ModelHealth("some/other:free", 99.0, 900, 0, "OK")])
     router = make_router(scouter)
     assert await router.candidates(ModelPurpose.SUMMARY) == ["some/other:free"]
+
+
+async def test_stored_preference_wins_over_settings():
+    """어드민이 DB에서 고른 목록이 환경변수보다 우선한다."""
+    preferences = FakePreferences({ModelPurpose.SUMMARY: ["minimax/minimax-m3:free"]})
+    router = make_router(preferences=preferences)
+
+    assert await router.candidates(ModelPurpose.SUMMARY) == ["minimax/minimax-m3:free"]
+
+
+async def test_empty_stored_preference_widens_to_all_healthy():
+    """저장된 목록이 비면 설정으로 좁히지 않고 정상 목록 전체를 쓴다."""
+    preferences = FakePreferences({})
+    router = make_router(preferences=preferences)
+
+    candidates = await router.candidates(ModelPurpose.SUMMARY)
+
+    assert candidates == [m.model_id for m in HEALTHY][: len(candidates)]
 
 
 async def test_candidates_fall_back_to_static_when_scouter_empty():

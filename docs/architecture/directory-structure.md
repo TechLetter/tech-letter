@@ -38,6 +38,7 @@ tech-letter/
 │   │   │   ├── router.py         # 모델 라우터: 큐레이션 ∩ 헬스, 순차 폴백
 │   │   │   ├── scouter.py        # 최근 헬스 기록 집계 + TTL 캐시 + 정적 폴백
 │   │   │   ├── model_scan.py     # OpenRouter :free 모델 헬스체크(주기 스캔) + 저장
+│   │   │   ├── model_history.py  # 위 기록의 일별 집계(장기 보관) + 추이 조회
 │   │   │   ├── stats.py          # llm_model_stats 기록/조회, 자동 강등 판정
 │   │   │   ├── budget.py         # llm_daily_usage, 쿼터 리셋 계산
 │   │   │   └── errors.py         # provider 예외 → Quota/Retryable/Permanent 분류

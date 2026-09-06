@@ -17,6 +17,8 @@ __all__ = [
     "BlogIn",
     "JobOut",
     "JobStatsOut",
+    "LlmModelPreferenceIn",
+    "LlmModelPreferenceOut",
     "LlmModelStatOut",
     "PostIn",
     "RetryBulkIn",
@@ -132,3 +134,25 @@ class BlogIn(BaseModel):
     blog_type: str = "company"
     is_active: bool = True
     tls_insecure: bool = False
+
+
+class LlmModelPreferenceIn(BaseModel):
+    """용도별 모델 선호목록. 순서가 곧 우선순위다."""
+
+    # 비우면 환경변수 기본값으로 되돌린다.
+    models: list[str] = Field(default_factory=list, max_length=50)
+
+
+class LlmModelPreferenceOut(BaseModel):
+    purpose: str
+    models: list[str]
+    source: str
+    """`database`면 어드민이 고른 것, `settings`면 환경변수 기본값이다."""
+
+    @classmethod
+    def of(cls, row: dict[str, Any]) -> LlmModelPreferenceOut:
+        return cls(
+            purpose=str(row.get("purpose") or ""),
+            models=[str(m) for m in (row.get("models") or [])],
+            source=str(row.get("source") or "settings"),
+        )

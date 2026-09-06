@@ -254,6 +254,8 @@
 | POST | `/admin/jobs/retry-bulk` | `{type?, error_kind?, limit}` | `200 {retried: n}` |
 | DELETE | `/admin/jobs/{id}` | | `204` |
 | GET | `/admin/llm-models` | `purpose?` | 목록 + `LlmModelStat[]` |
+| GET | `/admin/llm-models/preferences` | | 목록 + `LlmModelPreference[]` |
+| PUT | `/admin/llm-models/preferences/{purpose}` | `{models:[]}` | `LlmModelPreference` |
 | GET | `/admin/backfill/summary` | | `{unsummarized, unembedded, pending_jobs, dead_jobs}` |
 | POST | `/admin/backfill/summary` | `{limit, priority}` | `202 {enqueued: n}` |
 | POST | `/admin/backfill/embeddings` | `{limit, priority}` | `202 {enqueued: n}` |

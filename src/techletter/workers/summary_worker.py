@@ -55,6 +55,7 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             settings.router,
             ScouterClient(settings.router, container.db),
             container.model_stats,
+            container.model_preferences,
         ),
         RoutingChatClient(
             settings.summary_llm.model_name,

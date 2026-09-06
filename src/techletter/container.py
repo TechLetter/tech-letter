@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.service import BlogService, PostService
     from techletter.content.trends import TrendsService
     from techletter.core.db.qdrant import VectorStore
+    from techletter.core.llm.model_preferences import ModelPreferenceStore
     from techletter.core.llm.stats import ModelStatsStore
     from techletter.settings import Settings
     from techletter.users.auth_service import AuthService
@@ -56,6 +57,7 @@ class Container:
     _db: AsyncDatabase | None = None
     _vector_store: VectorStore | None = None
     _chat: ChatUseCase | None = None
+    _model_preferences: ModelPreferenceStore | None = None
 
     # ── 수명주기 ───────────────────────────────────────────────────
     @classmethod
@@ -64,6 +66,7 @@ class Container:
         import techletter.chat.repositories  # noqa: PLC0415
         import techletter.content.repositories  # noqa: PLC0415
         import techletter.core.jobs.queue  # noqa: PLC0415
+        import techletter.core.llm.model_history  # noqa: PLC0415
         import techletter.core.llm.model_scan  # noqa: PLC0415
         import techletter.core.llm.stats  # noqa: PLC0415
         import techletter.users.repositories  # noqa: F401, PLC0415
@@ -130,6 +133,21 @@ class Container:
         from techletter.core.llm.stats import ModelStatsStore  # noqa: PLC0415
 
         return ModelStatsStore(self.db, self.settings.router)
+
+    @property
+    def model_preferences(self) -> ModelPreferenceStore:
+        """선호목록 저장소는 프로세스 안에서 공유한다.
+
+        TTL 캐시를 들고 있어서, 매번 새로 만들면 캐시가 무의미해진다. 같은
+        인스턴스를 어드민 API와 챗봇 라우터가 함께 쓰므로 어드민이 목록을
+        바꾸면 이 프로세스에는 곧바로 반영된다(워커는 자기 프로세스의 TTL만큼
+        늦게 따라온다).
+        """
+        if self._model_preferences is None:
+            from techletter.core.llm.model_preferences import ModelPreferenceStore  # noqa: PLC0415
+
+            self._model_preferences = ModelPreferenceStore(self.db, self.settings.router)
+        return self._model_preferences
 
     # ── 서비스 ─────────────────────────────────────────────────────
     @property
@@ -241,6 +259,7 @@ class Container:
             self.settings.router,
             ScouterClient(self.settings.router, self.db),
             stats=self.model_stats,
+            preferences=self.model_preferences,
         )
         llm = LlmGateway(router, LangChainChatClient(self.settings.chat_llm))
         agent = ChatAgent(

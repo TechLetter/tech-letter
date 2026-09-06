@@ -18,7 +18,8 @@
 | `jobs` | `core.jobs` | 잡 큐. 상태 4종: pending/running/done/dead |
 | `llm_model_stats` | `core.llm` | 모델×용도별 성적. `_id = "{model_id}:{purpose}"` |
 | `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 30일 |
-| `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 기록(1시간 주기). TTL 3일 |
+| `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 원시 기록(1시간 주기). TTL 30일 |
+| `llm_model_daily` | `core.llm` | 위 기록의 날짜×모델 집계. `_id = "{date}:{model_id}"`, TTL 400일 |
 
 ### 1.2 인덱스
 ```
@@ -41,9 +42,15 @@ jobs       idx_jobs_claim {status:1,type:1,priority:1,run_at:1} · idx_jobs_stal
            idx_jobs_dedupe {key:1,type:1,status:1}
            ttl_jobs_done {finished_at:1} TTL 14일, partialFilterExpression {status:"done"}
 llm_model_checks  idx_model_checks_model_time {model_id:1,checked_at:-1}
-                  idx_model_checks_ttl {checked_at:1} TTL 3일
+                  idx_model_checks_ttl {checked_at:1} TTL 30일
+llm_model_daily   idx_model_daily_model_date {model_id:1,date:-1} · idx_model_daily_date {date:-1}
+                  idx_model_daily_ttl {date_at:1} TTL 400일
 ```
 인덱스는 부팅 시 `IndexRegistry`가 한 번 생성한다(요청마다 만들지 않는다).
+
+인덱스 **이름**은 바꾸지 않는다(같은 키에 중복 인덱스가 생긴다). 반면 **옵션**은
+바꿔도 된다 — 부팅 때 실제 인덱스와 대조해서, TTL만 다르면 `collMod`로 값만
+갱신하고 그 밖의 옵션이 다르면 지우고 다시 만든다.
 
 ### 1.3 문서 스키마
 
