@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from pymongo import UpdateOne
 
+from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
 
@@ -25,6 +26,16 @@ __all__ = ["COLLECTION", "ModelPurpose", "ModelStat", "ModelStatsStore"]
 
 COLLECTION = "llm_model_stats"
 logger = get_logger(__name__)
+
+register_indexes(
+    COLLECTION,
+    [
+        IndexSpec(
+            "idx_model_stats_purpose_attempts",
+            [("purpose", 1), ("attempts", -1)],
+        )
+    ],
+)
 
 
 class ModelPurpose(StrEnum):

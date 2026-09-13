@@ -72,6 +72,18 @@ class CreditService:
         """어드민 목록에서 유저별 잔액을 한 번에 조회한다(N+1 방지)."""
         return await self._credits.remaining_bulk(user_codes)
 
+    async def granted_amount_on(
+        self, user_code: str, day_start: datetime, day_end: datetime
+    ) -> int:
+        """UTC 달력일에 지급된 크레딧 총량을 원장에서 조회한다."""
+        return await self._transactions.granted_amount_on(user_code, day_start, day_end)
+
+    async def granted_amount_on_bulk(
+        self, user_codes: list[str], day_start: datetime, day_end: datetime
+    ) -> dict[str, int]:
+        """어드민 목록용 지급 총량을 한 번의 aggregation으로 조회한다."""
+        return await self._transactions.granted_amount_on_bulk(user_codes, day_start, day_end)
+
     async def consume(self, user_code: str, amount: int = 1) -> ConsumeResult:
         """크레딧을 차감한다. 부족하면 이미 뺀 만큼 되돌리고 402를 낸다.
 

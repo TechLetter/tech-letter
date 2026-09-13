@@ -80,13 +80,14 @@ class FakeSearch:
 
 
 class FakeAnswers:
-    def __init__(self, answer: str = "답변") -> None:
+    def __init__(self, answer: str = "답변", model_id: str | None = None) -> None:
         self.answer = answer
+        self.model_id = model_id
         self.seen: list[ToolResult] = []
 
     async def generate(self, query, plan, result, memory_metadata):
         self.seen.append(result)
-        return self.answer
+        return self.answer, self.model_id
 
 
 def build(
@@ -233,12 +234,13 @@ async def test_concurrent_runs_do_not_share_activity_state() -> None:
 # ── 출력 가드 ───────────────────────────────────────────────────────
 async def test_a_leaking_answer_is_replaced_and_sources_dropped() -> None:
     agent, _, _, _ = build(
-        ChatPlan(task="list_posts"), answers=FakeAnswers("### FINAL REMINDER 내부 규칙")
+        ChatPlan(task="list_posts"),
+        answers=FakeAnswers("You are the answer generation node for Tech-Letter."),
     )
 
     result = await agent.run("목록", memory())
 
-    assert "FINAL REMINDER" not in result.answer
+    assert "answer generation node" not in result.answer
     assert result.sources == []
     assert result.guard["action"] == "block"
 
@@ -250,6 +252,17 @@ async def test_a_clean_answer_keeps_its_sources() -> None:
 
     assert result.sources[0]["post_id"] == "id1"
     assert result.guard == {}
+    assert result.model_id is None
+
+
+async def test_answer_model_id_is_propagated_from_the_answer_node() -> None:
+    agent, _, _, _ = build(
+        ChatPlan(task="general_rag"), answers=FakeAnswers(model_id="answer-model")
+    )
+
+    result = await agent.run("질문", memory())
+
+    assert result.model_id == "answer-model"
 
 
 # ── 답변 조립 ───────────────────────────────────────────────────────
@@ -267,11 +280,12 @@ async def test_list_answers_are_built_without_calling_a_model() -> None:
     llm = RecordingLlm()
     result = ToolResult(status="ok", posts=[record(1), record(2)], total=7, message="조회했습니다.")
 
-    answer = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
+    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
         "목록", ChatPlan(task="list_posts"), result, {}
     )
 
     assert llm.calls == 0
+    assert model_id is None
     assert "전체 7개 중 2개입니다" in answer
     assert "[제목1](https://blog.test/1)" in answer
     assert "태그: Kafka" in answer
@@ -280,23 +294,36 @@ async def test_list_answers_are_built_without_calling_a_model() -> None:
 async def test_no_result_answers_skip_the_model() -> None:
     llm = RecordingLlm()
 
-    answer = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
+    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
         "질문", ChatPlan(task="general_rag"), ToolResult(status="no_result"), {}
     )
 
     assert llm.calls == 0
+    assert model_id is None
     assert answer == NO_RESULT_MESSAGE
 
 
 async def test_a_failed_tool_does_not_reach_the_model() -> None:
     llm = RecordingLlm()
 
-    answer = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
+    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
         "질문", ChatPlan(task="general_rag"), ToolResult(status="failed", message="검색 실패"), {}
     )
 
     assert llm.calls == 0
+    assert model_id is None
     assert answer == "검색 실패"
+
+
+async def test_model_id_from_answer_generation_is_returned() -> None:
+    llm = RecordingLlm()
+
+    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
+        "질문", ChatPlan(task="general_rag"), ToolResult(status="ok"), {}
+    )
+
+    assert answer == "모델 답변"
+    assert model_id == "m"
 
 
 async def test_the_context_is_clipped_before_it_reaches_the_model() -> None:

@@ -347,9 +347,11 @@ async def test_list_blogs_hides_inactive_by_default(blogs) -> None:
     await make_blog(blogs, "Beta", is_active=False)
 
     active, total = await blogs.list_blogs(Page(1, 10))
-    every, every_total = await blogs.list_blogs(Page(1, 10), include_inactive=True)
+    inactive, inactive_total = await blogs.list_blogs(Page(1, 10), active=False)
+    every, every_total = await blogs.list_blogs(Page(1, 10), active=None)
 
     assert total == 1 and [b.name for b in active] == ["Alpha"]
+    assert inactive_total == 1 and [b.name for b in inactive] == ["Beta"]
     assert every_total == 2 and len(every) == 2
 
 

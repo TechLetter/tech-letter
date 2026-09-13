@@ -13,16 +13,19 @@
 from __future__ import annotations
 
 import asyncio
+from itertools import combinations
 from typing import TYPE_CHECKING, Any
 
 import typer
 
 from techletter import __version__
+from techletter.content.links import normalize_link
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable, Coroutine
 
     from techletter.container import Container
+    from techletter.content.models import Post
 
 app = typer.Typer(
     name="techletter",
@@ -339,6 +342,136 @@ def backfill_embeddings(
             for post in posts
         ]
         typer.echo(f"{sum(job is not None for job in queued)}건 enqueue")
+
+    _with_container(body)
+
+
+async def _collect_missing_link_key_posts(container: Container, batch_size: int) -> list[Post]:
+    posts: list[Post] = []
+    after_id = None
+    while True:
+        batch = await container.posts.find_missing_link_keys(batch_size, after_id=after_id)
+        if not batch:
+            break
+        posts.extend(batch)
+        after_id = batch[-1].id
+        if after_id is None or len(batch) < batch_size:
+            break
+    return posts
+
+
+async def _collect_future_published_posts(
+    container: Container, now: Any, batch_size: int
+) -> list[Post]:
+    posts: list[Post] = []
+    after_id = None
+    while True:
+        batch = await container.posts.find_future_published_at(now, batch_size, after_id=after_id)
+        if not batch:
+            break
+        posts.extend(batch)
+        after_id = batch[-1].id
+        if after_id is None or len(batch) < batch_size:
+            break
+    return posts
+
+
+def _link_key_collisions(
+    candidates: list[tuple[Post, str]], existing: list[Post]
+) -> tuple[set[str], list[tuple[str, str, str]]]:
+    by_key: dict[str, list[Post]] = {}
+    for post, link_key in candidates:
+        by_key.setdefault(link_key, []).append(post)
+    for post in existing:
+        if isinstance(post.link_key, str):
+            by_key.setdefault(post.link_key, []).append(post)
+
+    collision_pairs: list[tuple[str, str, str]] = []
+    collision_keys: set[str] = set()
+    for link_key, matching in by_key.items():
+        by_id = {str(post.id): post for post in matching if post.id is not None}
+        if len(by_id) < 2:
+            continue
+        collision_keys.add(link_key)
+        ids = sorted(by_id)
+        collision_pairs.extend((link_key, first, second) for first, second in combinations(ids, 2))
+    collision_pairs.sort()
+    return collision_keys, collision_pairs
+
+
+@backfill_app.command("link-keys")
+def backfill_link_keys(
+    batch_size: int = typer.Option(500, "--batch-size", min=1),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
+) -> None:
+    """link_key가 없는 포스트를 채운다. 충돌 문서는 사람이 판단할 때까지 보류한다."""
+
+    async def body(container: Container) -> None:
+        posts = await _collect_missing_link_key_posts(container, batch_size)
+
+        candidates: list[tuple[Post, str]] = []
+        for post in posts:
+            link_key = normalize_link(post.link)
+            candidates.append((post, link_key))
+
+        existing = await container.posts.find_by_link_keys([link_key for _, link_key in candidates])
+        collision_keys, collision_pairs = _link_key_collisions(candidates, existing)
+
+        mode = "[dry-run]" if dry_run else "[execute]"
+        typer.echo(f"{mode} link_key 없는 {len(candidates)}건이 대상이다.")
+        typer.echo(f"충돌 {len(collision_pairs)}쌍")
+        if collision_pairs:
+            typer.echo("충돌 쌍 목록:")
+            for link_key, first, second in collision_pairs:
+                typer.echo(f"  link_key={link_key}  {first} <-> {second}")
+        if dry_run:
+            typer.echo("--execute 로 실행한다.")
+            return
+
+        updated = 0
+        for post, link_key in candidates:
+            if link_key in collision_keys or post.id is None:
+                continue
+            if await container.posts.update_link_key(str(post.id), link_key):
+                updated += 1
+        typer.echo(f"{updated}건 갱신, 충돌 {len(collision_pairs)}쌍은 건너뛰었다.")
+
+    _with_container(body)
+
+
+@backfill_app.command("published-at")
+def backfill_published_at(
+    batch_size: int = typer.Option(500, "--batch-size", min=1),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
+) -> None:
+    """미래 시각으로 저장된 published_at을 created_at 기준으로 고친다."""
+
+    async def body(container: Container) -> None:
+        from techletter.core.time import utcnow  # noqa: PLC0415
+
+        now = utcnow()
+        posts = await _collect_future_published_posts(container, now, batch_size)
+
+        mode = "[dry-run]" if dry_run else "[execute]"
+        typer.echo(f"{mode} published_at 미래 문서 {len(posts)}건이 대상이다.")
+        for post in posts:
+            published_at = post.published_at.isoformat() if post.published_at else "None"
+            typer.echo(
+                f"  {post.id}  {post.title[:60]}  "
+                f"published_at={published_at}  created_at={post.created_at.isoformat()}"
+            )
+        if dry_run:
+            typer.echo("--execute 로 실행한다.")
+            return
+
+        updated = 0
+        for post in posts:
+            if post.id is None:
+                continue
+            target = min(post.created_at, now)
+            if await container.posts.update_future_published_at(str(post.id), target, now=now):
+                updated += 1
+        typer.echo(f"{updated}건 갱신")
 
     _with_container(body)
 

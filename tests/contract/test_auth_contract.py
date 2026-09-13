@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from tests.contract.conftest import USER_CODE
 
-pytestmark = pytest.mark.integration
+from techletter.core.time import utcnow
+
+pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
 @pytest.fixture
@@ -89,6 +93,46 @@ async def test_credits_are_an_object_not_an_integer(client, registered, headers_
 
     assert isinstance(body["credits"], dict)
     assert set(body["credits"]) == {"remaining", "granted_today"}
+    assert body["credits"]["granted_today"] == 0
+
+
+async def test_me_reports_only_todays_grants_from_the_ledger(
+    client, ctx, registered, headers_for
+) -> None:
+    day_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    user_code = registered.user_code
+    await ctx.db["credit_transactions"].insert_many(
+        [
+            {
+                "user_code": user_code,
+                "type": "grant",
+                "amount": 10,
+                "created_at": day_start + timedelta(hours=1),
+            },
+            {
+                "user_code": user_code,
+                "type": "admin_grant",
+                "amount": 5,
+                "created_at": day_start + timedelta(hours=2),
+            },
+            {
+                "user_code": user_code,
+                "type": "consume",
+                "amount": -1,
+                "created_at": day_start + timedelta(hours=3),
+            },
+            {
+                "user_code": user_code,
+                "type": "grant",
+                "amount": 10,
+                "created_at": day_start - timedelta(seconds=1),
+            },
+        ]
+    )
+
+    body = (await client.get("/api/v1/me", headers=headers_for(user_code))).json()
+
+    assert body["credits"]["granted_today"] == 15
 
 
 async def test_internal_identifiers_are_not_exposed(client, registered, headers_for) -> None:

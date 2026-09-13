@@ -13,6 +13,7 @@ from techletter.content.jobs import (
     enqueue_embedding_requested,
     enqueue_summary_requested,
 )
+from techletter.content.links import normalize_link
 from techletter.content.models import AISummary, Blog, Post, StatusFlags
 from techletter.core.errors import (
     InvalidRequestError,
@@ -75,7 +76,10 @@ class PostService:
         blog = await self._blogs.get(blog_id)
         if blog is None:
             raise ResourceNotFoundError(f"blog not found: {blog_id}")
-        if await self._posts.exists_by_link(link):
+        raw_link = link.strip()
+        link_key = normalize_link(raw_link)
+        known = await self._posts.existing_link_keys([raw_link], [link_key])
+        if raw_link in known or link_key in known:
             raise ResourceConflictError("post with this link already exists", field="link")
 
         now = utcnow()
@@ -84,7 +88,8 @@ class PostService:
                 blog_id=blog.id,
                 blog_name=blog.name,
                 title=title.strip(),
-                link=link.strip(),
+                link=raw_link,
+                link_key=link_key,
                 published_at=now,
                 status=StatusFlags(),
                 aisummary=AISummary(),
@@ -117,9 +122,9 @@ class BlogService:
         self._queue = queue
 
     async def list(
-        self, page: Page, *, include_inactive: bool = False
+        self, page: Page, *, active: bool | None = True
     ) -> tuple[list[BlogWithCount], int]:
-        blogs, total = await self._blogs.list_blogs(page, include_inactive=include_inactive)
+        blogs, total = await self._blogs.list_blogs(page, active=active)
         counts = await self._posts.count_by_blog([blog.id for blog in blogs if blog.id is not None])
         return [
             BlogWithCount(blog=blog, post_count=counts.get(str(blog.id), 0)) for blog in blogs
@@ -149,6 +154,7 @@ class BlogService:
         rss_url: str,
         blog_type: str = "company",
         is_active: bool = True,
+        tls_insecure: bool = False,
     ) -> Blog:
         url, rss_url = normalize_url(url), normalize_url(rss_url)
         if conflict := await self._blogs.find_conflict(url=url, rss_url=rss_url, exclude_id=None):
@@ -160,6 +166,7 @@ class BlogService:
                 rss_url=rss_url,
                 blog_type=self._check_type(blog_type),  # type: ignore[arg-type]
                 is_active=is_active,
+                tls_insecure=tls_insecure,
             )
         )
 

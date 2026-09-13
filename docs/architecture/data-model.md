@@ -16,12 +16,15 @@
 | `chat_sessions` | `chat` | |
 | `chat_suggested_questions` | `chat` | |
 | `jobs` | `core.jobs` | 잡 큐. 상태 4종: pending/running/done/dead |
+| `llm_model_preferences` | `core.llm` | 용도별 선호목록. `_id=purpose(summary|chat|planner)`, `models:[str]`, `created_at/updated_at`; 어드민 `GET/PUT /admin/llm-models/preferences` 저장소 |
 | `llm_model_stats` | `core.llm` | 모델×용도별 성적. `_id = "{model_id}:{purpose}"` |
-| `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 30일 |
+| `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 없음(영구 누적, 하루 1~2건) |
 | `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 원시 기록(1시간 주기). TTL 30일 |
 | `llm_model_daily` | `core.llm` | 위 기록의 날짜×모델 집계. `_id = "{date}:{model_id}"`, TTL 400일 |
 | `llm_model_catalog` | `core.llm` | 모델별 "지금까지 알던 상태" 1건씩(카탈로그 변동 감지용) |
 | `llm_model_events` | `core.llm` | 모델 추가·삭제·저하·복구 이벤트. TTL 90일 |
+
+모델 선호목록은 DB(`llm_model_preferences`)가 있으면 우선하고, 없을 때 용도별 환경변수(`*_MODEL_PREFERENCE`)를 사용한다.
 
 ### 1.2 인덱스
 ```
@@ -32,9 +35,11 @@ identity_policies  idx_identity_policy_unique {identity_hash:1,policy_key:1} UNI
 login_sessions     uniq_login_session_id {session_id:1} UNIQUE · ttl_login_session_expires_at {expires_at:1} TTL=0
 posts      idx_published_at_desc {published_at:-1} · idx_categories {aisummary.categories:1}
            idx_tags {aisummary.tags:1} · uniq_link {link:1} UNIQUE
+           uniq_link_key {link_key:1} UNIQUE · partialFilterExpression {link_key: {$type:"string"}}
            idx_published_at_id_desc {published_at:-1,_id:-1}
            idx_tags_published_at {aisummary.tags:1,published_at:-1}
            idx_categories_published_at {aisummary.categories:1,published_at:-1}
+           idx_posts_blog_published {blog_id:1,published_at:-1}
            idx_posts_summarized {status.ai_summarized:1}
 users      uniq_user_code {user_code:1} UNIQUE · uniq_provider_provider_sub {provider:1,provider_sub:1} UNIQUE
 chat_sessions            idx_chat_user_updated {user_code:1, updated_at:-1}
@@ -43,6 +48,7 @@ credit_transactions      idx_credit_tx_user_created {user_code:1, created_at:-1}
 jobs       idx_jobs_claim {status:1,type:1,priority:1,run_at:1} · idx_jobs_stale {status:1,locked_at:1}
            idx_jobs_dedupe {key:1,type:1,status:1}
            ttl_jobs_done {finished_at:1} TTL 14일, partialFilterExpression {status:"done"}
+llm_model_stats idx_model_stats_purpose_attempts {purpose:1,attempts:-1}
 llm_model_checks  idx_model_checks_model_time {model_id:1,checked_at:-1}
                   idx_model_checks_ttl {checked_at:1} TTL 30일
 llm_model_daily   idx_model_daily_model_date {model_id:1,date:-1} · idx_model_daily_date {date:-1}
@@ -50,7 +56,7 @@ llm_model_daily   idx_model_daily_model_date {model_id:1,date:-1} · idx_model_d
 llm_model_events  idx_model_events_detected {detected_at:-1} · idx_model_events_model {model_id:1,detected_at:-1}
                   idx_model_events_ttl {detected_at:1} TTL 90일
 ```
-인덱스는 부팅 시 `IndexRegistry`가 한 번 생성한다(요청마다 만들지 않는다).
+인덱스는 모듈 전역 `_REGISTRY`에 `IndexSpec` dataclass로 등록하고, 부팅 시 `ensure_indexes()`가 한 번 적용한다(요청마다 만들지 않는다).
 
 인덱스 **이름**은 바꾸지 않는다(같은 키에 중복 인덱스가 생긴다). 반면 **옵션**은
 바꿔도 된다 — 부팅 때 실제 인덱스와 대조해서, TTL만 다르면 `collMod`로 값만
@@ -61,17 +67,17 @@ llm_model_events  idx_model_events_detected {detected_at:-1} · idx_model_events
 **`posts`** — 계약(API)에서 이름이 바뀌는 필드가 있지만 DB 필드명은 아래 그대로다.
 ```
 _id, created_at, updated_at,
-blog_id(ObjectId), blog_name, title, link(UNIQUE), published_at, thumbnail_url, view_count,
+blog_id(ObjectId), blog_name, title, link(UNIQUE), link_key(정규화 링크), published_at, thumbnail_url, view_count,
 status: { ai_summarized: bool, embedded: bool, failed_reason: str|null },
 aisummary: { categories[], tags[], summary, model_name, generated_at } | null,
 plain_text: str|null,
 embedding: { model_name, collection_name, vector_dimension, chunk_count, embedded_at } | 없음
 ```
-API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` → `ai_summary`로 이름이 바뀐다(변환은 DTO 레벨에서만 일어난다).
+API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` → `ai_summary`로 이름이 바뀐다(변환은 DTO 레벨에서만 일어난다). `link_key`에는 정규화한 링크를 저장하고 `uniq_link_key`가 문자열 값만 대상으로 유일성을 보장한다.
 
 **`blogs`**: `_id, created_at, updated_at, name, url, rss_url(UNIQUE), blog_type("company"|"creator"), is_active, tls_insecure, consecutive_failures, last_fetched_at, last_fetch_error`
 - `last_fetch_error`는 200자 이내로 절단해서 저장한다.
-- `consecutive_failures`가 임계치를 넘으면 RSS 수집기가 `is_active=false`로 자동 전환한다.
+- 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 RSS 수집기가 `is_active=false`로 자동 전환한다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
 **`users`**: `_id, created_at, updated_at, user_code("google:<uuid>", UNIQUE), provider, provider_sub, email, name, profile_image, role("user"|"admin")`
 
@@ -102,7 +108,8 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 | 컬렉션 | `tech_letter_posts__gemini-embedding-001__3072` (규칙 `{base}__{model}__{dim}`) |
 | 벡터 | 3072-dim, Cosine |
 | payload | `post_id, title, blog_name, link, published_at, categories, tags, chunk_index, chunk_text, model_name` |
-| on_disk_payload | true |
+| payload index | `post_id` (Qdrant payload index) |
+| on_disk_payload | 서버 기본값에 의존(애플리케이션에서 `true`를 지정하지 않음) |
 
 - point id는 `uuid5(NAMESPACE_URL, "{post_id}:{model}:{dim}:{chunk_index}")` — 결정적이므로 upsert가 멱등하다.
 - 삭제는 `{base}__` 접두어를 가진 모든 컬렉션에서 `post_id`가 일치하는 포인트를 제거한다.

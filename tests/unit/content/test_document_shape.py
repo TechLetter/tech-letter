@@ -16,6 +16,7 @@ POST_FIELDS = {
     "blog_name",
     "title",
     "link",
+    "link_key",
     "published_at",
     "thumbnail_url",
     "view_count",

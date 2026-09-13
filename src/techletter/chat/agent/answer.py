@@ -15,11 +15,18 @@ from techletter.chat.agent.state import ChatPlan, PostRecord, ToolResult
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.chat import LlmGateway
 
-__all__ = ["NO_RESULT_MESSAGE", "AnswerGenerator", "build_post_context", "format_post_list"]
+__all__ = [
+    "NO_RESULT_MESSAGE",
+    "AnswerGeneration",
+    "AnswerGenerator",
+    "build_post_context",
+    "format_post_list",
+]
 
 NO_RESULT_MESSAGE = "요청 조건에 맞는 포스트를 찾지 못했습니다."
 SUMMARY_PREVIEW_CHARS = 160
 MAX_LABELS = 5
+AnswerGeneration = tuple[str, str | None]
 
 
 def build_post_context(posts: list[PostRecord]) -> str:
@@ -71,11 +78,11 @@ class AnswerGenerator:
 
     async def generate(
         self, query: str, plan: ChatPlan, result: ToolResult, memory_metadata: dict[str, object]
-    ) -> str:
+    ) -> AnswerGeneration:
         if result.status in {"no_result", "failed"}:
-            return result.message or NO_RESULT_MESSAGE
+            return result.message or NO_RESULT_MESSAGE, None
         if plan.task == "list_posts":
-            return format_post_list(result)
+            return format_post_list(result), None
 
         payload = {
             "query": query,
@@ -104,7 +111,7 @@ class AnswerGenerator:
                 ],
             },
         }
-        answer, _ = await self._llm.complete(
+        answer, model_id = await self._llm.complete(
             "chat", ANSWER_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
         )
-        return answer or NO_RESULT_MESSAGE
+        return answer or NO_RESULT_MESSAGE, model_id

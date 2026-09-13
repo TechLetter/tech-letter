@@ -40,7 +40,6 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
-    "syrupy",
     "ruff",
     "pyright",
     "pre-commit",
@@ -79,7 +78,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "PLR2004", "S101", "PLC0415"]  # 픽스처 안 지연 import는 의도적
+"tests/**" = ["ANN", "PLR2004", "PLC0415"]  # 픽스처 안 지연 import는 의도적
 # 스크립트는 일회용 앱을 띄우느라 프로세스 환경을 직접 채운다(TID251).
 "scripts/**" = ["T20", "ANN", "E501", "PLR0911", "PLR0912", "PLC0415", "TID251"]
 # 라우트 핸들러는 쿼리 파라미터 수만큼 인자를 갖는다 — FastAPI의 시그니처 규약이다.
@@ -109,8 +108,7 @@ asyncio_mode = "auto"
 markers = [
     "integration: 컨테이너(Mongo/Qdrant)가 필요한 테스트",
     "e2e: 실행 중인 스택과 브라우저가 필요한 테스트",
-    "contract: 골든 스냅샷 비교",
-    "network: 실제 외부 서비스를 호출",
+    "contract: API 계약 테스트 선택자 (Mongo 필요)",
 ]
-addopts = "-m 'not integration and not e2e and not network' --strict-markers"
+addopts = "-m 'not integration and not e2e' --strict-markers"
 filterwarnings = ["ignore::DeprecationWarning:feedparser.util"]

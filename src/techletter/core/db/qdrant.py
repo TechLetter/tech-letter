@@ -17,10 +17,13 @@ from qdrant_client.http.models import (
     FieldCondition,
     Filter,
     MatchAny,
+    MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
 
+from techletter.core.errors import VectorStoreUnavailableError
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -83,7 +86,8 @@ class VectorStore:
     def __init__(self, settings: QdrantSettings, client: AsyncQdrantClient | None = None) -> None:
         self._base = settings.collection_base
         self._client = client or AsyncQdrantClient(host=settings.host, port=settings.port)
-        # 이미 만든 컬렉션을 기억해 매번 확인하지 않는다. 힌트일 뿐이라 틀려도 안전하다.
+        # 컬렉션과 post_id 인덱스를 정합화한 것을 기억해 매번 확인하지 않는다.
+        # 힌트일 뿐이라 틀려도 다음 프로세스가 다시 정합화할 수 있다.
         self._known: set[str] = set()
 
     async def close(self) -> None:
@@ -113,6 +117,22 @@ class VectorStore:
             logger.debug("qdrant collection already existed", extra={"collection": name})
         else:
             logger.info("qdrant collection created", extra={"collection": name})
+
+        try:
+            await self._client.create_payload_index(
+                collection_name=name,
+                field_name="post_id",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:
+            # Qdrant는 같은 인덱스를 다시 만들 때 400을 돌려준다. 이 경우는
+            # 이미 원하는 상태이므로 정상 처리하되, 연결 장애는 숨기지 않는다.
+            if not _is_existing_payload_index_error(exc):
+                raise RuntimeError(f"failed to ensure qdrant payload index: {name}") from exc
+            logger.debug(
+                "qdrant payload index already existed",
+                extra={"collection": name, "field": "post_id"},
+            )
         self._known.add(name)
 
     async def upsert_chunks(
@@ -129,6 +149,11 @@ class VectorStore:
 
         collection = self.collection_for(model_name, dimension)
         await self._ensure_collection(collection, dimension)
+
+        # 재임베딩으로 청크 수가 줄면 이전 꼬리 청크가 남지 않도록 먼저 비운다.
+        # 요약 잡 주기상 삭제와 재등록 사이의 짧은 검색 공백은 허용한다.
+        selector = Filter(must=[FieldCondition(key="post_id", match=MatchValue(value=post_id))])
+        await self._client.delete(collection_name=collection, points_selector=selector)
 
         points = [
             PointStruct(
@@ -166,8 +191,8 @@ class VectorStore:
     ) -> list[SearchHit]:
         """유사 청크를 찾는다.
 
-        검색 실패는 빈 결과로 낮춘다. 벡터 검색이 안 되더라도 챗봇이 "찾지
-        못했습니다"라고 답하는 편이 500을 내는 것보다 낫다.
+        컬렉션이 아직 없는 신규 환경은 빈 결과로 낮춘다. 그 밖의 검색 장애는
+        호출자가 장애를 구분해 처리할 수 있도록 예외로 올린다.
         """
         if not query_vector:
             return []
@@ -181,12 +206,15 @@ class VectorStore:
                 score_threshold=score_threshold,
             )
         except Exception as exc:
-            logger.warning(
-                "qdrant search failed; degrading to empty",
-                extra={"collection": collection, "reason": str(exc)[:200]},
-            )
-            return []
-        self._known.add(collection)
+            if _is_collection_not_found_error(exc):
+                logger.warning(
+                    "qdrant collection not found; degrading to empty",
+                    extra={"collection": collection},
+                )
+                return []
+            raise VectorStoreUnavailableError(
+                f"qdrant search failed for collection: {collection}"
+            ) from exc
         return [
             SearchHit(score=point.score, payload=dict(point.payload or {}))
             for point in response.points
@@ -221,3 +249,17 @@ class VectorStore:
         if failed:
             raise RuntimeError("failed to delete vectors from: " + ", ".join(failed))
         return len(collections)
+
+
+def _is_collection_not_found_error(exc: Exception) -> bool:
+    """Qdrant의 컬렉션 미존재 응답만 신규 환경으로 취급한다."""
+    return getattr(exc, "status_code", None) == 404
+
+
+def _is_existing_payload_index_error(exc: Exception) -> bool:
+    """이미 생성된 payload 인덱스를 다시 만드는 Qdrant 응답인지 판별한다."""
+    return (
+        getattr(exc, "status_code", None) == 400
+        and "payload index" in str(exc).lower()
+        and "already exists" in str(exc).lower()
+    )

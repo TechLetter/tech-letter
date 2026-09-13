@@ -21,7 +21,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from techletter.chat.guards import PromptGuard
-from techletter.core.errors import PolicyBlockedError
+from techletter.core.errors import (
+    LlmRateLimitedError,
+    LlmUnavailableError,
+    PolicyBlockedError,
+    QuotaExceededError,
+    RetryableError,
+)
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -97,6 +103,12 @@ class ChatUseCase:
         except BaseException as exc:
             # 취소(브라우저 종료)도 여기로 온다. 환불은 반드시 끝까지 돌린다.
             await asyncio.shield(self._refund(user_code, consumed.credit_ids, type(exc).__name__))
+            # 라우터는 잡 큐에서도 쓰이므로 JobError를 그대로 던진다. HTTP 채팅
+            # 경계에서만 공개용 AppError로 바꿔, 환불이 끝난 뒤 원인을 노출한다.
+            if isinstance(exc, QuotaExceededError):
+                raise LlmRateLimitedError() from exc
+            if isinstance(exc, RetryableError):
+                raise LlmUnavailableError() from exc
             raise
 
         return await asyncio.shield(
@@ -149,6 +161,7 @@ class ChatUseCase:
             "mode": "agent",
             "intent": result.intent,
             "activities": result.activities,
+            "model_id": result.model_id,
         }
         session = await self._sessions.append(
             session,

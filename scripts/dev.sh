@@ -13,6 +13,14 @@ cmd_dev() { # 개발용 인프라 기동 (mongo, qdrant)
   docker compose -f docker/compose.dev.yml up -d mongo qdrant
 }
 
+cmd_test-infra() { # 통합 테스트용 인프라 기동 (mongo-test, qdrant-test)
+  docker compose -f docker/compose.dev.yml --profile test up -d mongo-test qdrant-test
+}
+
+cmd_test-infra-down() { # 통합 테스트용 인프라 정지
+  docker compose -f docker/compose.dev.yml --profile test down mongo-test qdrant-test
+}
+
 cmd_api() { # API 서버 기동 (자동 재시작)
   "$UV" run techletter api --reload
 }

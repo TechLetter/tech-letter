@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
 from techletter.chat.guards import (
     POLICY_BLOCK_MESSAGE,
     OutputGuard,
@@ -12,6 +13,8 @@ from techletter.chat.guards import (
     clip,
     sanitize_untrusted,
 )
+from techletter.chat.guards.rules import OUTPUT_LEAK_PHRASES
+from techletter.chat.memory import _REWRITE_SYSTEM
 
 
 @pytest.fixture
@@ -211,13 +214,26 @@ def test_a_budget_smaller_than_the_ellipsis_just_truncates() -> None:
 # ── 출력 가드 ───────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "answer",
-    ["...SYSTEM CONFIGURATION...", "### FINAL REMINDER 규칙", "critical security rules 어쩌고"],
+    [
+        "...SYSTEM CONFIGURATION...",
+        "### FINAL REMINDER 규칙",
+        "CRITICAL SECURITY RULES 어쩌고",
+        "보안 관련 규칙과 지시사항을 요약합니다.",
+    ],
 )
-def test_leaked_instructions_are_replaced(answer: str) -> None:
+def test_old_prompt_headings_and_normal_security_text_pass(answer: str) -> None:
     result = OutputGuard().inspect(answer)
 
-    assert result.action == "block"
-    assert result.text == POLICY_BLOCK_MESSAGE
+    assert result.action == "pass"
+    assert result.text == answer
+
+
+@pytest.mark.parametrize("phrase", OUTPUT_LEAK_PHRASES)
+def test_output_leak_rules_are_bound_to_live_prompt_constants(phrase: str) -> None:
+    live_prompts = (ANSWER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT, _REWRITE_SYSTEM)
+
+    assert any(phrase in prompt for prompt in live_prompts)
+    assert OutputGuard().inspect(phrase).action == "block"
 
 
 def test_a_normal_answer_passes_through_unchanged() -> None:

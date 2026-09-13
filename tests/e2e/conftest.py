@@ -12,7 +12,7 @@
 2. 그 API 가 보는 Mongo 를 `E2E_MONGO_URI` 로 직접 만질 수 있다.
 3. 프론트 정적 빌드가 `E2E_UI_DIST` 에 있다(기본 `../tech-letter_ui/dist`).
 
-셋 중 하나라도 없으면 skip 한다. 준비 절차는 `docs/plan/08-deployment-and-ops.md`.
+셋 중 하나라도 없으면 skip 한다. 준비 절차는 `docs/architecture/deployment-and-ops.md`.
 """
 
 from __future__ import annotations
@@ -29,8 +29,6 @@ import pytest
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterator
-
-pytestmark = pytest.mark.e2e
 
 REPO = Path(__file__).resolve().parents[2]
 API_URL = os.environ.get("E2E_API_URL", "http://localhost:8080")

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from techletter.chat.agent.state import Source, ToolResult
 from techletter.chat.guards import RetrievedContentGuard
+from techletter.core.errors import VectorStoreUnavailableError
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -114,12 +115,20 @@ class VectorSearchTool:
             logger.warning("query embedding failed", exc_info=True)
             return ToolResult(status="failed", message="관련 정보를 찾지 못했습니다.")
 
-        hits = await self._store.search(
-            vector,
-            self._embedding_model,
-            limit=constraints.limit if constraints else self._top_k,
-            score_threshold=self._score_threshold,
-        )
+        try:
+            hits = await self._store.search(
+                vector,
+                self._embedding_model,
+                limit=constraints.limit if constraints else self._top_k,
+                score_threshold=self._score_threshold,
+            )
+        except VectorStoreUnavailableError:
+            logger.error("vector store unavailable during search", exc_info=True)
+            return ToolResult(
+                status="failed",
+                reason="vector_store_unavailable",
+                message="관련 정보를 찾지 못했습니다.",
+            )
         if not hits:
             return ToolResult(status="no_result", message="관련 정보를 찾지 못했습니다.")
 

@@ -42,7 +42,7 @@ flowchart LR
     EW -->|claim / update| M
 
     API -->|vector search| Q[(Qdrant)]
-    W -->|upsert / delete| Q
+    EW -->|upsert / delete| Q
 
     API -->|chat · plan| R{{"LLM 모델 라우터"}}
     W -->|context compression| R
@@ -57,9 +57,9 @@ flowchart LR
 | 프로세스 | 명령 | 책임 |
 |---|---|---|
 | **api** | `techletter api` | HTTP 전부(공개·어드민), 인증/인가, 채팅 오케스트레이션(가드→세션→크레딧→에이전트→기록), SSE, OpenAPI. 잡은 **enqueue만** 한다 |
-| **worker** | `techletter worker` | RSS 수집(30분 주기), 잡 소비 — 요약 완료 반영 및 임베딩 enqueue, 임베딩 완료 → Qdrant upsert, 삭제 요청, 채팅 컨텍스트 압축. 스테일 락 회수 · done 잡 TTL 관리도 겸한다 |
-| **summary-worker** | `techletter summary-worker` | 요약 잡 처리: 렌더링(Playwright) → 파싱 → 검증 → 썸네일 → LLM 요약. 별도 이미지(`techletter-browser`, Chromium 포함) |
-| **embedding-worker** | `techletter embedding-worker` | 임베딩 잡 처리: 청킹 + 임베딩 생성(Gemini 고정) |
+| **worker** | `techletter worker` | RSS 수집(30분 주기), 잡 소비 — 요약 완료 반영 및 임베딩 enqueue, 임베딩 완료 → posts 메타 반영, 채팅 컨텍스트 압축. `model_scan`·`model_history_rollup`(각 1시간, 시작 시 실행), 스테일 락 회수 · done 잡 TTL 관리도 겸한다 |
+| **summary-worker** | `techletter summary-worker` | 요약 잡 처리: 렌더링(Playwright) → 파싱 → 검증 → LLM 요약 → 썸네일. 요약이 실패하면 썸네일도 버려진다. 별도 이미지(`techletter-browser`, Chromium 포함) |
+| **embedding-worker** | `techletter embedding-worker` | 임베딩 잡 처리: 청킹 + 임베딩 생성(Gemini 고정) → Qdrant upsert, 삭제 요청 → Qdrant delete |
 
 로컬 개발용 `techletter all`(api + worker 단일 프로세스)도 있다. 컨슈머 그룹·오프셋 개념이 없다 — 워커를 늘리면 같은 `jobs` 컬렉션을 원자적 클레임으로 나눠 가진다.
 
@@ -77,7 +77,7 @@ src/techletter/
 └── workers/       프로세스 진입점 — runtime(잡 러너·graceful shutdown), scheduler, core/summary/embedding worker
 ```
 
-의존 방향(모듈 경계): `api → {content, users, chat, embedding} → core`. 도메인 간은 `chat → content, users, embedding`만 허용, `content ↔ users`는 금지. 도메인 패키지는 FastAPI를 import하지 않는다. 상세는 [directory-structure](docs/architecture/directory-structure.md).
+의존 방향(모듈 경계): `api → {content, users, chat, embedding} → core`. 도메인 간은 `chat → content, users, embedding`만 허용, `content ↔ users`는 금지. 특히 `summary/embedding → {core, content(jobs·handlers)}`이며 잡 페이로드·핸들러를 위해 `content`를 참조한다. 도메인 패키지는 FastAPI를 import하지 않는다. 상세는 [directory-structure](docs/architecture/directory-structure.md).
 
 ### 잡 큐
 
@@ -124,11 +124,15 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 ```bash
 uv sync
+uv run pre-commit install                    # 훅은 자동 설치되지 않는다
 uv run playwright install --only-shell chromium   # summary-worker(렌더링)에 필요
 
 docker compose -f docker/compose.dev.yml up -d mongo qdrant
+./scripts/dev.sh test-infra                  # 통합 테스트용 Mongo 27018 · Qdrant 6334
 
 cp .env.example .env && $EDITOR .env        # 로컬 기본값 포함 템플릿. 시크릿만 채우면 된다
+# 주의: .env만으로는 LLM 키가 주입되지 않는다. 실행 셸에서 export가 필요하다.
+#   export GEMINI_API_KEY=... OPENROUTER_API_KEY=...
 # 전체 env var 목록이 코드와 어긋났는지 의심되면 재생성해 비교한다:
 #   uv run techletter settings example
 
@@ -149,7 +153,7 @@ uv run pyright
 
 ## 배포 · 운영
 
-운영 서버 구성, 컨테이너 4개(api/worker/summary-worker/embedding-worker) + nginx, GitHub Actions 무중단 배포(이미지 빌드 → `up -d --wait` → 스모크 → 실패 시 자동 롤백), 관측 기준선, 런북은 [deployment-and-ops](docs/architecture/deployment-and-ops.md)에 정리돼 있다. 실제 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포").
+운영 서버 구성, 컨테이너 4개(api/worker/summary-worker/embedding-worker) + nginx, GitHub Actions 무중단 배포(이미지 빌드 → `up -d --wait` → 스모크 → 스모크 실패 시 자동 롤백; 기동 실패는 수동 조치), 관측 기준선, 런북은 [deployment-and-ops](docs/architecture/deployment-and-ops.md)에 정리돼 있다. 실제 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포").
 
 ## 더 읽기
 

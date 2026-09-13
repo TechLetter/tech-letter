@@ -124,6 +124,12 @@ class EmbeddingLlmSettings(LlmSettings):
 
 
 class ChatLlmSettings(LlmSettings):
+    """챗봇 LLM 설정.
+
+    모델은 라우터가 후보에서 결정하므로 `model_name`은 미사용이다. 공통
+    설정 모델과의 호환을 위해 필드는 남긴다.
+    """
+
     model_config = _llm_config("CHATBOT_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
     temperature: float = 0.7

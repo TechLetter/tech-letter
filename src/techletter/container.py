@@ -62,7 +62,7 @@ class Container:
     # ── 수명주기 ───────────────────────────────────────────────────
     @classmethod
     async def open(cls, settings: Settings, *, create_indexes: bool = True) -> Container:
-        # 저장소 모듈을 먼저 import해야 인덱스 레지스트리가 채워진다.
+        # `register_indexes`를 호출하는 모듈만 import해야 인덱스 레지스트리가 채워진다.
         import techletter.chat.repositories  # noqa: PLC0415
         import techletter.content.repositories  # noqa: PLC0415
         import techletter.core.jobs.queue  # noqa: PLC0415

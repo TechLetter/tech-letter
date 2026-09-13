@@ -6,11 +6,12 @@
 tech-letter/
 ├── pyproject.toml                # [project] techletter. dependency-groups. ruff/pyright/pytest 설정
 ├── uv.lock  .python-version(3.12)  .pre-commit-config.yaml  scripts/dev.sh
+│                                  # scripts/dev.sh: test-infra | test-infra-down (테스트 전용 Mongo/Qdrant)
 ├── .gitignore  .dockerignore  README.md
 │
 ├── src/techletter/
 │   ├── __main__.py  cli.py       # typer: api | worker | summary-worker | embedding-worker | all
-│   │                             #        | jobs {list,retry,purge} | backfill {summaries,embeddings}
+│   │                             #        | jobs {list,stats,retry,purge} | backfill {summaries,embeddings,link-keys,published-at}
 │   │                             #        | ensure-indexes | settings {check,example}
 │   ├── settings.py               # pydantic-settings 단일 트리
 │   ├── app.py                    # create_app(): lifespan, 미들웨어, 라우터, 예외 핸들러
@@ -24,7 +25,7 @@ tech-letter/
 │   │   ├── db/
 │   │   │   ├── mongo.py          # AsyncMongoClient 라이프사이클
 │   │   │   ├── documents.py      # BaseDocument(_id alias), SubDocument
-│   │   │   ├── indexes.py        # IndexRegistry — 부팅 시 인덱스 생성
+│   │   │   ├── indexes.py        # IndexSpec + _REGISTRY + ensure_indexes() — 부팅 시 인덱스 생성
 │   │   │   └── qdrant.py         # AsyncQdrantClient 라이프사이클
 │   │   ├── jobs/
 │   │   │   ├── types.py          # JobType, JobStatus, ErrorKind
@@ -40,6 +41,7 @@ tech-letter/
 │   │   │   ├── model_scan.py     # OpenRouter :free 모델 헬스체크(주기 스캔) + 저장
 │   │   │   ├── model_history.py  # 위 기록의 일별 집계(장기 보관) + 추이 조회
 │   │   │   ├── model_events.py   # 모델 추가/삭제/저하/복구 감지 + 이벤트 피드
+│   │   │   ├── model_preferences.py # 용도별 DB 모델 선호목록
 │   │   │   ├── stats.py          # llm_model_stats 기록/조회, 자동 강등 판정
 │   │   │   ├── budget.py         # llm_daily_usage, 쿼터 리셋 계산
 │   │   │   └── errors.py         # provider 예외 → Quota/Retryable/Permanent 분류
@@ -51,15 +53,15 @@ tech-letter/
 │   │   ├── errors.py             # 예외 → {"error":{code,message,details}} 변환, 422→400
 │   │   ├── schemas/               # 외부 계약 DTO
 │   │   │   ├── common.py         # Paged[T]/Listing[T], ErrorBody
-│   │   │   ├── content.py user.py chat.py admin.py query.py
+│   │   │   ├── content.py user.py chat.py admin.py llm.py query.py
 │   │   └── v1/
 │   │       ├── router.py         # /api/v1 조립
-│   │       ├── health.py  metrics.py  auth.py  me.py  posts.py  bookmarks.py  blogs.py  filters.py  trends.py
+│   │       ├── health.py  metrics.py  auth.py  me.py  posts.py  bookmarks.py  blogs.py  filters.py  trends.py  llm_models.py
 │   │       ├── chat.py           # /chat/messages, /chat/messages/stream(SSE), /chat/sessions*, suggested-questions
 │   │       └── admin/  posts.py blogs.py users.py suggested_questions.py jobs.py llm_models.py backfill.py
 │   │
 │   ├── content/                  # posts·blogs·RSS·필터·트렌드
-│   │   ├── models.py repositories.py service.py filters.py trends.py
+│   │   ├── models.py repositories.py service.py filters.py trends.py links.py  # link_key 정규화
 │   │   ├── rss/  feeder.py  aggregator.py
 │   │   ├── jobs.py               # payload 스키마 + enqueue 헬퍼
 │   │   └── handlers.py           # on_summary_completed 등
@@ -84,7 +86,7 @@ tech-letter/
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/  api/ chat/ content/ core/ embedding/ jobs/ llm/ summary/ users/
-│   ├── contract/  snapshots/{current,v2}/     # API 계약 골든 스냅샷
+│   ├── contract/  snapshots/{current,v2}/     # v1→v2 마이그레이션 심사 기록물(pytest·CI 미사용)
 │   ├── integration/              # Mongo·Qdrant 컨테이너, 잡 큐, 파이프라인 e2e
 │   ├── e2e/                      # Playwright(프론트+백엔드)
 │   └── fixtures/  rss/ html/ seed/
@@ -115,7 +117,7 @@ dependencies = [
 browser = ["playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]   # summary-worker 이미지에서만
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "syrupy", "ruff", "pyright", "pre-commit",
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "pyright", "pre-commit",
        "playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]
 
 [project.scripts]
@@ -144,9 +146,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = ["integration: 컨테이너(Mongo/Qdrant)가 필요한 테스트",
            "e2e: 실행 중인 스택과 브라우저가 필요한 테스트",
-           "contract: 골든 스냅샷 비교",
-           "network: 실제 외부 서비스를 호출"]
-addopts = "-m 'not integration and not e2e and not network' --strict-markers"
+           "contract: integration과 함께 쓰는 API 계약 선택자"]
+addopts = "-m 'not integration and not e2e' --strict-markers"
 ```
 
 ## 3. 설정 (`settings.py`)
@@ -193,9 +194,9 @@ class Settings(BaseSettings):
 | 예외 | 도메인은 `AppError` 서브클래스만 raise. HTTP 상태·에러코드는 예외 클래스 속성. `HTTPException`은 api 레이어만 |
 | 로깅 | `get_logger(__name__)`. 요청 본문·토큰·API 키는 로깅하지 않는다 |
 | DI | FastAPI `Depends`는 `api/deps.py`에만. 도메인 서비스는 생성자 주입 → 테스트에서 Fake 주입 |
-| 레포지토리 | 컬렉션 1개 = 클래스 1개. 인덱스는 부팅 시 `IndexRegistry`가 1회 생성 |
+| 레포지토리 | 컬렉션 1개 = 클래스 1개. 인덱스는 `IndexSpec`을 모은 `_REGISTRY`를 부팅 시 `ensure_indexes()`가 1회 적용 |
 | 잡 | payload는 pydantic 모델. 핸들러는 멱등하게 작성한다 |
-| async | 라우트·핸들러 전부 `async def`. 블로킹 라이브러리(trafilatura, PIL, feedparser 파싱)는 `asyncio.to_thread` |
+| async | 라우트·핸들러 전부 `async def`. 블로킹 라이브러리(trafilatura, PIL, feedparser 파싱)는 `asyncio.to_thread`로 감싸는 규약이지만, 현재는 미준수다 — 요약 워커 동시성이 1이라 영향이 작다 |
 | LLM | 반드시 `core.llm.router`/`core.llm.chat`을 경유한다. 직접 `ChatOpenAI(...)` 생성 금지 |
 | DTO | `api/schemas`가 외부 계약과 1:1. 도메인 모델을 그대로 노출하지 않는다 |
 | 네이밍 | 모듈 snake_case, 클래스 PascalCase |
