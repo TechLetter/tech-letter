@@ -19,8 +19,10 @@ class FakeAgent:
         self.error = error
         self.model_id = model_id
         self.emit_activity = emit_activity
+        self.seen_model_ids: list[str | None] = []
 
-    async def run(self, query, memory, on_activity=None):
+    async def run(self, query, memory, on_activity=None, model_id=None):
+        self.seen_model_ids.append(model_id)
         from techletter.chat.agent.graph import AgentResult
 
         if on_activity is not None and self.emit_activity:
@@ -196,6 +198,63 @@ async def test_a_chat_answer_matches_the_contract(client, user_headers, stub_cha
     assert body["credits"] == {"consumed": 1, "remaining": 4}
     assert body["agent"]["model_id"] == "test-answer-model"
     assert body["memory"]["status"] in {"ready", "pending", "failed"}
+
+
+async def test_an_unknown_model_is_rejected_before_credit_consumption(
+    client, ctx, user_headers, stub_chat, funded
+) -> None:
+    from techletter.core.llm.model_events import CATALOG_COLLECTION
+
+    await ctx.db[CATALOG_COLLECTION].insert_one({"_id": "qwen/free", "is_active": True})
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"query": "질문", "model_id": "openai/gpt-4o"},
+        headers=user_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request.invalid"
+    assert response.json()["error"]["details"]["field"] == "model_id"
+    assert await ctx.credits.remaining("google:alice") == 5
+
+
+async def test_an_unknown_stream_model_is_rejected_before_opening_the_stream(
+    client, ctx, user_headers, stub_chat, funded
+) -> None:
+    from techletter.core.llm.model_events import CATALOG_COLLECTION
+
+    await ctx.db[CATALOG_COLLECTION].insert_one({"_id": "qwen/free", "is_active": True})
+
+    response = await client.post(
+        "/api/v1/chat/messages/stream",
+        json={"query": "질문", "model_id": "openai/gpt-4o"},
+        headers=user_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request.invalid"
+    assert response.json()["error"]["details"]["field"] == "model_id"
+    assert await ctx.credits.remaining("google:alice") == 5
+
+
+async def test_a_catalog_model_is_passed_to_the_answer_agent(
+    client, ctx, user_headers, stub_chat, funded
+) -> None:
+    from techletter.core.llm.model_events import CATALOG_COLLECTION
+
+    await ctx.db[CATALOG_COLLECTION].insert_one({"_id": "qwen/free", "is_active": True})
+    agent = FakeAgent()
+    stub_chat(agent)
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"query": "질문", "model_id": "qwen/free"},
+        headers=user_headers,
+    )
+
+    assert response.status_code == 200
+    assert agent.seen_model_ids == ["qwen/free"]
 
 
 async def test_running_out_of_credits_is_402(client, user_headers, stub_chat) -> None:
@@ -383,7 +442,7 @@ async def test_a_mid_stream_failure_uses_the_error_envelope(
     from techletter.core.errors import LlmUnavailableError
 
     class FailsAfterActivity(FakeAgent):
-        async def run(self, query, memory, on_activity=None):
+        async def run(self, query, memory, on_activity=None, model_id=None):
             from techletter.chat.agent.state import Activity
 
             if on_activity is not None:

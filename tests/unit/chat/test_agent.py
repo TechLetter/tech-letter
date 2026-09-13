@@ -84,9 +84,11 @@ class FakeAnswers:
         self.answer = answer
         self.model_id = model_id
         self.seen: list[ToolResult] = []
+        self.model_ids: list[str | None] = []
 
-    async def generate(self, query, plan, result, memory_metadata):
+    async def generate(self, query, plan, result, memory_metadata, model_id=None):
         self.seen.append(result)
+        self.model_ids.append(model_id)
         return self.answer, self.model_id
 
 
@@ -265,6 +267,14 @@ async def test_answer_model_id_is_propagated_from_the_answer_node() -> None:
     assert result.model_id == "answer-model"
 
 
+async def test_selected_model_is_propagated_to_the_answer_node() -> None:
+    agent, _, _, answers = build(ChatPlan(task="general_rag"))
+
+    await agent.run("질문", memory(), model_id="selected/free")
+
+    assert answers.model_ids == ["selected/free"]
+
+
 # ── 답변 조립 ───────────────────────────────────────────────────────
 class RecordingLlm:
     def __init__(self) -> None:
@@ -273,6 +283,22 @@ class RecordingLlm:
     async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
         self.calls += 1
         return "모델 답변", "m"
+
+
+class CandidateLlm(RecordingLlm):
+    def __init__(self) -> None:
+        super().__init__()
+        self.selected: list[str] | None = None
+        self._router = type(
+            "Router", (), {"_settings": type("Settings", (), {"max_model_attempts": 3})()}
+        )()
+
+    async def candidates(self, purpose: str) -> list[str]:
+        return ["automatic-a", "selected/free", "automatic-b", "automatic-b", "automatic-c"]
+
+    async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
+        self.selected = kwargs.get("candidates")
+        return await super().complete(purpose, system, user, **kwargs)
 
 
 async def test_list_answers_are_built_without_calling_a_model() -> None:
@@ -324,6 +350,16 @@ async def test_model_id_from_answer_generation_is_returned() -> None:
 
     assert answer == "모델 답변"
     assert model_id == "m"
+
+
+async def test_selected_model_is_first_and_candidates_are_deduplicated_and_capped() -> None:
+    llm = CandidateLlm()
+
+    await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
+        "질문", ChatPlan(task="general_rag"), ToolResult(status="ok"), {}, model_id="selected/free"
+    )
+
+    assert llm.selected == ["selected/free", "automatic-a", "automatic-b"]
 
 
 async def test_the_context_is_clipped_before_it_reaches_the_model() -> None:

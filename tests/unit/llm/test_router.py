@@ -101,6 +101,13 @@ async def test_empty_stored_preference_widens_to_all_healthy():
     assert candidates == [m.model_id for m in HEALTHY][: len(candidates)]
 
 
+async def test_chat_and_planner_use_automatic_healthy_models_without_preferences():
+    router = make_router()
+
+    assert await router.candidates(ModelPurpose.CHAT) == [m.model_id for m in HEALTHY]
+    assert await router.candidates(ModelPurpose.PLANNER) == [m.model_id for m in HEALTHY]
+
+
 async def test_candidates_fall_back_to_static_when_scouter_empty():
     """scouter가 죽어도 서비스는 계속 동작해야 한다."""
     router = make_router(FakeScouter([]))

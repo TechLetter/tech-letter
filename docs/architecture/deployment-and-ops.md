@@ -33,7 +33,7 @@ main push (docs/**·*.md 제외)
 공통: `restart: unless-stopped`, `logging: json-file max-size=20m max-file=5`, non-root, `networks: [tech-letter_default]`. `summary_worker`는 Chromium용 `shm_size: 256m`.
 
 ### 1.2 환경변수
-전 서비스 공통(x-app-env + x-llm-env): `TZ`, `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `JWT_SECRET`, `JWT_ISSUER`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `SUMMARY_WORKER_LLM_PROVIDER`, `SUMMARY_WORKER_LLM_MODEL_NAME`, `EMBEDDING_WORKER_LLM_PROVIDER`, `EMBEDDING_WORKER_LLM_MODEL_NAME`, `CHATBOT_LLM_PROVIDER`, `CHATBOT_EMBEDDING_PROVIDER`, `CHATBOT_EMBEDDING_MODEL_NAME`, `*_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
+전 서비스 공통(x-app-env + x-llm-env): `TZ`, `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `JWT_SECRET`, `JWT_ISSUER`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `SUMMARY_WORKER_LLM_PROVIDER`, `SUMMARY_WORKER_LLM_MODEL_NAME`, `EMBEDDING_WORKER_LLM_PROVIDER`, `EMBEDDING_WORKER_LLM_MODEL_NAME`, `CHATBOT_LLM_PROVIDER`, `CHATBOT_EMBEDDING_PROVIDER`, `CHATBOT_EMBEDDING_MODEL_NAME`, `SUMMARY_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
 `SUMMARY_WORKER_LLM_*`는 `PROVIDER`와 `MODEL_NAME` 두 변수만 compose가 주입한다. `CHATBOT_LLM_MODEL_NAME`은 사용하지 않는다.
 `api`만 추가로: `SERVICE_NAME`, `API_PORT`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
 `worker`만 추가로: `SERVICE_NAME`, `CONTENT_BLOG_FETCH_BATCH_SIZE`. `JOB_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
@@ -49,7 +49,6 @@ main push (docs/**·*.md 제외)
 | dead 사유 | `/admin/jobs?status=dead` | `permanent`(봇 차단·404)만 정상. `retryable` 누적은 조사 |
 | RSS 사이클 | worker 로그 `rss cycle finished` 30분마다 | 일부 피드 상시 실패는 정상(깨진 외부 피드) |
 | 요약률 | `/admin/backfill/summary` | 신규는 24시간 내 처리 |
-| 모델 성적 | `/admin/llm-models` | 1순위 성공률 ≥ 0.8, 강등 발생 시 선호 목록 재검토 |
 | 모델 헬스 스캔 | worker 로그 `model scan finished` 1시간마다 | `ok` 건수가 0 근처면 OpenRouter 자체 장애 의심 |
 | heartbeat | compose healthcheck | healthy 4/4 |
 | 메모리 | `docker stats` | §1.1의 reservation 근처에서 안정 |
@@ -61,7 +60,7 @@ main push (docs/**·*.md 제외)
 
 - **실패 잡 처리**: 어드민 운영 대시보드 또는 `techletter jobs list --status dead`. 사유가 `permanent`(봇 차단·404)면 재시도가 무의미하다 → 블로그 설정 수정 또는 비활성화. 일시 장애면 `jobs retry`.
 - **요약 백필**: `techletter backfill summaries --limit N --priority 10 --dry-run` → 실행. 신규 포스트(priority 0)가 항상 먼저 처리된다.
-- **무료 모델 소멸**: 모델 라우터가 자동으로 폴백하므로 조치가 필요 없다. `/admin/llm-models`에서 성적을 확인한다. 선호목록은 DB(`llm_model_preferences`)가 환경변수보다 우선하므로, `/admin/llm-models/preferences`의 `source`를 확인한 뒤 필요하면 어드민에서 갱신한다.
+- **무료 모델 소멸**: 모델 라우터가 헬스 상위 모델로 자동 폴백하므로 조치가 필요 없다. 요약 체인을 직접 조정할 때는 `/admin/llm-models/preferences`에서 `source`와 `default_models`를 확인한 뒤 갱신한다.
 - **LLM 일일 예산 소진**: 정상 동작이다. 초과분은 OpenRouter로 흐르고, 다음 리셋(`LLM_QUOTA_RESET_UTC_HOUR`)에 다시 1순위 모델을 쓴다.
 - **모델 헬스 기록 없음/오래됨**: 라우터가 정적 폴백 목록으로 계속 동작한다. `docker logs techletter_worker | grep "model scan"`으로 스캔이 도는지 확인한다.
 - **블로그 피드 장애**: 어드민에서 `last_fetch_error` 확인 → RSS URL 수정 또는 `is_active=false`. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 자동으로 비활성화된다. 5xx나 타임아웃만으로는 꺼지지 않는다.

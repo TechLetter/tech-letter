@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +30,7 @@ __all__ = [
     "EVENTS_COLLECTION",
     "EventType",
     "detect_and_record",
+    "known_model_ids",
     "list_events",
 ]
 
@@ -39,8 +40,37 @@ EVENTS_COLLECTION = "llm_model_events"
 # 이벤트 피드는 "최근에 무슨 일이 있었는지" 훑어보는 용도라 원시 기록보다
 # 훨씬 길게, 그래도 무한하지는 않게 남긴다.
 EVENT_RETENTION_DAYS = 90
+CATALOG_CACHE_TTL_SECONDS = 60.0
 
 logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class _CatalogCache:
+    db: AsyncDatabase
+    ids: set[str] = field(default_factory=set)
+    fetched_at: float = 0.0
+
+
+_catalog_caches: dict[int, _CatalogCache] = {}
+
+
+def _cache_for(db: AsyncDatabase) -> _CatalogCache:
+    """DB 연결별 캐시를 가져온다. 테스트·멀티 테넌트 연결 간 값이 섞이면 안 된다."""
+    key = id(db)
+    cache = _catalog_caches.get(key)
+    if cache is None or cache.db is not db:
+        cache = _CatalogCache(db=db)
+        _catalog_caches[key] = cache
+    return cache
+
+
+def _invalidate_cache(db: AsyncDatabase) -> None:
+    """스캐너가 카탈로그를 갱신하면 다음 선택 요청에서 즉시 다시 읽는다."""
+    cache = _catalog_caches.get(id(db))
+    if cache is not None and cache.db is db:
+        cache.fetched_at = 0.0
+
 
 register_indexes(
     EVENTS_COLLECTION,
@@ -191,10 +221,45 @@ async def detect_and_record(
             ],
             ordered=False,
         )
+        _invalidate_cache(db)
 
     if events:
         logger.info("model catalog changes detected", extra={"events": len(events)})
     return len(events)
+
+
+async def known_model_ids(db: AsyncDatabase) -> set[str]:
+    """현재 무료 모델 카탈로그에 있는 활성 모델 id를 준다.
+
+    모델 선택 요청마다 전체 카탈로그를 읽으면 채팅 요청이 DB 상태에 불필요하게
+    묶인다. 프로세스에서 DB 연결은 하나를 공유하므로 짧은 TTL 캐시로 완화한다.
+    """
+    cache = _cache_for(db)
+    now = utcnow().timestamp()
+    if now - cache.fetched_at < CATALOG_CACHE_TTL_SECONDS:
+        return set(cache.ids)
+
+    try:
+        ids: set[str] = set()
+        async for doc in db[CATALOG_COLLECTION].find({}):
+            # 삭제된 모델은 이력 보존을 위해 컬렉션에 남지만 선택지에서는 빼야 한다.
+            if doc.get("is_active", True) is False:
+                continue
+            model_id = doc.get("_id")
+            if model_id is not None:
+                ids.add(str(model_id))
+    except Exception as exc:
+        # 카탈로그 장애가 채팅 전체를 500으로 만들면 안 된다. 빈 집합을 주면
+        # 호출자가 사용자 모델을 무시하고 기존 자동 후보로 안전하게 돌아간다.
+        logger.warning(
+            "model catalog query failed; ignoring user model",
+            extra={"error_type": type(exc).__name__},
+        )
+        return set()
+
+    cache.ids = ids
+    cache.fetched_at = now
+    return set(ids)
 
 
 async def list_events(

@@ -165,23 +165,11 @@ class RouterSettings(BaseSettings):
     summary_preference: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="SUMMARY_MODEL_PREFERENCE"
     )
-    chat_preference: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, alias="CHAT_MODEL_PREFERENCE"
-    )
-    planner_preference: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, alias="CHAT_PLANNER_MODEL_PREFERENCE"
-    )
     static_fallback: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="LLM_STATIC_FALLBACK_MODELS"
     )
 
-    @field_validator(
-        "summary_preference",
-        "chat_preference",
-        "planner_preference",
-        "static_fallback",
-        mode="before",
-    )
+    @field_validator("summary_preference", "static_fallback", mode="before")
     @classmethod
     def _split(cls, v: str | list[str] | None) -> list[str]:
         return _csv(v)

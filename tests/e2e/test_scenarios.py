@@ -197,16 +197,21 @@ async def test_admin_ops_tab_shows_the_job_queue(page, ui_server, seeded, sign_i
     ).to_be_visible(timeout=TIMEOUT)
 
 
-async def test_admin_llm_tab_shows_model_stats(page, ui_server, seeded, sign_in) -> None:
+async def test_admin_llm_tab_shows_model_preferences(page, ui_server, seeded, sign_in) -> None:
+    """모델 탭은 요약 폴백 체인 설정을 조회한다."""
     await sign_in(ADMIN_CODE, "admin")
     await page.goto(f"{ui_server}/admin", wait_until="networkidle")
 
     async with page.expect_response(
-        lambda r: "/api/v1/admin/llm-models" in r.url, timeout=TIMEOUT
+        lambda r: "/api/v1/admin/llm-models/preferences" in r.url, timeout=TIMEOUT
     ) as info:
         await page.get_by_role("button", name="모델").click()
 
-    assert (await info.value).status == 200
+    response = await info.value
+    assert response.status == 200
+    body = await response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["purpose"] == "summary"
 
 
 async def test_a_plain_user_cannot_see_admin_data(page, ui_server, seeded, sign_in) -> None:

@@ -19,7 +19,6 @@ __all__ = [
     "JobStatsOut",
     "LlmModelPreferenceIn",
     "LlmModelPreferenceOut",
-    "LlmModelStatOut",
     "PostIn",
     "RetryBulkIn",
 ]
@@ -68,40 +67,6 @@ class JobStatsOut(BaseModel):
     oldest_pending_at: str | None
 
 
-class LlmModelStatOut(BaseModel):
-    model_id: str
-    purpose: str
-    attempts: int
-    successes: int
-    json_failures: int
-    rate_limited: int
-    success_rate: float
-    avg_latency_ms: float
-    healthy: bool | None = None
-    uptime_24h: float | None = None
-    last_used_at: str | None = None
-    last_error: str | None = None
-
-    @classmethod
-    def of(cls, row: dict[str, Any], health: dict[str, Any] | None = None) -> LlmModelStatOut:
-        attempts = int(row.get("attempts") or 0)
-        successes = int(row.get("successes") or 0)
-        return cls(
-            model_id=str(row.get("model_id") or ""),
-            purpose=str(row.get("purpose") or ""),
-            attempts=attempts,
-            successes=successes,
-            json_failures=int(row.get("json_failures") or 0),
-            rate_limited=int(row.get("rate_limited") or 0),
-            success_rate=round(successes / attempts, 4) if attempts else 1.0,
-            avg_latency_ms=round(float(row.get("avg_latency_ms") or 0.0), 1),
-            healthy=health.get("healthy") if health else None,
-            uptime_24h=health.get("uptime_24h") if health else None,
-            last_used_at=to_iso_z(row.get("last_used_at")),
-            last_error=row.get("last_error"),
-        )
-
-
 class RetryBulkIn(BaseModel):
     type: str | None = None
     error_kind: str | None = None
@@ -137,9 +102,9 @@ class BlogIn(BaseModel):
 
 
 class LlmModelPreferenceIn(BaseModel):
-    """용도별 모델 선호목록. 순서가 곧 우선순위다."""
+    """요약 모델 폴백 체인에 붙일 추가 후보. 순서가 곧 우선순위다."""
 
-    # 비우면 환경변수 기본값으로 되돌린다.
+    # 비우면 DB 추가 후보를 지우고 환경변수 기본값만 사용한다.
     models: list[str] = Field(default_factory=list, max_length=50)
 
 
@@ -147,7 +112,8 @@ class LlmModelPreferenceOut(BaseModel):
     purpose: str
     models: list[str]
     source: str
-    """`database`면 어드민이 고른 것, `settings`면 환경변수 기본값이다."""
+    default_models: list[str]
+    """`default_models`는 환경변수 기본값, `models`는 최종 폴백 순서다."""
 
     @classmethod
     def of(cls, row: dict[str, Any]) -> LlmModelPreferenceOut:
@@ -155,4 +121,5 @@ class LlmModelPreferenceOut(BaseModel):
             purpose=str(row.get("purpose") or ""),
             models=[str(m) for m in (row.get("models") or [])],
             source=str(row.get("source") or "settings"),
+            default_models=[str(m) for m in (row.get("default_models") or [])],
         )

@@ -22,18 +22,21 @@ from typing import TYPE_CHECKING, Any
 
 from techletter.chat.guards import PromptGuard
 from techletter.core.errors import (
+    InvalidRequestError,
     LlmRateLimitedError,
     LlmUnavailableError,
     PolicyBlockedError,
     QuotaExceededError,
     RetryableError,
 )
+from techletter.core.llm.model_events import known_model_ids
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Awaitable, Callable
 
     from bson import ObjectId
+    from pymongo.asynchronous.database import AsyncDatabase
 
     from techletter.chat.agent import Activity, ChatAgent
     from techletter.chat.memory import MemoryBuilder
@@ -72,6 +75,7 @@ class ChatUseCase:
         queue: JobQueue,
         settings: ChatSettings,
         prompt_guard: PromptGuard | None = None,
+        catalog_db: AsyncDatabase | None = None,
     ) -> None:
         self._sessions = sessions
         self._credits = credits
@@ -80,6 +84,7 @@ class ChatUseCase:
         self._queue = queue
         self._settings = settings
         self._guard = prompt_guard or PromptGuard()
+        self._catalog_db = catalog_db
 
     async def run(
         self,
@@ -88,18 +93,25 @@ class ChatUseCase:
         query: str,
         session_id: str | None = None,
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
+        model_id: str | None = None,
     ) -> ChatAnswer:
         guard = self._guard.inspect(query)
         if guard.blocked:
             raise PolicyBlockedError(guard.message, details={"findings": guard.to_metadata()})
         safe_query = guard.text
+        selected_model_id = await self._validated_model_id(model_id)
 
         session, is_new = await self._resolve_session(user_code, session_id, safe_query)
         consumed = await self._credits.consume(user_code, self._settings.credits_per_message)
 
         try:
             context = await self._memory.build(safe_query, session.messages, session.memory)
-            result = await self._agent.run(safe_query, context, on_activity)
+            if selected_model_id is None:
+                result = await self._agent.run(safe_query, context, on_activity)
+            else:
+                result = await self._agent.run(
+                    safe_query, context, on_activity, model_id=selected_model_id
+                )
         except BaseException as exc:
             # 취소(브라우저 종료)도 여기로 온다. 환불은 반드시 끝까지 돌린다.
             await asyncio.shield(self._refund(user_code, consumed.credit_ids, type(exc).__name__))
@@ -123,6 +135,34 @@ class ChatUseCase:
                 remaining=consumed.remaining,
             )
         )
+
+    async def _validated_model_id(self, model_id: str | None) -> str | None:
+        """무료 카탈로그에 있는 사용자 모델만 답변 후보에 넣는다."""
+        if model_id is None:
+            return None
+
+        db = self._catalog_db if self._catalog_db is not None else self._session_database()
+        if db is None:
+            # 테스트 대역이나 아직 조립되지 않은 경계에서는 카탈로그를 읽을
+            # 수 없으므로 요청을 막지 않고 기존 자동 라우팅을 유지한다.
+            return None
+        known = await known_model_ids(db)
+        if not known:
+            # DB 장애·초기 빈 카탈로그에서는 유료 id를 추측해 허용하지 않고,
+            # 사용자의 선택만 버린 채 무료 자동 후보로 계속 답한다.
+            return None
+        if model_id not in known:
+            raise InvalidRequestError(
+                "선택한 모델을 사용할 수 없습니다.", details={"field": "model_id"}
+            )
+        return model_id
+
+    def _session_database(self) -> AsyncDatabase | None:
+        """세션 저장소가 이미 쥔 DB를 모델 카탈로그 검증에도 재사용한다."""
+        repository = getattr(self._sessions, "_sessions", None)
+        collection = getattr(repository, "_col", None)
+        database = getattr(collection, "database", None)
+        return database
 
     async def _resolve_session(
         self, user_code: str, session_id: str | None, query: str
