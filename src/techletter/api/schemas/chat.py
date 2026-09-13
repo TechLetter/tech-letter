@@ -97,6 +97,7 @@ class ChatSessionOut(BaseModel):
 class MessageIn(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     session_id: str | None = None
+    model_id: str | None = Field(default=None, max_length=120)
 
 
 class ChatAnswerOut(BaseModel):

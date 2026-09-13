@@ -77,7 +77,12 @@ class AnswerGenerator:
         self._max_context_chars = max_context_chars
 
     async def generate(
-        self, query: str, plan: ChatPlan, result: ToolResult, memory_metadata: dict[str, object]
+        self,
+        query: str,
+        plan: ChatPlan,
+        result: ToolResult,
+        memory_metadata: dict[str, object],
+        model_id: str | None = None,
     ) -> AnswerGeneration:
         if result.status in {"no_result", "failed"}:
             return result.message or NO_RESULT_MESSAGE, None
@@ -111,7 +116,30 @@ class AnswerGenerator:
                 ],
             },
         }
-        answer, model_id = await self._llm.complete(
-            "chat", ANSWER_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
-        )
-        return answer or NO_RESULT_MESSAGE, model_id
+        candidates: list[str] | None = None
+        if model_id is not None:
+            automatic = await self._llm.candidates("chat")
+            # 게이트웨이의 자동 후보는 이미 라우터 순서를 따른다. 사용자의
+            # 선택만 앞에 넣고 중복을 제거해야 한 모델에 시도가 몰리지 않는다.
+            candidates = list(dict.fromkeys([model_id, *automatic]))
+            # 명시 후보를 넘기면 Router.run은 후보를 다시 자르지 않으므로,
+            # 라우터 설정의 상한을 여기서 그대로 적용한다.
+            router = getattr(self._llm, "_router", None)
+            settings = getattr(router, "_settings", None)
+            raw_max_attempts = getattr(settings, "max_model_attempts", 3)
+            max_attempts = raw_max_attempts if isinstance(raw_max_attempts, int) else 3
+            max_attempts = max(max_attempts, 1)
+            candidates = candidates[:max_attempts]
+
+        if candidates is None:
+            answer, used_model_id = await self._llm.complete(
+                "chat", ANSWER_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
+            )
+        else:
+            answer, used_model_id = await self._llm.complete(
+                "chat",
+                ANSWER_SYSTEM_PROMPT,
+                json.dumps(payload, ensure_ascii=False),
+                candidates=candidates,
+            )
+        return answer or NO_RESULT_MESSAGE, used_model_id

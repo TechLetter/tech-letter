@@ -1,19 +1,19 @@
-"""용도별 모델 선호목록 저장소.
+"""요약 모델 폴백 체인 저장소.
 
-선호목록은 원래 `*_MODEL_PREFERENCE` 환경변수였다. 스캐너는 1시간마다 어떤
-무료 모델이 살아 있는지 알고 있는데, 정작 그걸 반영하려면 사람이 시크릿을
-고치고 재배포해야 했다. 그래서 DB로 옮겼다 — 어드민이 후보 중에서 고르면
-다음 캐시 만료 때 반영된다.
+요약 체인의 첫 후보는 `SUMMARY_MODEL_PREFERENCE` 환경변수로 정하고, 어드민이
+고른 모델은 DB에 추가 후보로 저장한다. 실제 순서는 환경변수 모델을 먼저 둔 뒤
+DB 모델을 이어 붙이고 중복을 제거하므로, 배포 기본값과 운영 중 조정을 함께
+유지할 수 있다.
 
-**환경변수는 여전히 기본값이다.** DB에 해당 용도의 선호목록이 없으면 설정을
-그대로 쓴다. 그래서 이 기능을 배포해도 어드민이 손대기 전까지는 동작이
-달라지지 않는다.
+챗봇과 플래너는 사용자의 선택 또는 헬스 기반 자동 라우팅만 사용하므로 이
+저장소에서 선호목록을 제공하지 않는다.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from techletter.core.errors import InvalidRequestError
 from techletter.core.llm.stats import ModelPurpose
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 
 class ModelPreferenceStore:
-    """`{purpose: [model_id, ...]}`. DB에 없으면 설정값으로 떨어진다."""
+    """요약 모델 체인을 `{env 기본값 + DB 추가분}`으로 관리한다."""
 
     def __init__(self, db: AsyncDatabase, settings: RouterSettings) -> None:
         self._col = db[COLLECTION]
@@ -43,13 +43,22 @@ class ModelPreferenceStore:
         self._cache: dict[str, list[str]] = {}
         self._fetched_at: float = 0.0
 
+    @staticmethod
+    def _unique(models: list[str]) -> list[str]:
+        return list(dict.fromkeys(models))
+
+    def settings_default(self, purpose: ModelPurpose) -> list[str]:
+        """환경변수에서 온 요약 기본값만 반환한다."""
+        if purpose is not ModelPurpose.SUMMARY:
+            return []
+        return self._unique(list(self._settings.summary_preference))
+
     def _from_settings(self, purpose: ModelPurpose) -> list[str]:
-        if purpose is ModelPurpose.SUMMARY:
-            return list(self._settings.summary_preference)
-        if purpose is ModelPurpose.PLANNER:
-            # 플래너는 따로 안 정했으면 챗봇 목록을 쓴다.
-            return list(self._settings.planner_preference or self._settings.chat_preference)
-        return list(self._settings.chat_preference)
+        """이전 내부 호출자와의 호환을 위해 설정 기본값을 위임한다."""
+        return self.settings_default(purpose)
+
+    def _merged(self, stored: list[str]) -> list[str]:
+        return self._unique([*self.settings_default(ModelPurpose.SUMMARY), *stored])
 
     async def _load(self) -> dict[str, list[str]]:
         now = utcnow().timestamp()
@@ -76,12 +85,20 @@ class ModelPreferenceStore:
         return stored
 
     async def preference(self, purpose: ModelPurpose) -> list[str]:
+        if purpose is not ModelPurpose.SUMMARY:
+            return []
         stored = await self._load()
-        return stored.get(purpose.value) or self._from_settings(purpose)
+        return self._merged(stored.get(purpose.value, []))
 
     async def set_preference(self, purpose: ModelPurpose, models: list[str]) -> list[str]:
-        """어드민이 고른 목록을 저장한다. 빈 목록이면 설정값으로 되돌린다."""
-        cleaned = [m.strip() for m in models if m and m.strip()]
+        """요약 모델 추가 후보만 저장한다. 빈 목록이면 DB 값을 지운다."""
+        if purpose is not ModelPurpose.SUMMARY:
+            raise InvalidRequestError(
+                "요약 모델 선호목록만 설정할 수 있습니다.",
+                details={"field": "purpose"},
+            )
+
+        cleaned = self._unique([m.strip() for m in models if m and m.strip()])
         now = utcnow()
         if not cleaned:
             await self._col.delete_one({"_id": purpose.value})
@@ -99,18 +116,20 @@ class ModelPreferenceStore:
             "model preference updated",
             extra={"purpose": purpose.value, "count": len(cleaned)},
         )
-        return cleaned or self._from_settings(purpose)
+        return await self.preference(purpose)
 
     async def all_preferences(self) -> list[dict[str, Any]]:
-        """어드민 화면용. 설정에서 온 값인지 DB에서 온 값인지 구분해서 준다."""
+        """어드민 화면용 요약 체인 한 건을 반환한다."""
         stored = await self._load()
+        default_models = self.settings_default(ModelPurpose.SUMMARY)
+        stored_models = stored.get(ModelPurpose.SUMMARY.value, [])
         return [
             {
-                "purpose": purpose.value,
-                "models": stored.get(purpose.value) or self._from_settings(purpose),
-                "source": "database" if stored.get(purpose.value) else "settings",
+                "purpose": ModelPurpose.SUMMARY.value,
+                "models": self._merged(stored_models),
+                "source": "database" if stored_models else "settings",
+                "default_models": default_models,
             }
-            for purpose in ModelPurpose
         ]
 
     def invalidate(self) -> None:

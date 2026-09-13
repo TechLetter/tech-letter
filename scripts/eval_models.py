@@ -1,7 +1,8 @@
 """무료 모델 요약 품질 실측.
 
-선호 목록(`SUMMARY_MODEL_PREFERENCE`, `CHAT_MODEL_PREFERENCE`)을 바꾸기 전에
-돌린다. 무료 모델은 몇 주 단위로 생겼다 없어지므로 목록은 실측으로만 정한다.
+요약 모델 선호 목록(`SUMMARY_MODEL_PREFERENCE`)을 정하기 전에 돌린다. 무료 모델은
+몇 주 단위로 생겼다 없어지므로 목록은 실측으로만 정한다. 챗봇 모델은 사용자가
+채팅창에서 직접 고르므로 이 스크립트의 결과로 챗봇 선호목록을 설정하지 않는다.
 
     OPENROUTER_API_KEY=... uv run python scripts/eval_models.py --limit 3
     OPENROUTER_API_KEY=... uv run python scripts/eval_models.py --models a:free,b:free

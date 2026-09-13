@@ -115,14 +115,14 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 ## 5. LLM 뷰
 
 ```
-요약   : Gemini(일 20회 예산) → 소진 시 OpenRouter[큐레이션 ∩ scouter 헬스]
-챗봇   : OpenRouter[큐레이션 ∩ scouter 헬스]
-플래너 : OpenRouter 소형·저지연 후보
+요약   : Gemini(일 20회 예산) → 소진 시 요약 env+DB 체인 → 헬스 기반 자동 폴백
+챗봇   : 사용자가 고른 무료 모델 → 헬스 기반 자동 폴백
+플래너 : 헬스 기반 자동 후보 선택
 임베딩 : Gemini gemini-embedding-001 고정
 ```
 - `core/llm/router.py`가 후보를 만들고 순차 폴백한다. `core/llm/model_scan.py`가 `worker`에서 1시간마다 OpenRouter의 `:free` 모델 전체에 짧은 요청을 보내 살아있는지 확인하고 `llm_model_checks`에 쌓는다. `ScouterClient`가 최근 24시간 기록으로 모델별 uptime·연속 실패를 계산해 후보를 좁히고(10분 TTL 캐시), 기록이 없으면 정적 목록으로 대체한다.
 - 한 프로세스가 요청에 따라 provider가 다른 모델(Gemini ↔ OpenRouter) 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 정확한 provider 클라이언트로 라우팅한다.
-- `llm_model_stats`에 모델×용도별 성적(성공률·JSON 실패·429·지연)을 기록해 자동 강등하고, 어드민 대시보드에 노출한다.
+- `llm_model_stats`에 모델×용도별 성적(성공률·JSON 실패·429·지연)을 기록해 자동 강등한다. 성적 표는 어드민에 노출하지 않는다.
 - `llm_daily_usage`로 provider별 일일 사용량을 기록한다(`LLM_QUOTA_RESET_UTC_HOUR` 기준 리셋).
 - 모든 LLM 호출에 타임아웃이 필수다. 입력은 `SUMMARY_MAX_INPUT_CHARS`로 절단한다.
 
@@ -132,7 +132,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 - 추적: HTTP `X-Request-Id` → 잡 `trace_id`로 전파 → 워커 로그까지 상관관계를 따라갈 수 있다.
 - 헬스: `api`는 `GET /health`(Mongo ping). 워커는 heartbeat 파일(`/tmp/techletter-heartbeat`)을 루프마다 touch, compose healthcheck가 2분 이내인지 검사한다.
 - `GET /metrics`(Prometheus 텍스트 노출 형식, 도커 네트워크 안에서만 접근 가능)이 잡 큐 상태를 노출한다.
-- 운영 대시보드: 잡 큐 상태·실패 사유·모델 성적을 어드민 화면에서 확인한다.
+- 운영 대시보드: 잡 큐 상태와 실패 사유를 어드민 화면에서 확인한다.
 
 ## 7. 보안
 

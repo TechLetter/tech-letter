@@ -177,14 +177,16 @@
 }
 ```
 
-### 2.10 `LlmModelStat` (어드민)
+### 2.10 `LlmModelPreference` (어드민)
 ```json
-{ "model_id": "nvidia/nemotron-3-super-120b-a12b:free", "purpose": "summary",
-  "attempts": 42, "successes": 39, "json_failures": 2, "rate_limited": 1,
-  "success_rate": 0.93, "avg_latency_ms": 1180,
-  "healthy": true, "uptime_24h": 100.0,
-  "last_used_at": "…", "last_error": null }
+{ "purpose": "summary",
+  "models": ["nvidia/nemotron-3-super-120b-a12b:free"],
+  "source": "settings", "default_models": ["nvidia/nemotron-3-super-120b-a12b:free"] }
 ```
+`default_models`는 `SUMMARY_MODEL_PREFERENCE`에서 온 기본 후보이고, `models`는
+환경변수 기본 후보 뒤에 어드민이 DB에 저장한 추가 후보를 붙인 최종 순서다(중복 제거).
+`source`는 DB 추가 후보가 있으면 `database`, 없으면 `settings`다. 챗봇·플래너에는
+선호목록이 없다.
 
 ### 2.11 모델 상태(공개)
 어드민용과 달리 테크레터 내부 실사용 성적(`json_failures`·`rate_limited`·성공률)은 없다 — OpenRouter 쪽 헬스만 보여준다.
@@ -246,10 +248,12 @@
 | POST | `/chat/sessions` | | `201 ChatSession` |
 | GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 400 `chat.session_not_found` |
 | DELETE | `/chat/sessions/{id}` | | `204` / 400 `chat.session_not_found` |
-| POST | `/chat/messages` | `{query, session_id?}` | `200 ChatAnswer` |
-| POST | `/chat/messages/stream` | `{query, session_id?}` | SSE |
+| POST | `/chat/messages` | `{query, session_id?, model_id?}` | `200 ChatAnswer` |
+| POST | `/chat/messages/stream` | `{query, session_id?, model_id?}` | SSE |
 
 처리 순서: 프롬프트 가드 → 세션 검증 → 크레딧 1 차감 → 에이전트 → 성공 시 메시지 저장 / 실패 시 환불.
+`model_id`는 선택 필드이며 무료 모델 카탈로그에 있는 id만 허용한다. 생략하면 자동으로
+모델을 고른다. 유효하지 않은 id는 400 `request.invalid`(`details.field="model_id"`)다.
 에러: `policy.blocked`(403) · `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).
 
 ### 3.4 어드민 (`role=admin`)
@@ -276,9 +280,8 @@
 | POST | `/admin/jobs/{id}/retry` | | `200 Job`(status→pending, attempt→0) |
 | POST | `/admin/jobs/retry-bulk` | `{type?, error_kind?, limit}` | `200 {retried: n}` |
 | DELETE | `/admin/jobs/{id}` | | `204` |
-| GET | `/admin/llm-models` | `purpose?` | 목록 + `LlmModelStat[]` |
-| GET | `/admin/llm-models/preferences` | | 목록 + `LlmModelPreference[]` |
-| PUT | `/admin/llm-models/preferences/{purpose}` | `{models:[]}` | `LlmModelPreference` |
+| GET | `/admin/llm-models/preferences` | | 목록(요약 1건) + `{purpose, models, source, default_models}` |
+| PUT | `/admin/llm-models/preferences/{purpose}` | `{models:[]}` (`purpose=summary`) | `{purpose, models, source, default_models}` |
 | GET | `/admin/backfill/summary` | | `{unsummarized, unembedded, pending_jobs, dead_jobs}` |
 | POST | `/admin/backfill/summary` | `{limit, priority}` | `202 {enqueued: n}` |
 | POST | `/admin/backfill/embeddings` | `{limit, priority}` | `202 {enqueued: n}` |
@@ -295,6 +298,8 @@
 
 ## 5. 어드민 운영 대시보드
 
-프론트 `/admin`에 두 탭이 있다.
-1. **운영(Ops)**: 잡 큐 상태 카드(pending/running/dead), 타입별 분포, 가장 오래된 pending, 실패 잡 목록(사유·attempt·재시도 버튼), 일괄 재시도, 백필 트리거.
-2. **모델(LLM)**: 모델별 성공률·JSON 실패·429·평균 지연·scouter 헬스 표.
+프론트 `/admin`에서 운영 관련 기능은 다음 두 탭으로 제공된다.
+1. **운영(Ops)**: 잡 큐 상태 카드(pending/running/dead), 타입별 분포, 가장 오래된
+   pending, 실패 잡 목록(사유·attempt·재시도 버튼), 일괄 재시도, 백필 트리거.
+2. **모델**: 모델 성적 통계 표는 제공하지 않으며, 요약 모델 폴백 체인(칩 추가/삭제/
+   순서 변경)을 `/admin/llm-models/preferences` API로 조회·저장한다.

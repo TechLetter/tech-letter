@@ -83,14 +83,12 @@ class ModelRouter:
         self._preferences = preferences
 
     async def _preference(self, purpose: ModelPurpose) -> list[str]:
-        """선호목록은 어드민이 DB에서 정한다. 저장소가 없으면 설정값을 쓴다."""
+        """저장소가 없을 때도 요약만 환경변수 기본값을 사용한다."""
         if self._preferences is not None:
             return await self._preferences.preference(purpose)
         if purpose is ModelPurpose.SUMMARY:
-            return self._settings.summary_preference
-        if purpose is ModelPurpose.PLANNER:
-            return self._settings.planner_preference or self._settings.chat_preference
-        return self._settings.chat_preference
+            return list(self._settings.summary_preference)
+        return []
 
     async def candidates(self, purpose: ModelPurpose) -> list[str]:
         """시도할 모델을 순서대로 준다.

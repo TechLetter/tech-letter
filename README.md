@@ -12,7 +12,7 @@
 - **언어**: Python 3.12
 - **웹 프레임워크**: FastAPI + uvicorn (async 전용)
 - **데이터베이스**: MongoDB (도메인 데이터 + 잡 큐), Qdrant (벡터 검색)
-- **AI**: Google Gemini(요약·임베딩 1순위) / OpenRouter(챗봇·요약 폴백) — 큐레이션과 실시간 헬스체크를 교차한 LLM 모델 라우터, LangChain/LangGraph 기반
+- **AI**: Google Gemini(요약·임베딩 1순위) / OpenRouter(챗봇·요약 폴백) — 요약 체인·사용자 선택·실시간 헬스체크를 결합한 LLM 모델 라우터, LangChain/LangGraph 기반
 - **패키지 관리**: uv
 - **컨테이너**: Docker & Docker Compose (이미지 2개, 프로세스 4개 — 아래 참고)
 
@@ -102,12 +102,13 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 ### LLM 모델 라우터
 
 ```
-요약   : Gemini(일일 예산) → 소진 시 OpenRouter[큐레이션 ∩ scouter 헬스]로 순차 폴백
-챗봇   : OpenRouter[큐레이션 ∩ scouter 헬스]
+요약   : Gemini(일일 예산) → 소진 시 요약 env+DB 체인 → 헬스 기반 자동 폴백
+챗봇   : 사용자가 고른 무료 모델 → 헬스 기반 자동 폴백
+플래너 : 헬스 기반 자동 후보 선택
 임베딩 : Gemini gemini-embedding-001 고정
 ```
 
-같은 프로세스가 provider가 다른 후보들 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 Gemini 클라이언트와 OpenRouter 클라이언트 중 하나로 정확히 라우팅한다. `worker`가 1시간마다 OpenRouter의 `:free` 모델 전체를 자체적으로 헬스체크해 후보를 좁히고, 기록이 없으면 정적 폴백 목록으로 계속 동작한다. 모델별 성적은 `llm_model_stats`에 기록되어 자동 강등되고 어드민 화면(`/admin/llm-models`)에 노출된다.
+같은 프로세스가 provider가 다른 후보들 사이를 오갈 수 있어야 하므로, `RoutingChatClient`가 요청된 `model_id`를 보고 Gemini 클라이언트와 OpenRouter 클라이언트 중 하나로 정확히 라우팅한다. `worker`가 1시간마다 OpenRouter의 `:free` 모델 전체를 자체적으로 헬스체크해 후보를 좁히고, 기록이 없으면 정적 폴백 목록으로 계속 동작한다. 모델별 성적은 `llm_model_stats`에 기록되어 자동 강등되지만 어드민 통계 표에는 노출하지 않는다.
 
 ## API
 
@@ -116,7 +117,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 - `posts`, `blogs`, `filters`, `trends` — 공개 콘텐츠 조회
 - `me`, `bookmarks`, `auth` — 사용자 프로필, 북마크, Google OAuth 로그인
 - `chat` — 세션·크레딧·LangGraph 에이전트 질의응답(SSE 스트리밍 포함)
-- `admin/*` — 잡 큐 조회·재시도, 백필 트리거, 블로그/포스트/유저/추천질문 관리, 모델 성적 대시보드
+- `admin/*` — 잡 큐 조회·재시도, 백필 트리거, 블로그/포스트/유저/추천질문 관리, 요약 모델 폴백 체인 설정
 
 에러 응답은 `{"error": {"code": "...", "message": "..."}}` 단일 봉투로 통일돼 있다.
 

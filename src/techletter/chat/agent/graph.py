@@ -204,9 +204,18 @@ class ChatAgent:
 
     async def _answer(self, state: AgentState) -> dict[str, Any]:
         await state.recorder.emit("answer", "running")
-        generated = await self._answers.generate(
-            state.query, state.plan, state.tool_result, state.memory_metadata
-        )
+        if state.model_id is None:
+            generated = await self._answers.generate(
+                state.query, state.plan, state.tool_result, state.memory_metadata
+            )
+        else:
+            generated = await self._answers.generate(
+                state.query,
+                state.plan,
+                state.tool_result,
+                state.memory_metadata,
+                model_id=state.model_id,
+            )
         # 기존 테스트용 답변 구현처럼 문자열만 돌려주는 구현도 허용한다.
         # 실제 AnswerGenerator는 (답변, 실제로 사용한 모델) 튜플을 준다.
         if isinstance(generated, tuple) and len(generated) == 2:
@@ -224,6 +233,7 @@ class ChatAgent:
         query: str,
         memory: MemoryContext,
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
+        model_id: str | None = None,
     ) -> AgentResult:
         recorder = ActivityRecorder(on_activity)
         final = await self._graph.ainvoke(
@@ -232,6 +242,7 @@ class ChatAgent:
                 search_query=memory.rewritten_query or query,
                 memory_metadata=memory.to_metadata(),
                 recorder=recorder,
+                model_id=model_id,
             )
         )
 

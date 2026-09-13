@@ -5,7 +5,7 @@
 | 층 | 대상 | 도구 | 마커 |
 |---|---|---|---|
 | **단위** | 도메인 서비스, 가드, 플래너, 파서, 검증기, 잡 정책, LLM 라우터, JWT, 관용 파서 | pytest + Fake | (기본) |
-| **계약** | API 57개 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
+| **계약** | API 56개 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
 | **통합** | 레포지토리↔Mongo, 잡 큐 클레임/재시도, Qdrant, 워커 파이프라인 | 실행 중인 Mongo/Qdrant 컨테이너 필요 | `integration` |
 | **E2E** | 프론트+백엔드 실제 브라우저 시나리오 | Playwright(pytest-playwright) | `e2e` |
 
@@ -23,7 +23,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 
 - syrupy 골든 스냅샷은 사용하지 않는다(import 0건이며 의존성도 제거됐다). 계약 테스트는 실제로 `assert set(body) == {...}` 형태의 키 집합과 DTO 네이밍 변환을 고정한다.
 - `tests/contract/snapshots/{current,v2}`는 v1→v2 마이그레이션 심사 기록물일 뿐 pytest·CI가 읽지 않는다.
-- `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 57개 라우트의 커버리지를 검증한다.
+- `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 56개 라우트의 커버리지를 검증한다.
 - SSE는 프론트 파서와 동일한 규칙으로 파싱해 이벤트 시퀀스와 `done` 키 집합을 검증한다.
 
 ## 3. 단위 테스트 — 핵심 커버리지
@@ -31,7 +31,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 - `core/pagination`: 관용 파싱 표(`""`, `abc`, `0`, `-1`, `101`).
 - `core/jobs/policy`: 백오프 표, 쿼터 리셋 계산(리셋 시각 경계·jitter), attempt 롤백, max 초과 시 dead 전이, `dead_retryable_alert` 임계치.
 - `core/jobs/queue`: 중복 억제, 동시 클레임 시 단일 승자, 스테일 락 회수, `count_dead`.
-- `core/llm/router`: 큐레이션∩헬스 순서, 헬스 기록 없을 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
+- `core/llm/router`: 요약 체인∩헬스 순서, 챗봇·플래너 자동 후보, 헬스 기록 없을 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
 - `core/llm/chat`: `RoutingChatClient`가 `model_id`로 올바른 provider 클라이언트를 고르는지.
 - `chat/use_case`: 순서 보장(가드 실패 시 크레딧 미차감, 차감 실패 시 에이전트 미호출, 에이전트 실패 시 환불 호출).
 - `summary/pipeline`: 예외 분류(렌더 실패/봇 차단/파싱 실패 → 각각 다른 처리).
@@ -70,7 +70,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 | 챗 세션 목록 | `message_count`를 사용하는 세션 요청 |
 | 어드민 포스트 목록 | v2 필드와 요약 모델명이 화면에 표시 |
 | 어드민 운영 탭 | 잡 통계 요청과 상태 카드 표시 |
-| 어드민 모델 탭 | 모델 성적 요청이 200 |
+| 어드민 모델 탭 | 요약 폴백 체인 조회 요청이 200이고 `purpose=summary` 1건 |
 | 일반 사용자의 어드민 접근 | 어드민 요청이 403이거나 요청하지 않음 |
 | 만료 토큰 접근 | 401 인터셉터가 토큰을 삭제 |
 
@@ -82,7 +82,7 @@ PR과 `develop`/`main` push에서 4개 잡이 병렬로 돈다.
 
 | 잡 | 내용 |
 |---|---|
-| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 → `scripts/check_routes.py`(57개 API 계약 라우트 일치) |
+| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 → `scripts/check_routes.py`(56개 API 계약 라우트 일치) |
 | `integration` | 실제 mongo:8.0·qdrant:v1.16.2 서비스 컨테이너로 통합·계약 테스트 |
 | `e2e` | `tech-letter_ui`를 체크아웃해 빌드하고, 실제 API 프로세스를 띄운 뒤 Playwright로 시나리오 실행(프론트 체크아웃 실패 시 경고만 남기고 건너뜀) |
 | `images` | 런타임/브라우저 이미지 빌드 + **크기 게이트**(런타임 ≤450MB, 브라우저 ≤1200MB) + 컨테이너 안에서 `techletter version`과 필수 의존성 import 스모크 |

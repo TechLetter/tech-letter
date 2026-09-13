@@ -83,7 +83,10 @@ async def delete_session(ctx: Ctx, user: CurrentUser, session_id: str) -> Respon
 @router.post("/messages", response_model=ChatAnswerOut)
 async def send_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> ChatAnswerOut:
     answer = await ctx.chat.run(
-        user_code=user.user_code, query=body.query, session_id=body.session_id
+        user_code=user.user_code,
+        query=body.query,
+        session_id=body.session_id,
+        model_id=body.model_id,
     )
     return ChatAnswerOut.of(answer)
 
@@ -107,6 +110,7 @@ async def stream_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> Stream
             user_code=user.user_code,
             query=body.query,
             session_id=body.session_id,
+            model_id=body.model_id,
             on_activity=on_activity,
         )
     )

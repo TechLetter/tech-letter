@@ -127,32 +127,6 @@ class ModelStatsStore:
                 demoted.add(doc["model_id"])
         return demoted
 
-    async def all_stats(self, purpose: ModelPurpose | None = None) -> list[dict[str, Any]]:
-        """어드민 대시보드용."""
-        query = {"purpose": purpose.value} if purpose else {}
-        rows: list[dict[str, Any]] = []
-        cursor = self._col.find(query)
-        async for doc in cursor:
-            attempts = doc.get("attempts") or 0
-            rows.append(
-                {
-                    "model_id": doc.get("model_id"),
-                    "purpose": doc.get("purpose"),
-                    "attempts": attempts,
-                    "successes": doc.get("successes", 0),
-                    "json_failures": doc.get("json_failures", 0),
-                    "rate_limited": doc.get("rate_limited", 0),
-                    "success_rate": round(
-                        (doc.get("successes", 0) / attempts) if attempts else 1.0, 3
-                    ),
-                    "avg_latency_ms": doc.get("avg_latency_ms"),
-                    "last_used_at": doc.get("last_used_at"),
-                    "last_error": doc.get("last_error"),
-                }
-            )
-        rows.sort(key=lambda r: (-r["success_rate"], r["avg_latency_ms"] or 1e9))
-        return rows
-
     async def reset(self, model_id: str, purpose: ModelPurpose) -> None:
         await self._col.delete_one({"_id": self._key(model_id, purpose)})
 
