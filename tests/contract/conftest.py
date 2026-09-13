@@ -20,10 +20,27 @@ if TYPE_CHECKING:  # pragma: no cover
 TEST_MONGO_URI = os.environ.get("TEST_MONGO_URI", "mongodb://localhost:27018")
 TEST_DB_NAME = "techletter_contract"
 
-pytestmark = pytest.mark.integration
-
 ADMIN_CODE = "google:admin"
 USER_CODE = "google:alice"
+
+
+@pytest.fixture(scope="session")
+async def mongo_available() -> str | None:
+    """Mongo 가용성을 세션에서 한 번 확인하고 실패 사유를 캐시한다."""
+    from pymongo import AsyncMongoClient
+    from pymongo.errors import PyMongoError
+
+    client = AsyncMongoClient(TEST_MONGO_URI, tz_aware=True, serverSelectionTimeoutMS=5000)
+    try:
+        await client.admin.command("ping")
+    except PyMongoError as exc:
+        return (
+            f"테스트 Mongo에 접속할 수 없다 ({TEST_MONGO_URI}). "
+            f"`./scripts/dev.sh test-infra` 를 먼저 실행한다: {exc}"
+        )
+    finally:
+        await client.close()
+    return None
 
 
 @pytest.fixture
@@ -39,16 +56,14 @@ def contract_settings():
 
 
 @pytest.fixture
-async def app(contract_settings) -> AsyncIterator[FastAPI]:
-    from pymongo.errors import PyMongoError
-
+async def app(mongo_available: str | None, contract_settings) -> AsyncIterator[FastAPI]:
     from techletter.app import create_app
     from techletter.container import Container
 
-    try:
-        container = await Container.open(contract_settings)
-    except PyMongoError as exc:
-        pytest.skip(f"테스트 Mongo에 접속할 수 없다 ({TEST_MONGO_URI}): {exc}")
+    if mongo_available:
+        pytest.skip(mongo_available)
+
+    container = await Container.open(contract_settings)
 
     for name in await container.db.list_collection_names():
         await container.db[name].drop()

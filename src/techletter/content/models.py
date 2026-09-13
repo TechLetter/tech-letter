@@ -56,6 +56,7 @@ class Post(BaseDocument):
     blog_name: str = ""
     title: str = ""
     link: str = ""
+    link_key: str | None = None
     published_at: MongoDateTime | None = None
     thumbnail_url: str | None = None
     view_count: int = 0

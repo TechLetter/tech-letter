@@ -16,7 +16,13 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-__all__ = ["OUTPUT_LEAK_RULES", "PROMPT_RULES", "RETRIEVED_CONTENT_RULES", "GuardRule"]
+__all__ = [
+    "OUTPUT_LEAK_PHRASES",
+    "OUTPUT_LEAK_RULES",
+    "PROMPT_RULES",
+    "RETRIEVED_CONTENT_RULES",
+    "GuardRule",
+]
 
 RuleAction = Literal["block", "sanitize"]
 
@@ -186,16 +192,22 @@ RETRIEVED_CONTENT_RULES: tuple[GuardRule, ...] = (
     GuardRule("secret_request", "sanitize", _match_any(_SECRET, _ENV_VAR)),
 )
 
-# 답변에 우리 시스템 프롬프트 조각이 새어 나왔는지 본다.
+# 답변에 우리 시스템 프롬프트 조각이 새어 나왔는지 본다. 일반 기술 문서에도
+# 나올 수 있는 단어가 아니라, 현재 프롬프트에만 있는 문장만 둔다. 프롬프트가
+# 바뀌면 이 목록을 함께 갱신하도록 테스트에서 실제 상수와 대조한다.
+OUTPUT_LEAK_PHRASES: tuple[str, ...] = (
+    "You are the planning node for the Tech-Letter chatbot.",
+    "Convert the current Korean user question into a structured execution plan.",
+    "You are the answer generation node for Tech-Letter.",
+    "Do not change the execution scope.",
+    "Rewrite the current Korean user question into a standalone search query for RAG.",
+)
+
+
 OUTPUT_LEAK_RULES: tuple[GuardRule, ...] = (
     GuardRule(
         "internal_instruction_leak",
         "block",
-        _match_any(
-            r"SYSTEM CONFIGURATION",
-            r"CRITICAL SECURITY RULES",
-            r"### FINAL REMINDER",
-            r"### OPERATIONAL INSTRUCTIONS",
-        ),
+        _match_any(*(re.escape(phrase) for phrase in OUTPUT_LEAK_PHRASES)),
     ),
 )

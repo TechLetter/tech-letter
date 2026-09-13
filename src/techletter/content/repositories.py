@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from techletter.content.links import normalize_link
 from techletter.content.models import Blog, ListPostsFilter, Post
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.ids import to_object_id
@@ -35,6 +36,12 @@ register_indexes(
         IndexSpec("idx_categories", [("aisummary.categories", ASCENDING)]),
         IndexSpec("idx_tags", [("aisummary.tags", ASCENDING)]),
         IndexSpec("uniq_link", [("link", ASCENDING)], unique=True),
+        IndexSpec(
+            "uniq_link_key",
+            [("link_key", ASCENDING)],
+            unique=True,
+            partial_filter={"link_key": {"$type": "string"}},
+        ),
         IndexSpec("idx_published_at_id_desc", [("published_at", DESCENDING), ("_id", DESCENDING)]),
         IndexSpec(
             "idx_tags_published_at",
@@ -72,6 +79,11 @@ def _falsy(field: str) -> dict[str, Any]:
 def _exact_ci(values: list[str]) -> list[re.Pattern[str]]:
     """대소문자를 무시하는 완전일치 패턴."""
     return [re.compile(f"^{re.escape(v.strip())}$", re.IGNORECASE) for v in values if v.strip()]
+
+
+def _missing_link_key_query() -> dict[str, Any]:
+    """정규화 키가 아직 없는 구형 문서를 고른다."""
+    return {"link_key": {"$not": {"$type": "string"}}}
 
 
 class PostRepository:
@@ -193,14 +205,67 @@ class PostRepository:
         cursor = self._col.find({"link": {"$in": links}}, projection={"link": 1})
         return {doc["link"] async for doc in cursor}
 
+    async def existing_link_keys(self, links: list[str], keys: list[str]) -> set[str]:
+        """원문 링크와 정규화 키 양쪽 기준으로 이미 저장된 값을 찾는다.
+
+        `link_key` 도입 전 문서와 전환 중인 문서가 함께 있으므로 두 필드를
+        모두 조회한다. 매치된 문서의 두 값을 전부 반환해야 호출자가 원문과
+        키 중 어느 쪽으로 들어온 중복도 놓치지 않는다.
+        """
+        clauses: list[dict[str, Any]] = []
+        if links:
+            clauses.append({"link": {"$in": links}})
+        if keys:
+            clauses.append({"link_key": {"$in": keys}})
+        if not clauses:
+            return set()
+        query: dict[str, Any] = clauses[0] if len(clauses) == 1 else {"$or": clauses}
+        cursor = self._col.find(query, projection={"link": 1, "link_key": 1})
+        known: set[str] = set()
+        async for doc in cursor:
+            if isinstance(link := doc.get("link"), str):
+                known.add(link)
+            if isinstance(link_key := doc.get("link_key"), str):
+                known.add(link_key)
+        return known
+
+    async def find_missing_link_keys(
+        self, limit: int, *, after_id: ObjectId | None = None
+    ) -> list[Post]:
+        """정규화 키가 없는 문서를 `_id` 순으로 배치 조회한다."""
+        query = _missing_link_key_query()
+        if after_id is not None:
+            query["_id"] = {"$gt": after_id}
+        cursor = (
+            self._col.find(
+                query,
+                projection={"_id": 1, "link": 1, "link_key": 1},
+            )
+            .sort([("_id", ASCENDING)])
+            .limit(limit)
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
+    async def find_by_link_keys(self, keys: list[str]) -> list[Post]:
+        """주어진 키를 이미 가진 문서를 조회한다(백필 충돌 확인용)."""
+        if not keys:
+            return []
+        cursor = self._col.find(
+            {"link_key": {"$in": keys}},
+            projection={"_id": 1, "link": 1, "link_key": 1},
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
     # ── 변경 ────────────────────────────────────────────────────────
     async def insert(self, post: Post) -> Post | None:
-        """새 포스트를 넣는다. `uniq_link`에 걸리면 None을 준다.
+        """새 포스트를 넣는다. 두 링크 유니크 인덱스 충돌은 None을 준다.
 
         수집기가 링크 존재 여부를 미리 확인해도, 워커 두 개가 같은 피드를
         동시에 처리하면 그 사이에 끼어들 수 있다. 유니크 인덱스가 최종
         방어선이고, 여기서는 그 충돌을 정상 흐름으로 다룬다.
         """
+        if post.link_key is None:
+            post.link_key = normalize_link(post.link)
         try:
             result = await self._col.insert_one(post.to_mongo())
         except DuplicateKeyError:
@@ -288,6 +353,50 @@ class PostRepository:
             projection={"plain_text": 0},
         ).limit(limit)
         return [Post.model_validate(doc) async for doc in cursor]
+
+    async def update_link_key(self, post_id: str, link_key: str) -> bool:
+        """구형 포스트에 정규화 키를 채운다. 유니크 충돌은 건너뛴다."""
+        oid = to_object_id(post_id)
+        if oid is None:
+            return False
+        try:
+            result = await self._col.update_one(
+                {"_id": oid, **_missing_link_key_query()},
+                {"$set": {"link_key": link_key, "updated_at": utcnow()}},
+            )
+        except DuplicateKeyError:
+            return False
+        return result.matched_count > 0
+
+    async def find_future_published_at(
+        self, now: datetime, limit: int, *, after_id: ObjectId | None = None
+    ) -> list[Post]:
+        """현재 시각보다 뒤인 발행일을 가진 포스트를 배치 조회한다."""
+        query: dict[str, Any] = {"published_at": {"$gt": now}}
+        if after_id is not None:
+            query["_id"] = {"$gt": after_id}
+        cursor = (
+            self._col.find(
+                query,
+                projection={"_id": 1, "title": 1, "published_at": 1, "created_at": 1},
+            )
+            .sort([("_id", ASCENDING)])
+            .limit(limit)
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
+    async def update_future_published_at(
+        self, post_id: str, published_at: datetime, *, now: datetime
+    ) -> bool:
+        """아직 미래인 발행일만 백필 값으로 갱신한다."""
+        oid = to_object_id(post_id)
+        if oid is None:
+            return False
+        result = await self._col.update_one(
+            {"_id": oid, "published_at": {"$gt": now}},
+            {"$set": {"published_at": published_at, "updated_at": utcnow()}},
+        )
+        return result.matched_count > 0
 
     # ── 집계 ────────────────────────────────────────────────────────
     async def _facet_counts(self, unwind_field: str, match: dict[str, Any]) -> dict[str, int]:
@@ -466,10 +575,20 @@ class BlogRepository:
                 return field_name
         return None
 
-    async def list_blogs(
-        self, page: Page, *, include_inactive: bool = False
-    ) -> tuple[list[Blog], int]:
-        query: dict[str, Any] = {} if include_inactive else {"is_active": {"$ne": False}}
+    async def list_blogs(self, page: Page, *, active: bool | None = True) -> tuple[list[Blog], int]:
+        """활성 여부 3상태 필터 — `True`=활성만, `False`=비활성만, `None`=전체.
+
+        활성 쪽이 `{"$ne": False}`인 것은 `is_active` 필드가 아예 없는 구형
+        문서를 활성으로 보기 위해서다. 비활성 쪽은 명시적 `False`만 본다 —
+        필드 없는 문서를 비활성로 몰아넣으면 활성로 살아 있던 피드가 사라진다.
+        """
+        query: dict[str, Any]
+        if active is None:
+            query = {}
+        elif active:
+            query = {"is_active": {"$ne": False}}
+        else:
+            query = {"is_active": False}
         total = await self._col.count_documents(query)
         cursor = (
             self._col.find(query).sort([("name", ASCENDING)]).skip(page.skip).limit(page.page_size)

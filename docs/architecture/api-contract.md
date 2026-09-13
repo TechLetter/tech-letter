@@ -48,13 +48,13 @@
 | `auth.forbidden` | 403 | 어드민 권한 부족 |
 | `auth.session_expired` | 400 | 로그인 세션 교환 실패 |
 | `resource.not_found` | 404 | 대상 없음 |
-| `resource.conflict` | 409 | 중복(`details.field`: `rss_url` \| `url` \| `text`) |
+| `resource.conflict` | 409 | 중복(`details.field`: `rss_url` \| `url` \| `text` \| `link`) |
 | `credit.insufficient` | 402 | 크레딧 부족 |
 | `credit.error` | 500 | 크레딧 처리 실패 |
 | `chat.session_not_found` | 400 | session_id 무효 |
 | `policy.blocked` | 403 | 프롬프트 가드 차단 |
-| `llm.rate_limited` | 429 | 모델 전부 rate limit |
-| `llm.unavailable` | 503 | 모델 전부 실패/장애 |
+| `llm.rate_limited` | 429 | 챗봇 모델 후보가 모두 rate limit/쿼터 소진 |
+| `llm.unavailable` | 503 | 챗봇 모델 후보가 모두 실패/장애 |
 | `internal.error` | 500 | 그 외 |
 
 ### 1.5 상태 코드
@@ -92,7 +92,7 @@
 
 ### 2.2 `Blog` / `AdminBlog`
 공개: `{id, name, url}`.
-어드민: `{id, name, url, rss_url, blog_type, is_active, tls_insecure, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. `consecutive_failures`가 임계치를 넘으면 블로그가 자동으로 `is_active=false`가 된다.
+어드민: `{id, name, url, rss_url, blog_type, is_active, tls_insecure, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
 ### 2.3 `AdminPost`
 ```json
@@ -121,6 +121,7 @@
   "created_at": "…", "updated_at": "…"
 }
 ```
+`credits.granted_today`는 오늘(UTC) 지급된 크레딧 총량(`daily` + `admin_grant` 합계)이며, 소비·환불은 제외한다.
 
 ### 2.5 `ChatSession`
 ```json
@@ -132,7 +133,7 @@
     { "role": "user", "content": "…", "created_at": "…" },
     { "role": "assistant", "content": "…", "created_at": "…",
       "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…"} ],
-      "agent":  {"mode":"…","intent":"…","activities":[…]},
+      "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[…]},
       "guard":  {"action":"pass","message":null},
       "memory": {"used":true,"status":"ready","compressed":false} }
   ]
@@ -147,12 +148,13 @@
   "message_id": "…",
   "answer": "마크다운 …",
   "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…","score":0.83} ],
-  "agent":  {"mode":"…","intent":"…","activities":[{"type":"search","label":"…","status":"done"}]},
+  "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[{"type":"search","label":"…","status":"done"}]},
   "guard":  {"action":"pass","risk_level":"low","message":null,"findings":[]},
   "memory": {"used":true,"status":"ready","compressed":false,"compression_failed":false,"recent_message_count":6},
   "credits": {"consumed":1,"remaining":6}
 }
 ```
+`agent.model_id`는 실제 사용 모델 ID(`string|null`)이며, 알 수 없으면 `null`이다.
 `guard.action ∈ {pass, sanitize, block}`, `memory.status ∈ {ready, pending, failed}`.
 
 ### 2.7 Trends
@@ -206,13 +208,13 @@
 ### 3.1 공개
 | 메서드 | 경로 | 인증 | 쿼리/바디 | 응답 |
 |---|---|---|---|---|
-| GET | `/health` | - | | `200 {"status":"ok"}` / `503 {"status":"degraded","checks":{...}}` |
+| GET | `/health` | - | | `200 {"status":"ok"}` / `503 {"status":"degraded","checks":{...}}` (Traefik은 `/api`만 라우팅하므로 compose healthcheck 전용) |
 | GET | `/posts` | 선택 | `page, page_size, categories[], tags[], blog_id, published_from, published_to` | 목록 봉투 + `Post[]` |
 | GET | `/posts/{id}` | 선택 | | `Post` / 404 `resource.not_found` |
 | POST | `/posts/{id}/views` | - | | `204` |
 | GET | `/blogs` | - | `page, page_size` | 목록 + `Blog[]` |
 | GET | `/bookmarks` | 필수 | `page, page_size` | 목록 + `Post[]`(`is_bookmarked: true`) |
-| POST | `/bookmarks` | 필수 | `{post_id}` | `201 {post_id, created_at}` / 404 / 409 |
+| POST | `/bookmarks` | 필수 | `{post_id}` | `201 {post_id, created_at}`(중복도 멱등 upsert) / 404 |
 | DELETE | `/bookmarks/{post_id}` | 필수 | | `204` / 404 |
 | GET | `/filters/categories` | - | `blog_id, tags[]` | `{items,total}` |
 | GET | `/filters/tags` | - | `blog_id, categories[]` | `{items,total}` |
@@ -242,8 +244,8 @@
 | GET | `/chat/suggested-questions` | | `{items:[{id,text}],total}` |
 | GET | `/chat/sessions` | `page, page_size` | 목록 + `ChatSession[]`(messages 제외, `updated_at` desc) |
 | POST | `/chat/sessions` | | `201 ChatSession` |
-| GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 404 |
-| DELETE | `/chat/sessions/{id}` | | `204` |
+| GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 400 `chat.session_not_found` |
+| DELETE | `/chat/sessions/{id}` | | `204` / 400 `chat.session_not_found` |
 | POST | `/chat/messages` | `{query, session_id?}` | `200 ChatAnswer` |
 | POST | `/chat/messages/stream` | `{query, session_id?}` | SSE |
 
@@ -258,14 +260,14 @@
 | DELETE | `/admin/posts/{id}` | | `204` |
 | POST | `/admin/posts/{id}/summarize` | | `202 {job_id}` |
 | POST | `/admin/posts/{id}/embed` | | `202 {job_id}` |
-| GET | `/admin/blogs` | `page, page_size, is_active?` | 목록 + `AdminBlog[]` |
-| POST | `/admin/blogs` | `{name,url,rss_url,blog_type,is_active}` | `201 AdminBlog` / 409 `details.field` |
+| GET | `/admin/blogs` | `page, page_size, is_active?` (`없음/인식불가`=전체, `true`=활성만, `false`=비활성만) | 목록 + `AdminBlog[]` |
+| POST | `/admin/blogs` | `{name,url,rss_url,blog_type,is_active,tls_insecure}` | `201 AdminBlog` / 409 `details.field` |
 | PUT | `/admin/blogs/{id}` | 동일 | `200 AdminBlog` |
 | DELETE | `/admin/blogs/{id}` | `delete_posts=bool` | `200 {deleted_posts: n}` |
-| POST | `/admin/blogs/{id}/activate` | | `200 AdminBlog`(자동 비활성화 해제) |
-| GET | `/admin/users` | `page, page_size` | 목록 + `{user_code,email,name,role,credits:{remaining},created_at,updated_at}` |
-| POST | `/admin/users/{user_code}/credits` | `{amount, expires_at}` | `201 {user_code, amount, expires_at}` |
-| GET | `/admin/suggested-questions` | `page, page_size, include_inactive` | 목록 |
+| POST | `/admin/blogs/{id}/activate` | | `200 AdminBlog`(자동 비활성화 해제, `post_count` 실제 카운트) |
+| GET | `/admin/users` | `page, page_size` | 목록 + `{user_code,email,name,role,credits:{remaining,granted_today},created_at,updated_at}` |
+| POST | `/admin/users/{user_code}/credits` | `{amount, expires_at}` (`expires_at ≤ now+365일`) | `201 {user_code, amount, expires_at}` / 400 `request.invalid` (`details.field="expires_at"`, `details.max_days=365`) |
+| GET | `/admin/suggested-questions` | `include_inactive` | 목록(페이지네이션 없음) |
 | POST | `/admin/suggested-questions` | `{text, sort_order, is_active}` | `201` / 409 `details.field="text"` |
 | PUT | `/admin/suggested-questions/{id}` | 동일 | `200` |
 | DELETE | `/admin/suggested-questions/{id}` | | `204` |

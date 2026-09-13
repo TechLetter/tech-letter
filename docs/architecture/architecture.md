@@ -24,7 +24,7 @@ flowchart LR
     EW -->|claim / update| M
 
     API -->|vector search| Q[(Qdrant)]
-    W -->|upsert / delete| Q
+    EW -->|upsert / delete| Q
 
     API -->|chat · plan| R{{"LLM 모델 라우터"}}
     W -->|context compression| R
@@ -39,9 +39,9 @@ flowchart LR
 | 프로세스 | 명령 | 책임 | 하지 않는 것 |
 |---|---|---|---|
 | **api** | `techletter api` | HTTP 전부(공개·어드민), 인증/인가, 채팅 오케스트레이션(가드→세션→크레딧→에이전트→기록/환불), SSE, OpenAPI. 잡은 **enqueue만** | 잡 소비, 스케줄러, Playwright |
-| **worker** | `techletter worker` | RSS 수집(30분), 잡 소비: `summary.completed` 반영·`embedding.requested` enqueue / `embedding.completed` → Qdrant upsert + posts 반영 / `embedding.delete_requested` / `chat.compression_requested`. run_at 도래분은 클레임 쿼리가 자동 pending 복귀시킨다 + **스테일 락 회수** + done 잡 TTL 관리 | HTTP 서빙 |
-| **summary-worker** | `techletter summary-worker` | `summary.requested` 잡 → 렌더링·파싱·검증·썸네일·요약 → `summary.completed` enqueue. LLM 예산·모델 라우팅 적용 | Qdrant, 도메인 쓰기 |
-| **embedding-worker** | `techletter embedding-worker` | `embedding.requested` 잡 → 청킹·임베딩 → `embedding.completed` enqueue | Qdrant upsert(worker 담당) |
+| **worker** | `techletter worker` | RSS 수집(30분 주기), 잡 소비: `summary.completed` 반영·`embedding.requested` enqueue / `embedding.completed` → posts 임베딩 메타 반영 / `chat.compression_requested`. `model_scan`·`model_history_rollup`(각 1시간, 시작 시 실행)도 담당한다. run_at 도래분은 클레임 쿼리가 자동 pending 복귀시킨다 + **스테일 락 회수** + done 잡 TTL 관리 | Qdrant upsert/delete, HTTP 서빙 |
+| **summary-worker** | `techletter summary-worker` | `summary.requested` 잡 → 렌더링·파싱·검증 → 요약 → 썸네일 → `summary.completed` enqueue. 요약이 실패하면 뒤의 썸네일도 버려지며, 영구 실패 사유는 posts에 기록한다. LLM 예산·모델 라우팅 적용 | Qdrant, 영구 실패 사유 외의 도메인 쓰기 |
+| **embedding-worker** | `techletter embedding-worker` | `embedding.requested` 잡 → 청킹·임베딩 → Qdrant upsert → `embedding.completed` enqueue. `embedding.delete_requested` 잡은 Qdrant delete로 처리한다 | HTTP 서빙 |
 
 - 로컬 개발용 `techletter all`(api + worker 단일 프로세스)을 제공한다.
 - 컨슈머 그룹·오프셋·리밸런스 개념이 없다. 워커를 늘리면 같은 `jobs` 컬렉션에서 원자적으로 나눠 가진다.
@@ -60,7 +60,7 @@ techletter
 └── workers/      프로세스 진입점·런타임(잡 러너, 스케줄러, graceful shutdown)
 ```
 
-의존 방향: `api → {content, users, chat, embedding} → core`. 도메인 간은 **`chat → content, users, embedding`** 만 허용한다. `content ↔ users`는 서로 참조하지 않는다. `summary`/`embedding`은 `core`만 의존한다.
+의존 방향: `api → {content, users, chat, embedding} → core`. 도메인 간은 **`chat → content, users, embedding`** 만 허용한다. `content ↔ users`는 서로 참조하지 않는다. 특히 `summary/embedding → {core, content(jobs·handlers)}`이며, 잡 페이로드·핸들러를 위해 `content`를 참조한다.
 도메인 패키지는 FastAPI를 import하지 않는다(`Depends`는 `api/deps.py`에만 있다).
 
 게이트웨이 역할(인증/인가, 채팅 오케스트레이션, 프로필 합성, 어드민 검증, 에러 변환)은 별도 프로세스 없이 `api` 안에서 계층으로 나뉜다: JWT 검증과 admin 체크는 `api/deps.py`, OAuth 로그인 흐름은 `users/auth_service.py` + `api/v1/auth.py`, 프로필 합성은 `users/service.py::get_me()`, 채팅 오케스트레이션은 `chat/use_case.py::ChatUseCase`(가드→세션→차감→에이전트→기록/환불을 한 함수 체인으로), 도메인 예외 → HTTP 응답 변환은 `api/errors.py`가 담당한다.
@@ -72,12 +72,12 @@ techletter
 ### 3.1 잡 타입
 | type | enqueue | 처리 | payload |
 |---|---|---|---|
-| `summary.requested` | worker(RSS 신규·백필), api(어드민 트리거) | summary-worker | `{post_id, title, blog_name, link, published_at}` |
+| `summary.requested` | worker(RSS 신규·백필), api(어드민 트리거) | summary-worker | `{post_id, title, link, blog_name}` |
 | `summary.completed` | summary-worker | worker | `{post_id, summary, categories, tags, model_name, plain_text, thumbnail_url}` |
-| `embedding.requested` | worker(요약 반영 후), api(어드민 트리거) | embedding-worker | `{post_id, title, blog_name, link, published_at, categories, tags, summary, plain_text}` |
-| `embedding.completed` | embedding-worker | worker | `{post_id, model_name, chunks:[{index,text,vector}]}` |
-| `embedding.delete_requested` | api(포스트·블로그 삭제) | worker | `{post_id}` |
-| `chat.compression_requested` | api(세션 임계치 도달) | worker | `{user_code, session_id, message_count}` |
+| `embedding.requested` | worker(요약 반영 후), api(어드민 트리거) | embedding-worker | `{post_id}` |
+| `embedding.completed` | embedding-worker | worker | `{post_id, model_name, collection_name, vector_dimension, chunk_count}` (벡터는 잡으로 흐르지 않음) |
+| `embedding.delete_requested` | api(포스트·블로그 삭제) | embedding-worker | `{post_ids:[...]}` |
+| `chat.compression_requested` | api(세션 임계치 도달) | worker | `{session_id, user_code}` |
 
 ### 3.2 상태 기계
 ```
@@ -91,6 +91,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 스테일 락(running & locked_at < now-timeout) ──▶ pending
 ```
 - 폴링: 기본 2초, 유휴 시 10초까지 백오프. `priority`(신규 0, 백필 10) → `run_at` 순 정렬.
+- worker 주기 작업: RSS 30분, 유지보수 1분, `model_scan` 1시간·`model_history_rollup` 1시간이며 두 모델 작업은 `run_at_start=True`다.
 - 중복 억제: `(key, type, status ∈ {pending, running})` 존재 시 enqueue를 건너뛴다.
 - 관측: `GET /api/v1/admin/jobs`, `/admin/jobs/stats`, CLI `techletter jobs …`.
 
@@ -136,7 +137,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 ## 7. 보안
 
 - 요청 본문·토큰·API 키는 로깅하지 않는다. LLM 키는 클라이언트 생성자 인자로만 전달한다(프로세스 환경 변수 쓰기는 하지 않는다).
-- `oauth_state` 쿠키는 운영에서 `Secure=true`. RSS 수집은 `verify=True`가 기본이며, 예외 목록에 등록된 호스트만 우회한다.
+- `oauth_state` 쿠키는 운영에서 `Secure=true`. RSS 수집은 `verify=True`가 기본이며, 호스트 예외 목록이 아니라 `blogs.tls_insecure` 불리언 필드가 `true`인 블로그만 TLS 검증을 우회한다. 이 값은 어드민 `POST/PUT /admin/blogs` 의 `tls_insecure` 로 설정한다.
 - CORS는 `CORS_ALLOWED_ORIGINS`로 허용 출처를 지정하고, credentials는 쓰지 않는다.
 
 ## 8. 로컬 개발

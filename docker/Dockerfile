@@ -23,15 +23,14 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never
 
 # 락 파일만 먼저 복사한다. 소스가 바뀌어도 의존성 레이어를 다시 만들지 않는다.
-ARG EXTRAS=""
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project ${EXTRAS}
+    uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
 COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev ${EXTRAS}
+    uv sync --frozen --no-dev
 
 # ── 공통 런타임 ───────────────────────────────────────────────────
 FROM python:${PYTHON_VERSION}-slim AS runtime-base

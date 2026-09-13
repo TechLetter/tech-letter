@@ -32,6 +32,29 @@ services:
     ports: ["6333:6333"]
     volumes: [qdrant_data:/qdrant/storage]
 
+  mongo-test:
+    image: mongo:8.0
+    container_name: techletter_dev_mongo_test
+    profiles: [test]
+    restart: unless-stopped
+    ports: ["27018:27017"]
+    volumes: [mongo_test_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant-test:
+    image: qdrant/qdrant:v1.16.2
+    container_name: techletter_dev_qdrant_test
+    profiles: [test]
+    restart: unless-stopped
+    ports: ["6334:6333"]
+    volumes: [qdrant_test_data:/qdrant/storage]
+
 volumes:
   mongo_data:
   qdrant_data:
+  mongo_test_data:
+  qdrant_test_data:

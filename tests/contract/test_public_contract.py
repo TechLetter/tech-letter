@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 PAGED_KEYS = {"items", "page", "page_size", "total", "total_pages"}
 POST_KEYS = {

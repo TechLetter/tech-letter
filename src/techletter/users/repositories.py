@@ -296,6 +296,52 @@ class CreditTransactionRepository:
         )
         return [CreditTransaction.model_validate(doc) async for doc in cursor], total
 
+    async def granted_amount_on(
+        self, user_code: str, day_start: datetime, day_end: datetime
+    ) -> int:
+        """`[day_start, day_end)` 사이에 지급된 크레딧 총량.
+
+        일일(`grant`)과 어드민(`admin_grant`) 지급만 합산하고 소비·환불은
+        제외한다. `credits` 컬렉션은 TTL로 소멸해 만료된 지급이 빠질 수
+        있으므로, 사라지지 않는 이 원장을 기준으로 센다. `$match` 조건은
+        `idx_credit_tx_user_created {user_code, created_at}` 를 타도록
+        user_code → created_at 순서로 맞췄다.
+        """
+        pipeline = [
+            {
+                "$match": {
+                    "user_code": user_code,
+                    "created_at": {"$gte": day_start, "$lt": day_end},
+                    "type": {"$in": ["grant", "admin_grant"]},
+                }
+            },
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+        ]
+        async for row in await self._col.aggregate(pipeline):
+            return int(row["total"])
+        return 0
+
+    async def granted_amount_on_bulk(
+        self, user_codes: list[str], day_start: datetime, day_end: datetime
+    ) -> dict[str, int]:
+        """어드민 사용자 목록용 — 여러 사용자의 지급 총량을 한 번의 aggregation으로."""
+        if not user_codes:
+            return {}
+        pipeline = [
+            {
+                "$match": {
+                    "user_code": {"$in": user_codes},
+                    "created_at": {"$gte": day_start, "$lt": day_end},
+                    "type": {"$in": ["grant", "admin_grant"]},
+                }
+            },
+            {"$group": {"_id": "$user_code", "total": {"$sum": "$amount"}}},
+        ]
+        result = dict.fromkeys(user_codes, 0)
+        async for row in await self._col.aggregate(pipeline):
+            result[row["_id"]] = int(row["total"])
+        return result
+
     async def delete_by_user(self, user_code: str) -> int:
         result = await self._col.delete_many({"user_code": user_code})
         return result.deleted_count

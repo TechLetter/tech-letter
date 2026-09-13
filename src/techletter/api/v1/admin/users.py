@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, status
 
 from techletter.api.deps import AdminUser, Ctx
@@ -16,6 +18,8 @@ from techletter.core.time import parse_rfc3339_or_date, to_iso_z, utcnow
 
 router = APIRouter(prefix="/users", tags=["admin:users"])
 
+# 크레딧 지급 만료의 상한. 상한이 없으면 `9999-12-31` 같은 오타가
+# 사실상 무기한 크레딧으로 발급된다.
 MAX_GRANT_DAYS = 365
 
 
@@ -44,9 +48,15 @@ async def grant_credits(
         raise InvalidRequestError(
             "만료 시각을 올바른 날짜로 입력해 주세요.", details={"field": "expires_at"}
         )
-    if expires_at <= utcnow():
+    now = utcnow()
+    if expires_at <= now:
         raise InvalidRequestError(
             "만료 시각은 현재보다 뒤여야 합니다.", details={"field": "expires_at"}
+        )
+    if expires_at > now + timedelta(days=MAX_GRANT_DAYS):
+        raise InvalidRequestError(
+            f"만료 시각은 현재보다 {MAX_GRANT_DAYS}일 이내여야 합니다.",
+            details={"field": "expires_at", "max_days": MAX_GRANT_DAYS},
         )
 
     await ctx.credits.admin_grant(user_code, body.amount, expires_at)

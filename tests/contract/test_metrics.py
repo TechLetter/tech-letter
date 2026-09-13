@@ -6,7 +6,7 @@ import pytest
 
 from techletter.core.jobs.types import JobType
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
 async def test_metrics_is_unavailable_before_the_container_is_ready(client) -> None:

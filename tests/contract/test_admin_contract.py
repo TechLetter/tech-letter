@@ -8,19 +8,58 @@ import pytest
 
 from techletter.core.time import to_iso_z, utcnow
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 ADMIN_PATHS = [
     ("GET", "/api/v1/admin/posts"),
+    ("POST", "/api/v1/admin/posts"),
+    ("DELETE", "/api/v1/admin/posts/000000000000000000000000"),
+    ("POST", "/api/v1/admin/posts/000000000000000000000000/summarize"),
+    ("POST", "/api/v1/admin/posts/000000000000000000000000/embed"),
     ("GET", "/api/v1/admin/blogs"),
+    ("POST", "/api/v1/admin/blogs"),
+    ("PUT", "/api/v1/admin/blogs/000000000000000000000000"),
+    ("DELETE", "/api/v1/admin/blogs/000000000000000000000000"),
+    ("POST", "/api/v1/admin/blogs/000000000000000000000000/activate"),
     ("GET", "/api/v1/admin/users"),
+    ("POST", "/api/v1/admin/users/google:ghost/credits"),
     ("GET", "/api/v1/admin/suggested-questions"),
+    ("POST", "/api/v1/admin/suggested-questions"),
+    ("PUT", "/api/v1/admin/suggested-questions/000000000000000000000000"),
+    ("DELETE", "/api/v1/admin/suggested-questions/000000000000000000000000"),
     ("GET", "/api/v1/admin/jobs"),
     ("GET", "/api/v1/admin/jobs/stats"),
+    ("POST", "/api/v1/admin/jobs/000000000000000000000000/retry"),
+    ("POST", "/api/v1/admin/jobs/retry-bulk"),
+    ("DELETE", "/api/v1/admin/jobs/000000000000000000000000"),
     ("GET", "/api/v1/admin/llm-models"),
     ("GET", "/api/v1/admin/llm-models/preferences"),
+    ("PUT", "/api/v1/admin/llm-models/preferences/chat"),
     ("GET", "/api/v1/admin/backfill/summary"),
+    ("POST", "/api/v1/admin/backfill/summary"),
+    ("POST", "/api/v1/admin/backfill/embeddings"),
 ]
+
+
+def _path_shape(path: str) -> str:
+    """권한 요청의 임의 파라미터와 OpenAPI의 파라미터 이름을 같은 모양으로 만든다."""
+    dynamic_values = {"000000000000000000000000", "google:ghost", "chat"}
+    return "/".join(
+        "{}" if segment.startswith("{") or segment in dynamic_values else segment
+        for segment in path.split("/")
+    )
+
+
+async def test_admin_paths_match_openapi(app) -> None:
+    routes = {
+        (method.upper(), _path_shape(path))
+        for path, operations in app.openapi()["paths"].items()
+        if path.startswith("/api/v1/admin/")
+        for method in operations
+        if method.upper() not in {"HEAD", "OPTIONS"}
+    }
+
+    assert {(method, _path_shape(path)) for method, path in ADMIN_PATHS} == routes
 
 
 # ── 권한 ────────────────────────────────────────────────────────────

@@ -75,7 +75,10 @@ class AdminUserOut(BaseModel):
             email=user.email,
             name=user.name,
             role=user.role,
-            credits=CreditsOut(remaining=profile.credits_remaining),
+            credits=CreditsOut(
+                remaining=profile.credits_remaining,
+                granted_today=profile.credits_granted_today,
+            ),
             created_at=to_iso_z(user.created_at),
             updated_at=to_iso_z(user.updated_at),
         )

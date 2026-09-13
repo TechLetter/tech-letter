@@ -1,6 +1,6 @@
 """통합 테스트용 실제 MongoDB 픽스처.
 
-로컬: `docker run -d -p 27018:27017 mongo:8.2`
+로컬: `docker run -d -p 27018:27017 mongo:8.0`
 CI:   서비스 컨테이너(스텝 9.4에서 추가)
 
 `TEST_MONGO_URI`로 주소를 바꿀 수 있다. 접속되지 않으면 skip한다.
@@ -23,11 +23,10 @@ TEST_DB_NAME = "techletter_itest"
 TEST_QDRANT_HOST = os.environ.get("TEST_QDRANT_HOST", "localhost")
 TEST_QDRANT_PORT = int(os.environ.get("TEST_QDRANT_PORT", "6334"))
 
-pytestmark = pytest.mark.integration
 
-
-@pytest.fixture
-async def mongo_db() -> AsyncIterator[AsyncDatabase]:
+@pytest.fixture(scope="session")
+async def mongo_available() -> str | None:
+    """Mongo 가용성을 세션에서 한 번 확인하고 실패 사유를 캐시한다."""
     from pymongo import AsyncMongoClient
     from pymongo.errors import PyMongoError
 
@@ -35,9 +34,44 @@ async def mongo_db() -> AsyncIterator[AsyncDatabase]:
     try:
         await client.admin.command("ping")
     except PyMongoError as exc:
+        return (
+            f"테스트 Mongo에 접속할 수 없다 ({TEST_MONGO_URI}). "
+            f"`./scripts/dev.sh test-infra` 를 먼저 실행한다: {exc}"
+        )
+    finally:
         await client.close()
-        pytest.skip(f"테스트 Mongo에 접속할 수 없다 ({TEST_MONGO_URI}): {exc}")
+    return None
 
+
+@pytest.fixture(scope="session")
+async def qdrant_available() -> str | None:
+    """Qdrant 가용성을 세션에서 한 번 확인하고 실패 사유를 캐시한다."""
+    from qdrant_client import AsyncQdrantClient
+
+    client = AsyncQdrantClient(
+        host=TEST_QDRANT_HOST,
+        port=TEST_QDRANT_PORT,
+        timeout=2,
+    )
+    try:
+        await client.get_collections()
+    except Exception as exc:
+        return (
+            f"테스트 Qdrant에 접속할 수 없다 ({TEST_QDRANT_HOST}:{TEST_QDRANT_PORT}). "
+            f"`./scripts/dev.sh test-infra` 를 먼저 실행한다: {exc}"
+        )
+    finally:
+        await client.close()
+    return None
+
+
+@pytest.fixture
+async def mongo_db(mongo_available: str | None) -> AsyncIterator[AsyncDatabase]:
+    from pymongo import AsyncMongoClient
+
+    if mongo_available:
+        pytest.skip(mongo_available)
+    client = AsyncMongoClient(TEST_MONGO_URI, tz_aware=True, serverSelectionTimeoutMS=2000)
     db = client[TEST_DB_NAME]
     for name in await db.list_collection_names():
         await db[name].drop()
@@ -73,7 +107,7 @@ def queue(mongo_db, job_settings):
 
 
 @pytest.fixture
-async def vector_store():
+async def vector_store(qdrant_available: str | None):
     """실제 Qdrant. `docker run -d -p 6334:6333 qdrant/qdrant`.
 
     컬렉션 이름 규칙과 필터 삭제는 대역으로 검증되지 않는다.
@@ -87,13 +121,9 @@ async def vector_store():
         QDRANT_COLLECTION_NAME="techletter_itest",
     )
     store = VectorStore(settings)
-    try:
-        await store.ping()
-    except Exception as exc:
+    if qdrant_available:
         await store.close()
-        pytest.skip(
-            f"테스트 Qdrant에 접속할 수 없다 ({TEST_QDRANT_HOST}:{TEST_QDRANT_PORT}): {exc}"
-        )
+        pytest.skip(qdrant_available)
 
     yield store
 

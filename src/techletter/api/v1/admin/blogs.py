@@ -21,10 +21,11 @@ async def list_blogs(
     is_active: StrQ = None,
 ) -> Paged[AdminBlogOut]:
     paging = parse_page(page, page_size, default_size=50)
-    # 어드민은 기본적으로 비활성 블로그도 봐야 한다 — 자동 비활성화된 피드를
-    # 찾아 다시 켜는 것이 이 화면의 목적이다.
-    include_inactive = lenient_bool(is_active) is not True
-    rows, total = await ctx.blog_service.list(paging, include_inactive=include_inactive)
+    # `is_active`는 3상태다 — true=활성만, false=비활성만, 생략·인식 불가 값=전체.
+    # 비활성만 보기가 이 화면의 핵심이다: 자동 비활성화된 피드를 찾아
+    # 다시 켜는 것이 목적이다.
+    active = lenient_bool(is_active)
+    rows, total = await ctx.blog_service.list(paging, active=active)
     return Paged.of_page([AdminBlogOut.of(row) for row in rows], total, paging)
 
 
@@ -38,6 +39,7 @@ async def create_blog(ctx: Ctx, _: AdminUser, body: BlogIn) -> AdminBlogOut:
         rss_url=body.rss_url,
         blog_type=body.blog_type,
         is_active=body.is_active,
+        tls_insecure=body.tls_insecure,
     )
     return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=0))
 
@@ -66,4 +68,5 @@ async def activate_blog(ctx: Ctx, _: AdminUser, blog_id: str) -> AdminBlogOut:
     from techletter.content.service import BlogWithCount  # noqa: PLC0415
 
     blog = await ctx.blog_service.update(blog_id, {"is_active": True})
-    return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=0))
+    counts = await ctx.posts.count_by_blog([blog.id] if blog.id else [])
+    return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=counts.get(str(blog.id), 0)))

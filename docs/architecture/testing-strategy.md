@@ -5,24 +5,25 @@
 | 층 | 대상 | 도구 | 마커 |
 |---|---|---|---|
 | **단위** | 도메인 서비스, 가드, 플래너, 파서, 검증기, 잡 정책, LLM 라우터, JWT, 관용 파서 | pytest + Fake | (기본) |
-| **계약** | API 49개 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` + syrupy 스냅샷 | `contract` |
+| **계약** | API 57개 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
 | **통합** | 레포지토리↔Mongo, 잡 큐 클레임/재시도, Qdrant, 워커 파이프라인 | 실행 중인 Mongo/Qdrant 컨테이너 필요 | `integration` |
 | **E2E** | 프론트+백엔드 실제 브라우저 시나리오 | Playwright(pytest-playwright) | `e2e` |
-| 네트워크 | 실제 RSS, 실제 LLM/scouter 호출 | 수동 실행 | `network` |
 
-기본 실행(`uv run pytest`)은 `-m "not integration and not e2e and not network"`.
+`tests/contract/` 의 계약 모듈에는 `integration`과 `contract` 마커를 **함께** 붙인다(새 파일도 동일 — 모듈 상단 `pytestmark = [pytest.mark.integration, pytest.mark.contract]`). 계약 테스트도 Mongo가 필요하므로 기본 실행에서 제외되며, `uv run pytest -q`는 단위 테스트만 실행한다.
 
 ```bash
-uv run pytest -q                                                          # 단위 + 계약
-TEST_MONGO_URI=mongodb://localhost:27018 uv run pytest -q -m integration  # 통합(컨테이너 필요)
-uv run pytest -q -m e2e                                                    # E2E(실행 중인 스택 + 브라우저)
+uv run pytest -q                                      # 단위 415개
+./scripts/dev.sh test-infra                           # Mongo 27018 · Qdrant 6334 기동
+uv run pytest -q -m integration                       # 통합 + 계약(컨테이너 필요)
+uv run pytest -q -m "integration and contract"        # 계약만(컨테이너 필요)
+uv run pytest -q -m e2e                                # E2E(실행 중인 스택 + 브라우저)
 ```
 
 ## 2. 계약 테스트
 
-- `tests/contract/snapshots/`에 골든 스냅샷을 둔다(`current/`는 참고용, `v2/`가 실제 회귀 방지선).
-- 정규화 규칙: 문자열은 타입 토큰(`"<str>"`), ObjectId는 `"<oid>"`, datetime은 `"<dt>"`, 숫자는 `"<int>"`/`"<float>"`, `null`은 값 그대로 보존, 배열은 첫 원소의 shape + 비어있음 여부만 비교한다. 키 순서는 무관하다.
-- `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 라우트 커버리지를 검증한다.
+- syrupy 골든 스냅샷은 사용하지 않는다(import 0건이며 의존성도 제거됐다). 계약 테스트는 실제로 `assert set(body) == {...}` 형태의 키 집합과 DTO 네이밍 변환을 고정한다.
+- `tests/contract/snapshots/{current,v2}`는 v1→v2 마이그레이션 심사 기록물일 뿐 pytest·CI가 읽지 않는다.
+- `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 57개 라우트의 커버리지를 검증한다.
 - SSE는 프론트 파서와 동일한 규칙으로 파싱해 이벤트 시퀀스와 `done` 키 집합을 검증한다.
 
 ## 3. 단위 테스트 — 핵심 커버리지
@@ -40,25 +41,38 @@ uv run pytest -q -m e2e                                                    # E2E
 
 - `test_indexes.py`: `ensure_indexes()` 후 실제 인덱스가 [data-model.md](data-model.md)와 일치(이름·키·옵션·TTL).
 - `test_job_queue.py`: 병렬 클레임, 재시도 전이 4종, 스테일 락 회수, `count_dead`, TTL 인덱스.
-- `test_credits_concurrency.py`: 동시 consume → 잔액이 절대 음수가 되지 않음.
+- `tests/integration/test_credits.py::test_concurrent_consume_never_goes_negative`: 동시 consume → 잔액이 절대 음수가 되지 않음.
 - `test_pipeline_e2e.py`: RSS 픽스처 → summary(Fake) → embedding(Fake) → Qdrant → `GET /posts`.
 - `test_content_aggregator.py`: 연속 실패 시 블로그 자동 비활성화.
 
+## 4.1 커버리지 공백
+
+- `workers/**`, `cli.py`, `api/**`는 직접 테스트가 0건이며, API는 계약 테스트가 간접적으로 커버한다.
+- `PlaywrightRenderer` 테스트는 0건이다. 테스트는 ScraperApi 경로만 다루며, 운영 경로는 Playwright다.
+
 ## 5. E2E 시나리오
 
-로컬 스택: `docker compose -f docker/compose.dev.yml up -d mongo qdrant` + `techletter all` + 프론트 `npm run dev`(또는 빌드 후 nginx).
+로컬 스택: `./scripts/dev.sh test-infra`로 테스트용 Mongo(27018)·Qdrant(6334)를 띄운 뒤 `techletter all`과 API를 실행한다. E2E는 `E2E_UI_DIST=../tech-letter_ui/dist`에 정적 빌드를 준비하면 fixture가 4173 포트에서 자체 서빙한다. `npm run dev`로는 이 절차가 성립하지 않는다.
+
+주의: `docker compose -f docker/compose.dev.yml up -d mongo qdrant`는 기본 개발 포트(27017/6333)만 열어 통합 테스트에 붙지 않는다. 통합·계약 테스트에는 반드시 `./scripts/dev.sh test-infra`를 사용한다.
+
+기본값은 `E2E_MONGO_URI=mongodb://localhost:27018`, `E2E_API_URL=http://localhost:8080`이다. 프론트에서 `npm ci && npm run build`를 먼저 실행한 뒤 `E2E_UI_DIST=../tech-letter_ui/dist E2E_MONGO_URI=mongodb://localhost:27018 E2E_API_URL=http://localhost:8080 uv run pytest -q tests/e2e -m e2e`를 실행한다. 시나리오는 13종이다.
 
 | 시나리오 | 검증 |
 |---|---|
-| 홈 진입 → 필터 조합 → 무한스크롤 | `items` 봉투, `total_pages` 기반 페이징 |
-| 로그인 → 북마크 토글 → 북마크 페이지 확인 → 해제 | `/bookmarks` 경로 3개, `is_bookmarked` boolean |
-| 트렌드 페이지 → 기간 변경 → 태그 선택 | `items`, 기간 파라미터 |
-| 챗봇 질문 → activity 배지 → 답변 → 출처 → 크레딧 감소 표시 | SSE 3이벤트, `ChatAnswer.credits.remaining` |
-| 세션 사이드바 전환 → 히스토리 로드 → 세션 삭제 | `message_count`, 평탄화 메타, 204 |
-| 크레딧 0 상태에서 질문 | 402 `credit.insufficient` |
-| 어드민 CRUD + 중복 등록 오류 | 201/204, 409 `details.field` |
-| 어드민 운영 대시보드 → 실패 잡 재시도 → 백필 트리거 | `/admin/jobs*`, `/admin/backfill/summary` |
-| 로그아웃 → 만료 토큰으로 접근 → 자동 로그아웃 | 401 인터셉터 |
+| 홈 포스트 목록·필터 | 카드가 보이고 콘솔 오류가 없음 |
+| 홈 무한스크롤 | `total_pages` 기반으로 다음 페이지를 요청 |
+| 홈 v2 요청 계약 | `/posts` 요청에 폐기된 파라미터가 없고 필터 요청이 존재 |
+| 로그인 → 북마크 토글 → 북마크 페이지 | POST 201, 북마크 목록 반영 |
+| 트렌드 렌더링 | `items` 응답을 사용하고 모든 요청이 200 |
+| 챗봇 SSE 답변 | 스트림 경로와 200/402/429/503 응답 처리 |
+| 크레딧 0 상태에서 질문 | 스트림 전에 402 `credit.insufficient` |
+| 챗 세션 목록 | `message_count`를 사용하는 세션 요청 |
+| 어드민 포스트 목록 | v2 필드와 요약 모델명이 화면에 표시 |
+| 어드민 운영 탭 | 잡 통계 요청과 상태 카드 표시 |
+| 어드민 모델 탭 | 모델 성적 요청이 200 |
+| 일반 사용자의 어드민 접근 | 어드민 요청이 403이거나 요청하지 않음 |
+| 만료 토큰 접근 | 401 인터셉터가 토큰을 삭제 |
 
 각 시나리오는 실패 시 스크린샷·콘솔 로그를 남긴다. 콘솔 에러 0을 기준으로 판정한다.
 
@@ -68,7 +82,7 @@ PR과 `develop`/`main` push에서 4개 잡이 병렬로 돈다.
 
 | 잡 | 내용 |
 |---|---|
-| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 → `scripts/check_routes.py`(API 계약 라우트 일치) |
+| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 → `scripts/check_routes.py`(57개 API 계약 라우트 일치) |
 | `integration` | 실제 mongo:8.0·qdrant:v1.16.2 서비스 컨테이너로 통합·계약 테스트 |
 | `e2e` | `tech-letter_ui`를 체크아웃해 빌드하고, 실제 API 프로세스를 띄운 뒤 Playwright로 시나리오 실행(프론트 체크아웃 실패 시 경고만 남기고 건너뜀) |
 | `images` | 런타임/브라우저 이미지 빌드 + **크기 게이트**(런타임 ≤450MB, 브라우저 ≤1200MB) + 컨테이너 안에서 `techletter version`과 필수 의존성 import 스모크 |
@@ -82,7 +96,7 @@ PR과 `develop`/`main` push에서 4개 잡이 병렬로 돈다.
 
 ## 7. 배포 스모크 (`scripts/verify_prod_smoke.sh`)
 
-배포 파이프라인이 이미지를 교체한 직후 실행한다. 실패하면 자동으로 이전 이미지 태그로 되돌린다.
+배포 파이프라인이 이미지를 교체한 직후 실행한다. Smoke 실패는 조건을 만족하면 이전 이미지 태그로 되돌리지만, `Start` 기동 실패는 Smoke가 skipped라 자동 롤백되지 않는다.
 
 ```
 1/5 GET /health                          → 200 {"status":"ok"}

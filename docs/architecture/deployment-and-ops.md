@@ -8,18 +8,19 @@
 
 ```
 main push (docs/**·*.md 제외)
-  1. 이미지 태그 결정 — GIT_SHA 12자, 또는 workflow_dispatch의 image_tag 입력
+  1. 이미지 태그 결정 — 기본은 GIT_SHA 12자. workflow_dispatch의 image_tag는 소스 ref가 아니라 이미지 태그만 덮어쓴다
   2. 현재 실행 중인 태그 기록 (스모크 실패 시 롤백용)
   3. docker compose -f docker/compose.prod.yml build --pull   (기존 컨테이너는 계속 실행)
   4. docker compose -f docker/compose.prod.yml up -d --wait --wait-timeout 180 --remove-orphans
   5. scripts/verify_prod_smoke.sh
-  6. 실패 → 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백)
-  7. 성공 → 168시간 넘은 이미지 정리
+  6. Smoke 실패 → 조건을 만족하면 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백). Start 기동 실패는 Smoke가 skipped가 되어 자동 롤백되지 않으므로 수동 조치
+  7. 성공 → 168시간 넘은 dangling 이미지 정리
 ```
-- 이미지 태그가 커밋 SHA이므로 임의 시점으로 재배포할 수 있다.
+- `workflow_dispatch`는 현재 main 소스를 checkout한 뒤 `image_tag` 이름만 바꿔 빌드한다. 옛 SHA를 입력해도 옛 소스를 재배포하지 않으며, 기존 롤백 대상 태그를 현재 소스로 덮어쓸 수 있으므로 이 입력을 옛 SHA 재배포·롤백 절차로 사용하지 않는다.
 - compose의 `${VAR:?required}` 앵커가 빌드·기동 양쪽에서 시크릿 누락을 즉시 실패시킨다.
 - `down` 없이 `up -d --wait`로 교체하므로 다운타임은 컨테이너 재생성 수 초뿐이다.
 - 동시 배포는 `concurrency: production`으로 직렬화된다.
+- 7단계의 `docker image prune -f --filter until=168h`는 `-a`가 없어 dangling 이미지만 지운다. SHA 태그 이미지는 배포 1회당 두 개씩 영구 누적되며, 현재 이를 정리하는 절차는 없다.
 
 ### 1.1 서비스 구성 (`docker/compose.prod.yml`)
 | 서비스 | 이미지 | 메모리(limit/reservation) | healthcheck | Traefik |
@@ -32,11 +33,12 @@ main push (docs/**·*.md 제외)
 공통: `restart: unless-stopped`, `logging: json-file max-size=20m max-file=5`, non-root, `networks: [tech-letter_default]`. `summary_worker`는 Chromium용 `shm_size: 256m`.
 
 ### 1.2 환경변수
-공통: `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `SUMMARY_WORKER_LLM_*`, `EMBEDDING_WORKER_LLM_*`, `CHATBOT_LLM_*`, `CHATBOT_EMBEDDING_*`, `*_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
-`api`만 추가로: `JWT_SECRET`, `JWT_ISSUER`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
-`worker`만 추가로: `CONTENT_BLOG_FETCH_BATCH_SIZE`, `JOB_*`.
-`summary_worker`만 추가로: `RENDERER_STRATEGY`, `SCRAPERAPI_KEY`, `SUMMARY_DAILY_BUDGET`.
-`embedding_worker`만 추가로: `EMBEDDING_WORKER_CHUNK_*`.
+전 서비스 공통(x-app-env + x-llm-env): `TZ`, `MONGO_URI`, `MONGO_DB_NAME`, `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION_NAME`, `LOG_LEVEL`, `JWT_SECRET`, `JWT_ISSUER`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `SUMMARY_WORKER_LLM_PROVIDER`, `SUMMARY_WORKER_LLM_MODEL_NAME`, `EMBEDDING_WORKER_LLM_PROVIDER`, `EMBEDDING_WORKER_LLM_MODEL_NAME`, `CHATBOT_LLM_PROVIDER`, `CHATBOT_EMBEDDING_PROVIDER`, `CHATBOT_EMBEDDING_MODEL_NAME`, `*_MODEL_PREFERENCE`, `LLM_STATIC_FALLBACK_MODELS`.
+`SUMMARY_WORKER_LLM_*`는 `PROVIDER`와 `MODEL_NAME` 두 변수만 compose가 주입한다. `CHATBOT_LLM_MODEL_NAME`은 사용하지 않는다.
+`api`만 추가로: `SERVICE_NAME`, `API_PORT`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
+`worker`만 추가로: `SERVICE_NAME`, `CONTENT_BLOG_FETCH_BATCH_SIZE`. `JOB_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
+`summary_worker`만 추가로: `SERVICE_NAME`, `RENDERER_STRATEGY`, `SCRAPERAPI_KEY`, `SUMMARY_DAILY_BUDGET`.
+`embedding_worker`만 추가로: `SERVICE_NAME`. `EMBEDDING_WORKER_CHUNK_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
 
 ## 2. 관측 기준선
 
@@ -45,10 +47,10 @@ main push (docs/**·*.md 제외)
 | api 5xx | `docker logs techletter_api \| jq 'select(.status>=500)'` | 0/일 |
 | 잡 큐 | `GET /admin/jobs/stats` 또는 `GET /metrics` | pending이 계속 쌓이지 않음, running ≤ 워커 수 |
 | dead 사유 | `/admin/jobs?status=dead` | `permanent`(봇 차단·404)만 정상. `retryable` 누적은 조사 |
-| RSS 사이클 | worker 로그 `rss cycle completed` 30분마다 | 일부 피드 상시 실패는 정상(깨진 외부 피드) |
+| RSS 사이클 | worker 로그 `rss cycle finished` 30분마다 | 일부 피드 상시 실패는 정상(깨진 외부 피드) |
 | 요약률 | `/admin/backfill/summary` | 신규는 24시간 내 처리 |
 | 모델 성적 | `/admin/llm-models` | 1순위 성공률 ≥ 0.8, 강등 발생 시 선호 목록 재검토 |
-| 모델 헬스 스캔 | worker 로그 `model scan complete` 1시간마다 | `ok` 건수가 0 근처면 OpenRouter 자체 장애 의심 |
+| 모델 헬스 스캔 | worker 로그 `model scan finished` 1시간마다 | `ok` 건수가 0 근처면 OpenRouter 자체 장애 의심 |
 | heartbeat | compose healthcheck | healthy 4/4 |
 | 메모리 | `docker stats` | §1.1의 reservation 근처에서 안정 |
 | 디스크 | `docker system df` | 로그 ≤ 100MB/컨테이너(20m×5) |
@@ -59,10 +61,10 @@ main push (docs/**·*.md 제외)
 
 - **실패 잡 처리**: 어드민 운영 대시보드 또는 `techletter jobs list --status dead`. 사유가 `permanent`(봇 차단·404)면 재시도가 무의미하다 → 블로그 설정 수정 또는 비활성화. 일시 장애면 `jobs retry`.
 - **요약 백필**: `techletter backfill summaries --limit N --priority 10 --dry-run` → 실행. 신규 포스트(priority 0)가 항상 먼저 처리된다.
-- **무료 모델 소멸**: 모델 라우터가 자동으로 폴백하므로 조치가 필요 없다. `/admin/llm-models`에서 성적을 확인하고 `*_MODEL_PREFERENCE`를 갱신하면 더 나은 후보를 우선순위에 둘 수 있다.
+- **무료 모델 소멸**: 모델 라우터가 자동으로 폴백하므로 조치가 필요 없다. `/admin/llm-models`에서 성적을 확인한다. 선호목록은 DB(`llm_model_preferences`)가 환경변수보다 우선하므로, `/admin/llm-models/preferences`의 `source`를 확인한 뒤 필요하면 어드민에서 갱신한다.
 - **LLM 일일 예산 소진**: 정상 동작이다. 초과분은 OpenRouter로 흐르고, 다음 리셋(`LLM_QUOTA_RESET_UTC_HOUR`)에 다시 1순위 모델을 쓴다.
 - **모델 헬스 기록 없음/오래됨**: 라우터가 정적 폴백 목록으로 계속 동작한다. `docker logs techletter_worker | grep "model scan"`으로 스캔이 도는지 확인한다.
-- **블로그 피드 장애**: 어드민에서 `last_fetch_error` 확인 → RSS URL 수정 또는 `is_active=false`. 연속 실패가 임계치를 넘으면 자동으로 비활성화된다.
+- **블로그 피드 장애**: 어드민에서 `last_fetch_error` 확인 → RSS URL 수정 또는 `is_active=false`. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 자동으로 비활성화된다. 5xx나 타임아웃만으로는 꺼지지 않는다.
 - **LLM 키 교체**: GitHub Environment secret 갱신 → `deploy.yml`을 `workflow_dispatch`로 재실행.
 - **Mongo 백업**: `mongodump --archive --gzip` 정기 백업을 권장한다.
 - **Mongo가 SPOF**: 잡 큐까지 Mongo에 있으므로 Mongo 장애는 전면 정지로 이어진다. 볼륨 백업과 `restart: unless-stopped`에 의존하는 트레이드오프를 이 규모에서는 수용한다.
@@ -70,12 +72,12 @@ main push (docs/**·*.md 제외)
 
 ## 4. 롤백
 
-- **배포 직후 스모크 실패**: 파이프라인이 같은 실행 안에서 자동으로 직전 이미지 태그로 되돌리고 스모크를 재실행한다. 사람이 할 일은 검증뿐이다.
+- **배포 직후 스모크 실패**: 파이프라인이 같은 실행 안에서 자동으로 직전 이미지 태그로 되돌리고 스모크를 재실행한다. 단, `Start` 단계의 기동 실패는 `steps.smoke.outcome == 'failure'` 조건에 걸리지 않아 자동 롤백되지 않으므로 수동 조치가 필요하다.
 - **배포는 성공했지만 나중에 문제가 발견된 경우**: 해당 커밋을 되돌리고 다시 push한다.
   ```bash
   git revert --no-edit <bad-sha> && git push origin main
   ```
-  이미지 태그가 커밋 SHA이므로 재빌드는 몇 분이면 끝난다. 급하면 `workflow_dispatch`로 알려진 좋은 SHA를 `image_tag`에 지정해 재배포할 수도 있다.
+  이미지 태그가 커밋 SHA이므로 재빌드는 몇 분이면 끝난다. `workflow_dispatch`의 `image_tag`는 현재 main 소스에 태그만 붙이는 입력이므로, 알려진 좋은 옛 SHA를 지정하는 방식으로 재배포·롤백하지 않는다.
 
 ## 5. 로컬 개발
 ```bash

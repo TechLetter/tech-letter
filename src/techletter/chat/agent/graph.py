@@ -81,6 +81,7 @@ class AgentState:
     plan: ChatPlan = field(default_factory=ChatPlan)
     tool_result: ToolResult = field(default_factory=ToolResult)
     answer: str = ""
+    model_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -90,6 +91,7 @@ class AgentResult:
     intent: str = "general_rag"
     activities: list[dict[str, str]] = field(default_factory=list)
     guard: dict[str, Any] = field(default_factory=dict)
+    model_id: str | None = None
 
 
 class ChatAgent:
@@ -202,11 +204,19 @@ class ChatAgent:
 
     async def _answer(self, state: AgentState) -> dict[str, Any]:
         await state.recorder.emit("answer", "running")
-        answer = await self._answers.generate(
+        generated = await self._answers.generate(
             state.query, state.plan, state.tool_result, state.memory_metadata
         )
+        # 기존 테스트용 답변 구현처럼 문자열만 돌려주는 구현도 허용한다.
+        # 실제 AnswerGenerator는 (답변, 실제로 사용한 모델) 튜플을 준다.
+        if isinstance(generated, tuple) and len(generated) == 2:
+            answer = str(generated[0])
+            model_id = generated[1] if isinstance(generated[1], str) else None
+        else:
+            answer = str(generated)
+            model_id = None
         await state.recorder.emit("answer", "completed")
-        return {"answer": answer}
+        return {"answer": answer, "model_id": model_id}
 
     # ── 실행 ───────────────────────────────────────────────────────
     async def run(
@@ -235,4 +245,5 @@ class ChatAgent:
             intent=plan.task,
             activities=recorder.items,
             guard=checked.to_metadata() if checked.blocked else {},
+            model_id=final.get("model_id"),
         )

@@ -96,6 +96,7 @@ class ToolResult:
     sources: list[Source] = field(default_factory=list)
     total: int = 0
     message: str = ""
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

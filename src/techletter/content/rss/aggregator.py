@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from techletter.content.jobs import enqueue_summary_requested
+from techletter.content.links import normalize_link
 from techletter.content.models import AISummary, Post, StatusFlags
 from techletter.core.errors import PermanentError
 from techletter.core.logging import get_logger
@@ -129,21 +130,26 @@ class Aggregator:
         return outcome
 
     async def _store(self, blog: Blog, items: list[FeedItem]) -> int:
-        known = await self._posts.existing_links([item.link for item in items])
+        item_keys = [(item, normalize_link(item.link)) for item in items]
+        known = await self._posts.existing_link_keys(
+            [item.link for item, _ in item_keys], [link_key for _, link_key in item_keys]
+        )
         inserted = 0
-        for item in items:
-            if item.link in known:
+        for item, link_key in item_keys:
+            if item.link in known or link_key in known:
                 continue
-            post = self._build(blog, item)
+            post = self._build(blog, item, link_key=link_key)
             saved = await self._posts.insert(post)
             if saved is None:  # 동시에 다른 워커가 넣었다.
                 continue
             inserted += 1
+            # 같은 RSS 응답 안의 중복도 저장소 왕복 없이 걸러낸다.
+            known.update((item.link, link_key))
             await enqueue_summary_requested(self._queue, saved)
         return inserted
 
     @staticmethod
-    def _build(blog: Blog, item: FeedItem) -> Post:
+    def _build(blog: Blog, item: FeedItem, *, link_key: str | None = None) -> Post:
         now = utcnow()
         # 피드가 발행일을 미래로 잘못 주는 경우가 있다(관측: 올리브영이 실제로는
         # 오늘 올린 글에 며칠 뒤 날짜를 달아 준 적이 있다). 그대로 두면
@@ -155,6 +161,7 @@ class Aggregator:
             blog_name=blog.name,
             title=item.title,
             link=item.link,
+            link_key=link_key if link_key is not None else normalize_link(item.link),
             published_at=published_at,
             thumbnail_url=None,
             status=StatusFlags(),

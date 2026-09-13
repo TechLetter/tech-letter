@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from techletter.core.errors import ResourceNotFoundError
 from techletter.core.logging import get_logger
+from techletter.core.time import utcnow
 from techletter.users.models import User
 
 if TYPE_CHECKING:  # pragma: no cover
+    from datetime import datetime
+
     from techletter.core.pagination import Page
     from techletter.users.credits import CreditService
     from techletter.users.repositories import BookmarkRepository, UserRepository
@@ -74,19 +78,40 @@ class UserService:
         if user is None:
             raise ResourceNotFoundError("사용자를 찾을 수 없습니다.")
         try:
+            day_start, day_end = self._today_bounds()
             remaining = await self._credits.remaining(user_code)
+            granted_today = await self._credits.granted_amount_on(user_code, day_start, day_end)
         except Exception:
             logger.warning("failed to load credits", extra={"user_code": user_code})
             remaining = 0
-        return UserProfile(user=user, credits_remaining=remaining)
+            granted_today = 0
+        return UserProfile(
+            user=user,
+            credits_remaining=remaining,
+            credits_granted_today=granted_today,
+        )
 
     async def list_users(self, page: Page) -> tuple[list[UserProfile], int]:
         """어드민 목록. 크레딧을 벌크로 조회해 N+1을 피한다."""
         users, total = await self._users.list_users(page)
-        remaining = await self._credits.remaining_bulk([u.user_code for u in users])
+        user_codes = [u.user_code for u in users]
+        day_start, day_end = self._today_bounds()
+        remaining = await self._credits.remaining_bulk(user_codes)
+        granted_today = await self._credits.granted_amount_on_bulk(user_codes, day_start, day_end)
         return [
-            UserProfile(user=u, credits_remaining=remaining.get(u.user_code, 0)) for u in users
+            UserProfile(
+                user=u,
+                credits_remaining=remaining.get(u.user_code, 0),
+                credits_granted_today=granted_today.get(u.user_code, 0),
+            )
+            for u in users
         ], total
+
+    @staticmethod
+    def _today_bounds() -> tuple[datetime, datetime]:
+        """현재 UTC 달력일의 반열린 구간을 계산한다."""
+        day_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        return day_start, day_start + timedelta(days=1)
 
     async def delete_user(self, user_code: str) -> None:
         """유저와 딸린 데이터를 지운다(캐스케이드)."""

@@ -27,6 +27,7 @@ htmlcov/
 *.log
 tmp/
 .ipynb_checkpoints/ # Jupyter notebooks
+tests/e2e/_artifacts/
 
 # OS generated files
 .DS_Store

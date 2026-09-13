@@ -34,6 +34,7 @@ __all__ = [
     "ResourceNotFoundError",
     "RetryableError",
     "SessionExpiredError",
+    "VectorStoreUnavailableError",
 ]
 
 
@@ -176,3 +177,7 @@ class QuotaExceededError(JobError):
     def __init__(self, message: str, *, reset_at: datetime | None = None) -> None:
         self.reset_at = reset_at
         super().__init__(message)
+
+
+class VectorStoreUnavailableError(RetryableError):
+    """벡터 저장소에 연결할 수 없어 검색을 완료하지 못한 일시적 실패."""

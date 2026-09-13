@@ -112,12 +112,15 @@ class ChatAnswerOut(BaseModel):
     @classmethod
     def of(cls, answer: ChatAnswer) -> ChatAnswerOut:
         memory = {**answer.memory, "status": memory_status(answer.memory.get("status"))}
+        # 구버전 기록이나 직접 만든 답변에도 nested 계약을 고정한다. 모델을
+        # 부르지 않은 경로는 명시적으로 null을 내보낸다.
+        agent = {**answer.agent, "model_id": answer.agent.get("model_id")}
         return cls(
             session_id=answer.session_id,
             message_id=answer.message_id,
             answer=answer.answer,
             sources=answer.sources,
-            agent=answer.agent,
+            agent=agent,
             guard=answer.guard or {"action": "pass", "risk_level": "low", "findings": []},
             memory=memory,
             # 정수 두 개(consumed_credits/remaining_credits) → 객체 하나.

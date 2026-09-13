@@ -6,17 +6,24 @@ import json
 
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
 class FakeAgent:
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        model_id: str | None = "test-answer-model",
+        emit_activity: bool = True,
+    ) -> None:
         self.error = error
+        self.model_id = model_id
+        self.emit_activity = emit_activity
 
     async def run(self, query, memory, on_activity=None):
         from techletter.chat.agent.graph import AgentResult
 
-        if on_activity is not None:
+        if on_activity is not None and self.emit_activity:
             from techletter.chat.agent.state import Activity
 
             await on_activity(Activity(type="plan", label="질문 의도 분석", status="running"))
@@ -30,6 +37,7 @@ class FakeAgent:
             ],
             intent="general_rag",
             activities=[{"type": "plan", "label": "질문 의도 분석", "status": "completed"}],
+            model_id=self.model_id,
         )
 
 
@@ -186,6 +194,7 @@ async def test_a_chat_answer_matches_the_contract(client, user_headers, stub_cha
         "credits",
     }
     assert body["credits"] == {"consumed": 1, "remaining": 4}
+    assert body["agent"]["model_id"] == "test-answer-model"
     assert body["memory"]["status"] in {"ready", "pending", "failed"}
 
 
@@ -241,15 +250,32 @@ async def test_model_exhaustion_maps_to_503(client, user_headers, stub_chat, fun
 
 
 async def test_rate_limits_map_to_429(client, user_headers, stub_chat, funded) -> None:
-    from techletter.core.errors import LlmRateLimitedError
+    from techletter.core.errors import QuotaExceededError
 
-    stub_chat(FakeAgent(LlmRateLimitedError()))
+    stub_chat(FakeAgent(QuotaExceededError("all models exhausted")))
 
     response = await client.post(
         "/api/v1/chat/messages", json={"query": "질문"}, headers=user_headers
     )
 
     assert response.status_code == 429
+    assert response.json()["error"]["code"] == "llm.rate_limited"
+
+
+async def test_job_errors_are_refunded_when_mapped_to_public_llm_errors(
+    client, ctx, user_headers, stub_chat, funded
+) -> None:
+    from techletter.core.errors import RetryableError
+
+    stub_chat(FakeAgent(RetryableError("all models unavailable")))
+
+    response = await client.post(
+        "/api/v1/chat/messages", json={"query": "질문"}, headers=user_headers
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "llm.unavailable"
+    assert await ctx.credits.remaining("google:alice") == 5
 
 
 async def test_an_unexpected_failure_does_not_leak_internals(
@@ -373,3 +399,31 @@ async def test_a_mid_stream_failure_uses_the_error_envelope(
     event, payload = parse_sse(response.text)[-1]
     assert event == "error"
     assert payload["error"]["code"] == "llm.unavailable"
+
+
+@pytest.mark.usefixtures("funded")
+@pytest.mark.parametrize(
+    "case",
+    [("quota", 429, "llm.rate_limited"), ("retryable", 503, "llm.unavailable")],
+)
+async def test_llm_failure_before_the_first_activity_is_plain_json(
+    client, ctx, user_headers, stub_chat, case
+) -> None:
+    from techletter.core.errors import QuotaExceededError, RetryableError
+
+    error_kind, status_code, error_code = case
+    error = (
+        QuotaExceededError("all models exhausted")
+        if error_kind == "quota"
+        else RetryableError("all models unavailable")
+    )
+    stub_chat(FakeAgent(error, emit_activity=False))
+
+    response = await client.post(
+        "/api/v1/chat/messages/stream", json={"query": "질문"}, headers=user_headers
+    )
+
+    assert response.status_code == status_code
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["error"]["code"] == error_code
+    assert await ctx.credits.remaining("google:alice") == 5
