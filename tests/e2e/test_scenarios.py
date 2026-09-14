@@ -205,7 +205,9 @@ async def test_admin_llm_tab_shows_model_preferences(page, ui_server, seeded, si
     async with page.expect_response(
         lambda r: "/api/v1/admin/llm-models/preferences" in r.url, timeout=TIMEOUT
     ) as info:
-        await page.get_by_role("button", name="모델").click()
+        # 사이트 헤더에도 공개 모델 현황 페이지로 가는 "모델" 버튼이 있어 이름만으로는
+        # 두 개가 걸린다. 어드민 본문(main)으로 한정해서 탭 버튼만 집는다.
+        await page.get_by_role("main").get_by_role("button", name="모델").click()
 
     response = await info.value
     assert response.status == 200
