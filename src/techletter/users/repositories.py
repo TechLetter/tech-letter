@@ -233,15 +233,6 @@ class CreditRepository:
         credit.id = result.inserted_id
         return credit
 
-    async def granted_today(self, user_code: str, source: str = "daily") -> bool:
-        """오늘(UTC) 이미 같은 source로 지급됐는지."""
-        today_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        doc = await self._col.find_one(
-            {"user_code": user_code, "source": source, "created_at": {"$gte": today_start}},
-            projection={"_id": 1},
-        )
-        return doc is not None
-
     async def take_one(self, user_code: str) -> ObjectId | None:
         """만료 임박 크레딧에서 1을 **원자적으로** 뺀다.
 
@@ -423,40 +414,34 @@ class IdentityPolicyRepository:
     def __init__(self, db: AsyncDatabase) -> None:
         self._col = db["identity_policies"]
 
-    async def try_use(self, identity_hash: str, policy_key: str, *, window_hours: int = 24) -> bool:
-        """정책을 소비한다. 창 안에 이미 사용했으면 False.
+    async def try_use(self, identity_hash: str, policy_key: str) -> bool:
+        """오늘(UTC) 처음 쓰는 거면 기록하고 True, 이미 썼으면 False.
 
-        "오래된 것 갱신 → 없으면 삽입" 두 단계다.
+        기준은 24시간이 아니라 UTC 자정 — 어제 밤 11시 50분에 쓰고 오늘
+        0시 10분에 또 써도(20분밖에 안 지났어도) "새 날"로 친다.
 
-        **`idx_identity_policy_unique`(유니크)에 의존한다.** 인덱스가 없으면
-        동시 삽입이 모두 성공해 중복 지급이 조용히 일어난다. 부팅 시
-        `ensure_indexes()`가 반드시 실행되어야 한다.
+        구현: upsert 하나로 끝낸다. 오늘 이전 기록이 있으면 그걸 갱신하고,
+        기록이 아예 없으면 새로 만든다. "오늘 이미 썼음"은 이 upsert가
+        유니크 인덱스(`idx_identity_policy_unique`)에 걸려 `DuplicateKeyError`를
+        내는 것으로 판단한다 — 이 인덱스가 없으면 중복 지급을 못 막는다.
         """
         now = utcnow()
-        cutoff = now - timedelta(hours=window_hours)
-        result = await self._col.update_one(
-            {
-                "identity_hash": identity_hash,
-                "policy_key": policy_key,
-                "last_acted_at": {"$lt": cutoff},
-            },
-            {"$set": {"last_acted_at": now, "updated_at": now}},
-        )
-        if result.modified_count == 1:
-            return True
-
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         try:
-            await self._col.insert_one(
+            await self._col.find_one_and_update(
                 {
                     "identity_hash": identity_hash,
                     "policy_key": policy_key,
-                    "last_acted_at": now,
-                    "created_at": now,
-                    "updated_at": now,
-                }
+                    "last_acted_at": {"$lt": today_start},
+                },
+                {
+                    "$set": {"last_acted_at": now, "updated_at": now},
+                    "$setOnInsert": {"created_at": now},
+                },
+                upsert=True,
             )
         except DuplicateKeyError:
-            # 문서는 있는데 창 안에 이미 사용했다.
+            # 오늘 이전 기록이 없어서(=오늘 이미 씀) 새로 넣으려다 인덱스에 막혔다.
             return False
         return True
 
