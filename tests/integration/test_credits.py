@@ -167,6 +167,30 @@ async def test_grant_daily_allows_different_identity(credit_service):
     assert await credit_service.grant_daily("google:b", "google", "sub-b") == DAILY_CREDITS
 
 
+async def test_grant_daily_works_right_after_utc_midnight_even_if_recent(
+    credit_service, monkeypatch
+):
+    """자정 직후 재로그인해도 지급된다 — 롤링 24시간이 아니라 UTC 달력일 경계다.
+
+    예전 버전은 `now - 24h`를 기준으로 삼아서, 전날 23시대에 로그인한 유저가
+    다음 날 자정을 막 넘겨(예: 20분 뒤) 다시 로그인하면 "24시간이 안 지났다"는
+    이유로 그날 치 지급을 건너뛰었다. 실제로 겪은 버그다.
+    """
+    mon_2350 = utcnow().replace(hour=23, minute=50, second=0, microsecond=0)
+    tue_0010 = mon_2350 + timedelta(hours=0, minutes=20)  # 자정을 넘겼지만 20분밖에 안 지남
+
+    monkeypatch.setattr("techletter.users.credits.utcnow", lambda: mon_2350)
+    monkeypatch.setattr("techletter.users.repositories.utcnow", lambda: mon_2350)
+    assert await credit_service.grant_daily(USER, "google", "sub-1") == DAILY_CREDITS
+
+    monkeypatch.setattr("techletter.users.credits.utcnow", lambda: tue_0010)
+    monkeypatch.setattr("techletter.users.repositories.utcnow", lambda: tue_0010)
+    # 전날 지급분은 이미 자정에 소멸했으므로(설계대로) remaining 은 DAILY_CREDITS 그대로여야
+    # 한다 — 여기서 묻는 건 "두 번째 grant_daily 가 실제로 지급했는가"다.
+    assert await credit_service.grant_daily(USER, "google", "sub-1") == DAILY_CREDITS
+    assert await credit_service.remaining(USER) == DAILY_CREDITS
+
+
 async def test_daily_credit_expires_next_midnight(credit_service, credits_repo):
     await credit_service.grant_daily(USER, "google", "sub-1")
     summary = await credits_repo.summary(USER)
