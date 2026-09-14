@@ -233,15 +233,6 @@ class CreditRepository:
         credit.id = result.inserted_id
         return credit
 
-    async def granted_today(self, user_code: str, source: str = "daily") -> bool:
-        """오늘(UTC) 이미 같은 source로 지급됐는지."""
-        today_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        doc = await self._col.find_one(
-            {"user_code": user_code, "source": source, "created_at": {"$gte": today_start}},
-            projection={"_id": 1},
-        )
-        return doc is not None
-
     async def take_one(self, user_code: str) -> ObjectId | None:
         """만료 임박 크레딧에서 1을 **원자적으로** 뺀다.
 

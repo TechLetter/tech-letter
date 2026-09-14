@@ -116,16 +116,11 @@ class CreditService:
         return restored
 
     async def grant_daily(self, user_code: str, provider: str, provider_sub: str) -> int:
-        """로그인 시 일일 지급. 이미 받았으면 0.
-
-        식별자 정책과 유저 기준 검사를 모두 통과해야 지급한다.
-        """
+        """로그인 시 일일 지급. 오늘 이미 받았으면(같은 identity 기준) 0."""
         allowed = await self._policies.try_use(
             identity_hash(provider, provider_sub), DAILY_POLICY_KEY
         )
         if not allowed:
-            return 0
-        if await self._credits.granted_today(user_code):
             return 0
 
         credit = await self._credits.grant(
