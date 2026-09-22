@@ -22,7 +22,6 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 ## 2. 계약 테스트
 
 - syrupy 골든 스냅샷은 사용하지 않는다(import 0건이며 의존성도 제거됐다). 계약 테스트는 실제로 `assert set(body) == {...}` 형태의 키 집합과 DTO 네이밍 변환을 고정한다.
-- `tests/contract/snapshots/{current,v2}`는 v1→v2 마이그레이션 심사 기록물일 뿐 pytest·CI가 읽지 않는다.
 - `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 56개 라우트의 커버리지를 검증한다.
 - SSE는 프론트 파서와 동일한 규칙으로 파싱해 이벤트 시퀀스와 `done` 키 집합을 검증한다.
 

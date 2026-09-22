@@ -86,13 +86,13 @@ tech-letter/
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/  api/ chat/ content/ core/ embedding/ jobs/ llm/ summary/ users/
-│   ├── contract/  snapshots/{current,v2}/     # v1→v2 마이그레이션 심사 기록물(pytest·CI 미사용)
+│   ├── contract/                  # API 계약(응답 모양) 테스트
 │   ├── integration/              # Mongo·Qdrant 컨테이너, 잡 큐, 파이프라인 e2e
 │   ├── e2e/                      # Playwright(프론트+백엔드)
 │   └── fixtures/  rss/ html/ seed/
 │
 ├── docker/  Dockerfile  compose.dev.yml  compose.prod.yml
-├── scripts/  check_routes.py  contract_diff.py  contract_snapshot.py  eval_models.py  dev.sh  verify_prod_smoke.sh
+├── scripts/  check_routes.py  eval_models.py  dev.sh  verify_prod_smoke.sh
 ├── .github/workflows/  ci.yml  deploy.yml
 └── docs/  README.md  architecture/  PRIVACY_POLICY.md
 ```
