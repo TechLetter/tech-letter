@@ -222,13 +222,20 @@ async def test_duplicate_link_is_rejected_by_the_unique_index(posts, blogs) -> N
     assert again is None
 
 
-async def test_existing_links_filters_the_batch(posts, blogs) -> None:
+async def test_existing_link_keys_matches_by_link_or_link_key(posts, blogs) -> None:
+    """원문 링크로 와도, 정규화된 link_key로 와도 같은 문서를 잡아야 한다 —
+    link_key 도입 전 문서와 전환 중인 문서가 섞여 있기 때문이다."""
     blog = await make_blog(blogs, "Alpha")
     saved = await make_post(posts, blog, "one")
 
-    known = await posts.existing_links([saved.link, "https://alpha.test/never-seen"])
+    by_link = await posts.existing_link_keys([saved.link], [])
+    assert by_link == {saved.link, saved.link_key}
 
-    assert known == {saved.link}
+    by_key = await posts.existing_link_keys(["https://alpha.test/never-seen"], [saved.link_key])
+    assert by_key == {saved.link, saved.link_key}
+
+    assert await posts.existing_link_keys(["https://alpha.test/nope"], ["nope-key"]) == set()
+    assert await posts.existing_link_keys([], []) == set()
 
 
 async def test_view_count_increments(posts, blogs) -> None:

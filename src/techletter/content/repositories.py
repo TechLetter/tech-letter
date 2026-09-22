@@ -192,19 +192,6 @@ class PostRepository:
         cursor = self._col.find({"_id": {"$in": oids}}, projection={"plain_text": 1})
         return {str(doc["_id"]): doc["plain_text"] async for doc in cursor if doc.get("plain_text")}
 
-    async def exists_by_link(self, link: str) -> bool:
-        return await self._col.find_one({"link": link}, projection={"_id": 1}) is not None
-
-    async def existing_links(self, links: list[str]) -> set[str]:
-        """이미 저장된 링크만 골라낸다.
-
-        항목마다 개별 조회하면 블로그 하나당 수십 번 왕복한다. 한 번에 묻는다.
-        """
-        if not links:
-            return set()
-        cursor = self._col.find({"link": {"$in": links}}, projection={"link": 1})
-        return {doc["link"] async for doc in cursor}
-
     async def existing_link_keys(self, links: list[str], keys: list[str]) -> set[str]:
         """원문 링크와 정규화 키 양쪽 기준으로 이미 저장된 값을 찾는다.
 
