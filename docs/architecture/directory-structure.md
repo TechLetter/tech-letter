@@ -5,7 +5,7 @@
 ```
 tech-letter/
 ├── pyproject.toml                # [project] techletter. dependency-groups. ruff/pyright/pytest 설정
-├── uv.lock  .python-version(3.12)  .pre-commit-config.yaml  scripts/dev.sh
+├── uv.lock  .python-version(3.12)  scripts/dev.sh
 │                                  # scripts/dev.sh: test-infra | test-infra-down (테스트 전용 Mongo/Qdrant)
 ├── .gitignore  .dockerignore  README.md
 │
@@ -117,7 +117,7 @@ dependencies = [
 browser = ["playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]   # summary-worker 이미지에서만
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "pyright", "pre-commit",
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "pyright",
        "playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]
 
 [project.scripts]
