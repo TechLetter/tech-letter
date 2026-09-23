@@ -26,7 +26,7 @@ POST_KEYS = {
 # ── 봉투 ────────────────────────────────────────────────────────────
 async def test_every_list_uses_one_envelope(client, seeded) -> None:
     """모든 목록 응답이 같은 봉투를 써야 한다."""
-    for path in ("/api/v1/posts", "/api/v1/blogs", "/api/v1/trends/posts"):
+    for path in ("/api/v1/posts", "/api/v1/trends/posts"):
         body = (await client.get(path)).json()
         assert set(body) == PAGED_KEYS, path
 
@@ -163,13 +163,6 @@ async def test_a_view_on_a_missing_post_is_404(client) -> None:
 
 
 # ── 블로그 · 필터 ───────────────────────────────────────────────────
-async def test_public_blogs_expose_only_three_fields(client, seeded) -> None:
-    item = (await client.get("/api/v1/blogs")).json()["items"][0]
-
-    assert set(item) == {"id", "name", "url"}
-    # rss_url 은 공개하지 않는다.
-
-
 async def test_filter_items_carry_names_and_counts(client, seeded) -> None:
     body = (await client.get("/api/v1/filters/tags")).json()
 

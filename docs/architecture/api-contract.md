@@ -90,9 +90,8 @@
 ```
 `is_bookmarked`는 항상 boolean(익명 요청이면 `false`). `categories`/`tags`는 항상 배열(요약 전이면 `[]`). `summary`/`thumbnail_url`은 없으면 `null`.
 
-### 2.2 `Blog` / `AdminBlog`
-공개: `{id, name, url}`.
-어드민: `{id, name, url, rss_url, is_active, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
+### 2.2 `AdminBlog`
+`{id, name, url, rss_url, is_active, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
 ### 2.3 `AdminPost`
 ```json
@@ -213,7 +212,6 @@
 | GET | `/posts` | 선택 | `page, page_size, categories[], tags[], blog_id, published_from, published_to` | 목록 봉투 + `Post[]` |
 | GET | `/posts/{id}` | 선택 | | `Post` / 404 `resource.not_found` |
 | POST | `/posts/{id}/views` | - | | `204` |
-| GET | `/blogs` | - | `page, page_size` | 목록 + `Blog[]` |
 | GET | `/bookmarks` | 필수 | `page, page_size` | 목록 + `Post[]`(`is_bookmarked: true`) |
 | POST | `/bookmarks` | 필수 | `{post_id}` | `201 {post_id, created_at}`(중복도 멱등 upsert) / 404 |
 | DELETE | `/bookmarks/{post_id}` | 필수 | | `204` / 404 |

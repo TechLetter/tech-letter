@@ -5,7 +5,7 @@
 | 층 | 대상 | 도구 | 마커 |
 |---|---|---|---|
 | **단위** | 도메인 서비스, 가드, 플래너, 파서, 검증기, 잡 정책, LLM 라우터, JWT, 관용 파서 | pytest + Fake | (기본) |
-| **계약** | API 56개 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
+| **계약** | API 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
 | **통합** | 레포지토리↔Mongo, 잡 큐 클레임/재시도, Qdrant, 워커 파이프라인 | 실행 중인 Mongo/Qdrant 컨테이너 필요 | `integration` |
 | **E2E** | 프론트+백엔드 실제 브라우저 시나리오 | Playwright(pytest-playwright) | `e2e` |
 

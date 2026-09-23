@@ -15,7 +15,7 @@ from techletter.core.time import to_iso_z
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.chat.agent.state import Source
     from techletter.content.filters import BlogFilterItem, FilterItem
-    from techletter.content.models import Blog, Post
+    from techletter.content.models import Post
     from techletter.content.service import BlogWithCount
     from techletter.content.trends import RisingTags, TrendSeries
 
@@ -24,7 +24,6 @@ __all__ = [
     "AdminPostOut",
     "AiSummaryOut",
     "BlogFilterOut",
-    "BlogOut",
     "EmbeddingOut",
     "FilterOut",
     "PostOut",
@@ -74,18 +73,6 @@ class PostOut(BaseModel):
             # 익명 요청이면 false. 키가 없는 3상태를 없앤다.
             is_bookmarked=bookmarked,
         )
-
-
-class BlogOut(BaseModel):
-    """공개 블로그."""
-
-    id: str
-    name: str
-    url: str
-
-    @classmethod
-    def of(cls, blog: Blog) -> BlogOut:
-        return cls(id=str(blog.id), name=blog.name, url=blog.url)
 
 
 class AdminBlogOut(BaseModel):
