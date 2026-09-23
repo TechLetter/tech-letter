@@ -114,28 +114,30 @@ async def stream_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> Stream
             on_activity=on_activity,
         )
     )
+    # 태스크가 끝나면 큐에 None을 넣어 대기 중인 루프를 깨운다. 이게 없으면
+    # 마지막 활동 뒤 답변이 준비돼도 keepalive 타임아웃까지 기다린다.
+    task.add_done_callback(lambda _: activities.put_nowait(None))
 
     # 첫 활동(=계획 시작)이 나오면 가드·세션·크레딧을 모두 통과했다는 뜻이다.
     first = await _first_signal(task, activities)
 
     async def events() -> AsyncIterator[str]:
-        pending = [first] if first is not None else []
         try:
-            while True:
-                for activity in pending:
-                    yield _frame("activity", _activity_payload(activity))
-                pending = []
-                if task.done():
-                    break
-                try:
-                    item = await asyncio.wait_for(activities.get(), timeout=KEEPALIVE_SECONDS)
-                except TimeoutError:
-                    # 프록시가 조용한 연결을 끊지 않게 한다. 프론트 파서는
-                    # `data:` 없는 블록을 무시한다.
-                    yield ": keepalive\n\n"
-                    continue
-                if item is not None:
-                    pending = [item]
+            # first가 None이면 태스크가 활동 없이 이미 끝났다.
+            if first is not None:
+                yield _frame("activity", _activity_payload(first))
+                while True:
+                    try:
+                        item = await asyncio.wait_for(activities.get(), timeout=KEEPALIVE_SECONDS)
+                    except TimeoutError:
+                        # 프록시가 조용한 연결을 끊지 않게 한다. 프론트 파서는
+                        # `data:` 없는 블록을 무시한다.
+                        yield ": keepalive\n\n"
+                        continue
+                    # None은 종료 신호다. 그 전에 들어온 활동은 큐 순서대로 이미 보냈다.
+                    if item is None:
+                        break
+                    yield _frame("activity", _activity_payload(item))
 
             answer = await task
             yield _frame("done", ChatAnswerOut.of(answer).model_dump())
@@ -171,8 +173,12 @@ async def _first_signal(task: asyncio.Task, activities: asyncio.Queue) -> Activi
     getter = asyncio.ensure_future(activities.get())
     done, _ = await asyncio.wait({getter, task}, return_when=asyncio.FIRST_COMPLETED)
     if getter in done:
-        return getter.result()
-    getter.cancel()
+        first = getter.result()
+        # None(종료 신호)을 먼저 받았으면 태스크가 끝난 것이다 — 아래로 내려가 예외를 올린다.
+        if first is not None:
+            return first
+    else:
+        getter.cancel()
     # 태스크가 먼저 끝났다: 예외면 여기서 전파된다.
     task.result()
     return None

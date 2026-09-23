@@ -12,6 +12,7 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
+from tests.factories import clear_documents
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
@@ -73,11 +74,11 @@ async def mongo_db(mongo_available: str | None) -> AsyncIterator[AsyncDatabase]:
         pytest.skip(mongo_available)
     client = AsyncMongoClient(TEST_MONGO_URI, tz_aware=True, serverSelectionTimeoutMS=2000)
     db = client[TEST_DB_NAME]
-    for name in await db.list_collection_names():
-        await db[name].drop()
+    # DB를 지우지 않고 문서만 비운다. 인덱스를 매번 새로 만들면 테스트당 1초 넘게 든다.
+    await clear_documents(db)
 
-    # 운영과 같은 인덱스를 만들어 둔다. 유니크 제약에 기대는 동작(중복 지급 방지,
-    # 북마크 중복 등)이 인덱스 없이는 조용히 통과하기 때문이다.
+    # 운영과 같은 인덱스를 둔다. 유니크 제약에 기대는 동작(중복 지급 방지,
+    # 북마크 중복 등)이 인덱스 없이는 조용히 통과하기 때문이다. 이미 있으면 no-op이다.
     import techletter.content.repositories
     import techletter.core.jobs.queue
     import techletter.users.repositories  # noqa: F401
@@ -87,7 +88,6 @@ async def mongo_db(mongo_available: str | None) -> AsyncIterator[AsyncDatabase]:
     try:
         yield db
     finally:
-        await client.drop_database(TEST_DB_NAME)
         await client.close()
 
 

@@ -10,6 +10,7 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
+from tests.factories import clear_documents
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import AsyncIterator
@@ -63,19 +64,15 @@ async def app(mongo_available: str | None, contract_settings) -> AsyncIterator[F
     if mongo_available:
         pytest.skip(mongo_available)
 
-    container = await Container.open(contract_settings)
-
-    for name in await container.db.list_collection_names():
-        await container.db[name].drop()
+    # DB를 지우지 않고 문서만 비운다. 인덱스는 lifespan의 Container.open이 보장하며,
+    # 이미 있으면 no-op이라 테스트마다 다시 만들지 않는다.
+    container = await Container.open(contract_settings, create_indexes=False)
+    await clear_documents(container.db)
     await container.close()
 
     application = create_app(contract_settings)
     async with application.router.lifespan_context(application):
         yield application
-
-    client = (await Container.open(contract_settings, create_indexes=False)).mongo
-    await client.client.drop_database(TEST_DB_NAME)
-    await client.close()
 
 
 @pytest.fixture
