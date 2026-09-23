@@ -355,36 +355,6 @@ class PostRepository:
             return False
         return result.matched_count > 0
 
-    async def find_future_published_at(
-        self, now: datetime, limit: int, *, after_id: ObjectId | None = None
-    ) -> list[Post]:
-        """현재 시각보다 뒤인 발행일을 가진 포스트를 배치 조회한다."""
-        query: dict[str, Any] = {"published_at": {"$gt": now}}
-        if after_id is not None:
-            query["_id"] = {"$gt": after_id}
-        cursor = (
-            self._col.find(
-                query,
-                projection={"_id": 1, "title": 1, "published_at": 1, "created_at": 1},
-            )
-            .sort([("_id", ASCENDING)])
-            .limit(limit)
-        )
-        return [Post.model_validate(doc) async for doc in cursor]
-
-    async def update_future_published_at(
-        self, post_id: str, published_at: datetime, *, now: datetime
-    ) -> bool:
-        """아직 미래인 발행일만 백필 값으로 갱신한다."""
-        oid = to_object_id(post_id)
-        if oid is None:
-            return False
-        result = await self._col.update_one(
-            {"_id": oid, "published_at": {"$gt": now}},
-            {"$set": {"published_at": published_at, "updated_at": utcnow()}},
-        )
-        return result.matched_count > 0
-
     # ── 집계 ────────────────────────────────────────────────────────
     async def _facet_counts(self, unwind_field: str, match: dict[str, Any]) -> dict[str, int]:
         """배열 필드를 펼쳐 값별 개수를 센다. 대소문자를 무시해 묶고 원본 표기를 쓴다."""
