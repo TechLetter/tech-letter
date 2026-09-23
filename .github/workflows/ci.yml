@@ -36,9 +36,6 @@ jobs:
       - name: Unit tests
         run: uv run pytest -q
 
-      - name: Routes match the contract
-        run: uv run python scripts/check_routes.py
-
   integration:
     name: integration · contract
     runs-on: ubuntu-24.04

@@ -103,16 +103,6 @@ class ChatSessionRepository:
             async for doc in cursor
         ], total
 
-    async def message_counts(self, session_ids: list[str]) -> dict[str, int]:
-        oids = [oid for oid in (to_object_id(s) for s in session_ids) if oid is not None]
-        if not oids:
-            return {}
-        pipeline = [
-            {"$match": {"_id": {"$in": oids}}},
-            {"$project": {"n": {"$size": {"$ifNull": ["$messages", []]}}}},
-        ]
-        return {str(row["_id"]): int(row["n"]) async for row in await self._col.aggregate(pipeline)}
-
     async def append_message(self, session_id: str, message: ChatMessage) -> ChatSession | None:
         oid = to_object_id(session_id)
         if oid is None:

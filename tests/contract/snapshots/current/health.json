@@ -1,9 +1,0 @@
-{
- "_request": {
-  "authed": false,
-  "path": "/health"
- },
- "body": "<non-json:473bytes>",
- "content_type": "text/html",
- "status": 200
-}

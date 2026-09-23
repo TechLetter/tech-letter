@@ -113,10 +113,6 @@ class UserRepository:
         doc = await self._col.find_one({"user_code": user_code})
         return User.model_validate(doc) if doc else None
 
-    async def get_by_provider(self, provider: str, provider_sub: str) -> User | None:
-        doc = await self._col.find_one({"provider": provider, "provider_sub": provider_sub})
-        return User.model_validate(doc) if doc else None
-
     async def upsert(self, user: User) -> User:
         """provider+provider_sub 기준으로 생성하거나 프로필을 갱신한다."""
         now = utcnow()
@@ -275,17 +271,6 @@ class CreditTransactionRepository:
         result = await self._col.insert_one(transaction.to_mongo())
         transaction.id = result.inserted_id
         return transaction
-
-    async def list_by_user(self, user_code: str, page: Page) -> tuple[list[CreditTransaction], int]:
-        query = {"user_code": user_code}
-        total = await self._col.count_documents(query)
-        cursor = (
-            self._col.find(query)
-            .sort([("created_at", DESCENDING)])
-            .skip(page.skip)
-            .limit(page.page_size)
-        )
-        return [CreditTransaction.model_validate(doc) async for doc in cursor], total
 
     async def granted_amount_on(
         self, user_code: str, day_start: datetime, day_end: datetime

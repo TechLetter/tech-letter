@@ -47,10 +47,6 @@ cmd_test-all() { # 통합·E2E 포함 전체
   "$UV" run pytest -q -m ""
 }
 
-cmd_snapshot() { # 현행 API 골든 스냅샷 재캡처 (BASE_URL/TOKEN 필요)
-  "$UV" run python scripts/contract_snapshot.py --out tests/contract/snapshots/current
-}
-
 cmd_check() { # CI가 도는 것과 같은 검사
   cmd_lint
   cmd_typecheck

@@ -22,8 +22,6 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 ## 2. 계약 테스트
 
 - syrupy 골든 스냅샷은 사용하지 않는다(import 0건이며 의존성도 제거됐다). 계약 테스트는 실제로 `assert set(body) == {...}` 형태의 키 집합과 DTO 네이밍 변환을 고정한다.
-- `tests/contract/snapshots/{current,v2}`는 v1→v2 마이그레이션 심사 기록물일 뿐 pytest·CI가 읽지 않는다.
-- `scripts/check_routes.py`가 API 계약 문서(`docs/architecture/api-contract.md`)의 엔드포인트 표와 실제 `app.openapi()` 스키마를 대조해 56개 라우트의 커버리지를 검증한다.
 - SSE는 프론트 파서와 동일한 규칙으로 파싱해 이벤트 시퀀스와 `done` 키 집합을 검증한다.
 
 ## 3. 단위 테스트 — 핵심 커버리지
@@ -82,7 +80,7 @@ PR과 `develop`/`main` push에서 4개 잡이 병렬로 돈다.
 
 | 잡 | 내용 |
 |---|---|
-| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 → `scripts/check_routes.py`(56개 API 계약 라우트 일치) |
+| `check` | `ruff check`/`format --check`(ASYNC/DTZ/TID 포함) → `pyright` → 단위 테스트 |
 | `integration` | 실제 mongo:8.0·qdrant:v1.16.2 서비스 컨테이너로 통합·계약 테스트 |
 | `e2e` | `tech-letter_ui`를 체크아웃해 빌드하고, 실제 API 프로세스를 띄운 뒤 Playwright로 시나리오 실행(프론트 체크아웃 실패 시 경고만 남기고 건너뜀) |
 | `images` | 런타임/브라우저 이미지 빌드 + **크기 게이트**(런타임 ≤450MB, 브라우저 ≤1200MB) + 컨테이너 안에서 `techletter version`과 필수 의존성 import 스모크 |

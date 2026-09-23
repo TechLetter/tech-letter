@@ -125,7 +125,6 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 ```bash
 uv sync
-uv run pre-commit install                    # 훅은 자동 설치되지 않는다
 uv run playwright install --only-shell chromium   # summary-worker(렌더링)에 필요
 
 docker compose -f docker/compose.dev.yml up -d mongo qdrant

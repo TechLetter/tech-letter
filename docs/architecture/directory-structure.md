@@ -5,7 +5,7 @@
 ```
 tech-letter/
 ├── pyproject.toml                # [project] techletter. dependency-groups. ruff/pyright/pytest 설정
-├── uv.lock  .python-version(3.12)  .pre-commit-config.yaml  scripts/dev.sh
+├── uv.lock  .python-version(3.12)  scripts/dev.sh
 │                                  # scripts/dev.sh: test-infra | test-infra-down (테스트 전용 Mongo/Qdrant)
 ├── .gitignore  .dockerignore  README.md
 │
@@ -86,13 +86,13 @@ tech-letter/
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/  api/ chat/ content/ core/ embedding/ jobs/ llm/ summary/ users/
-│   ├── contract/  snapshots/{current,v2}/     # v1→v2 마이그레이션 심사 기록물(pytest·CI 미사용)
+│   ├── contract/                  # API 계약(응답 모양) 테스트
 │   ├── integration/              # Mongo·Qdrant 컨테이너, 잡 큐, 파이프라인 e2e
 │   ├── e2e/                      # Playwright(프론트+백엔드)
 │   └── fixtures/  rss/ html/ seed/
 │
 ├── docker/  Dockerfile  compose.dev.yml  compose.prod.yml
-├── scripts/  check_routes.py  contract_diff.py  contract_snapshot.py  eval_models.py  dev.sh  verify_prod_smoke.sh
+├── scripts/  eval_models.py  dev.sh  verify_prod_smoke.sh
 ├── .github/workflows/  ci.yml  deploy.yml
 └── docs/  README.md  architecture/  PRIVACY_POLICY.md
 ```
@@ -117,7 +117,7 @@ dependencies = [
 browser = ["playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]   # summary-worker 이미지에서만
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "pyright", "pre-commit",
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "pyright",
        "playwright==1.49.1", "trafilatura", "beautifulsoup4", "pillow"]
 
 [project.scripts]

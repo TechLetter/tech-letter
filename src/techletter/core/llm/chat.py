@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from techletter.core.llm.errors import JsonOutputError
@@ -75,12 +74,6 @@ class ChatClient:
 
     async def aclose(self) -> None:  # pragma: no cover - 기본 no-op
         return
-
-
-@dataclass(slots=True)
-class _ModelKey:
-    model_id: str
-    max_tokens: int
 
 
 class LangChainChatClient(ChatClient):
