@@ -92,7 +92,7 @@ tech-letter/
 │   └── fixtures/  rss/ html/ seed/
 │
 ├── docker/  Dockerfile  compose.dev.yml  compose.prod.yml
-├── scripts/  check_routes.py  eval_models.py  dev.sh  verify_prod_smoke.sh
+├── scripts/  eval_models.py  dev.sh  verify_prod_smoke.sh
 ├── .github/workflows/  ci.yml  deploy.yml
 └── docs/  README.md  architecture/  PRIVACY_POLICY.md
 ```
