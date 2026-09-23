@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -378,6 +379,26 @@ async def test_the_stream_emits_activities_then_done(
     frames = parse_sse(response.text)
     assert [event for event, _ in frames][-1] == "done"
     assert any(event == "activity" for event, _ in frames)
+
+
+async def test_the_done_frame_is_not_held_back_by_the_keepalive(
+    client, user_headers, stub_chat, funded
+) -> None:
+    """마지막 활동 뒤 태스크가 끝나면 바로 done을 보낸다.
+
+    종료 신호가 없던 시절에는 keepalive 타임아웃(15초)까지 답변이 묶여 있었다.
+    """
+    from techletter.api.v1.chat import KEEPALIVE_SECONDS
+
+    started = time.perf_counter()
+    response = await client.post(
+        "/api/v1/chat/messages/stream", json={"query": "질문"}, headers=user_headers
+    )
+    elapsed = time.perf_counter() - started
+
+    assert [event for event, _ in parse_sse(response.text)][-1] == "done"
+    assert ": keepalive" not in response.text
+    assert elapsed < KEEPALIVE_SECONDS / 3
 
 
 async def test_activity_completion_is_reported_as_done(
