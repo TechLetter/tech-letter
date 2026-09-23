@@ -93,10 +93,6 @@ class VectorStore:
     async def close(self) -> None:
         await self._client.close()
 
-    async def ping(self) -> bool:
-        await self._client.get_collections()
-        return True
-
     def collection_for(self, model_name: str, vector_dimension: int) -> str:
         return collection_name_for(self._base, model_name, vector_dimension)
 
