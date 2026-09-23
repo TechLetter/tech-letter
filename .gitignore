@@ -1,4 +1,3 @@
-config.yaml
 .env
 .env.*
 !.env.example
@@ -26,19 +25,12 @@ htmlcov/
 # Logs and temporary files
 *.log
 tmp/
-.ipynb_checkpoints/ # Jupyter notebooks
 tests/e2e/_artifacts/
 
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# IDE files (Uncomment if needed)
+# IDE files
 .vscode/
 .idea/
-
-# Local configuration and secrets
-.flaskenv
-secrets.json
-*.local.py
-

@@ -19,7 +19,6 @@ htmlcov/
 *.egg-info/
 dist/
 build/
-.mypy_cache/
 .ruff_cache/
 
 # IDEs
@@ -40,11 +39,9 @@ tests/
 
 # Docker
 Dockerfile*
-docker-compose*.yml
 .dockerignore
 
 # Misc
 *.log
 .env
 .env.*
-config-example.yaml
