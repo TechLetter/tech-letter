@@ -33,7 +33,6 @@ class User(BaseDocument):
     provider_sub: str
     email: str | None = None
     name: str | None = None
-    profile_image: str | None = None
     role: str = "user"
 
 

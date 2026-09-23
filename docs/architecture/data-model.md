@@ -80,7 +80,7 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 - `last_fetch_error`는 200자 이내로 절단해서 저장한다.
 - 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 RSS 수집기가 `is_active=false`로 자동 전환한다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
-**`users`**: `_id, created_at, updated_at, user_code("google:<uuid>", UNIQUE), provider, provider_sub, email, name, profile_image, role("user"|"admin")`
+**`users`**: `_id, created_at, updated_at, user_code("google:<uuid>", UNIQUE), provider, provider_sub, email, name, role("user"|"admin")`
 
 **`bookmarks`**: `_id, user_code, post_id(문자열), created_at, updated_at`
 

@@ -121,7 +121,6 @@ class UserRepository:
                 "$set": {
                     "email": user.email,
                     "name": user.name,
-                    "profile_image": user.profile_image,
                     "updated_at": now,
                 },
                 "$setOnInsert": {

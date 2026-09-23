@@ -33,7 +33,6 @@ class OAuthProfile:
     provider_sub: str
     email: str | None = None
     name: str | None = None
-    profile_image: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +63,6 @@ class UserService:
             provider_sub=profile.provider_sub,
             email=profile.email,
             name=profile.name,
-            profile_image=profile.profile_image,
         )
         return await self._users.upsert(candidate)
 

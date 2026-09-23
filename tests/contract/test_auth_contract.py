@@ -22,7 +22,6 @@ async def registered(ctx):
             provider_sub="sub-1",
             email="alice@example.com",
             name="Alice",
-            profile_image="https://img.test/a.png",
         )
     )
 
@@ -80,7 +79,6 @@ async def test_me_shape(client, registered, headers_for) -> None:
         "user_code",
         "email",
         "name",
-        "profile_image",
         "role",
         "credits",
         "created_at",

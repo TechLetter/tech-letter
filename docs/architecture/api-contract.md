@@ -116,7 +116,7 @@
 ```json
 {
   "user_code": "google:…", "email": "…", "name": "…",
-  "profile_image": "https://…", "role": "user",
+  "role": "user",
   "credits": { "remaining": 7, "granted_today": 10 },
   "created_at": "…", "updated_at": "…"
 }
