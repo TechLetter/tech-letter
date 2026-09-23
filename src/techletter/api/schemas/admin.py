@@ -35,7 +35,6 @@ class JobOut(BaseModel):
     run_at: str | None
     last_error: str | None
     error_kind: str | None
-    trace_id: str | None
     created_at: str | None
     updated_at: str | None
     finished_at: str | None
@@ -53,7 +52,6 @@ class JobOut(BaseModel):
             run_at=to_iso_z(job.run_at),
             last_error=job.last_error,
             error_kind=job.error_kind.value if job.error_kind else None,
-            trace_id=job.trace_id,
             created_at=to_iso_z(job.created_at),
             updated_at=to_iso_z(job.updated_at),
             finished_at=to_iso_z(job.finished_at),

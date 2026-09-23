@@ -37,10 +37,6 @@ class TokenClaims:
     user_code: str
     role: str
 
-    @property
-    def is_admin(self) -> bool:
-        return self.role == ROLE_ADMIN
-
 
 def issue_token(settings: AuthSettings, user_code: str, role: str = ROLE_USER) -> str:
     expires = utcnow() + timedelta(seconds=settings.jwt_ttl_seconds)

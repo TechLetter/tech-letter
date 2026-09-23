@@ -116,7 +116,7 @@
 ```json
 {
   "user_code": "google:…", "email": "…", "name": "…",
-  "profile_image": "https://…", "role": "user",
+  "role": "user",
   "credits": { "remaining": 7, "granted_today": 10 },
   "created_at": "…", "updated_at": "…"
 }
@@ -127,7 +127,6 @@
 ```json
 {
   "id": "…", "title": "…",
-  "message_count": 8,
   "created_at": "…", "updated_at": "…",
   "messages": [
     { "role": "user", "content": "…", "created_at": "…" },
@@ -139,7 +138,7 @@
   ]
 }
 ```
-목록 응답(`GET /chat/sessions`)은 `messages`를 제외하고 `message_count`만 포함한다. 메시지 메타데이터(`sources`/`agent`/`guard`/`memory`)는 평탄화되어 있다.
+목록 응답(`GET /chat/sessions`)은 `messages`를 `null`로 준다. 메시지 메타데이터(`sources`/`agent`/`guard`/`memory`)는 평탄화되어 있다.
 
 ### 2.6 `ChatAnswer` (`POST /chat/messages` 응답 및 SSE `done`)
 ```json
@@ -173,7 +172,7 @@
   "priority": 0,
   "run_at": "…", "last_error": "ai judged that this content is not summarizable: …",
   "error_kind": "permanent",
-  "trace_id": "…", "created_at": "…", "updated_at": "…", "finished_at": "…"
+  "created_at": "…", "updated_at": "…", "finished_at": "…"
 }
 ```
 

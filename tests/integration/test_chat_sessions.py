@@ -64,16 +64,14 @@ async def test_a_malformed_session_id_is_not_found(sessions) -> None:
 
 
 # ── 목록 ────────────────────────────────────────────────────────────
-async def test_the_list_carries_counts_but_not_message_bodies(sessions) -> None:
-    """메시지 본문은 빼도 개수는 프론트가 알 수 있어야 한다."""
+async def test_the_list_omits_message_bodies(sessions) -> None:
     session = await sessions.create(USER, "첫 질문")
     await sessions.append(session, "assistant", "답변")
 
     rows, total = await sessions.list(USER, Page(1, 10))
 
     assert total == 1
-    assert rows[0].message_count == 2
-    assert rows[0].session.messages == []
+    assert rows[0].messages == []
 
 
 async def test_the_list_is_newest_updated_first(sessions) -> None:
@@ -83,7 +81,7 @@ async def test_the_list_is_newest_updated_first(sessions) -> None:
 
     rows, _ = await sessions.list(USER, Page(1, 10))
 
-    assert [row.session.title for row in rows] == ["오래된", "새것"]
+    assert [row.title for row in rows] == ["오래된", "새것"]
 
 
 async def test_the_list_only_shows_your_own_sessions(sessions) -> None:
@@ -93,7 +91,7 @@ async def test_the_list_only_shows_your_own_sessions(sessions) -> None:
     rows, total = await sessions.list(USER, Page(1, 10))
 
     assert total == 1
-    assert rows[0].session.title == "내 것"
+    assert rows[0].title == "내 것"
 
 
 async def test_list_pagination(sessions) -> None:
@@ -235,13 +233,12 @@ async def test_a_failed_compression_keeps_the_old_summary(sessions, repo) -> Non
     await sessions.store_summary(str(session.id), "쓸만한 요약", 4)
     stored = await repo.get(str(session.id))
 
-    await sessions.mark_compression_failed(str(session.id), "boom", stored.memory)  # type: ignore[union-attr]
+    await sessions.mark_compression_failed(str(session.id), stored.memory)  # type: ignore[union-attr]
 
     after = await repo.get(str(session.id))
     assert after is not None and after.memory is not None
     assert after.memory.status == "failed"
     assert after.memory.summary == "쓸만한 요약"
-    assert after.memory.error_message == "boom"
 
 
 # ── 추천 질문 ───────────────────────────────────────────────────────

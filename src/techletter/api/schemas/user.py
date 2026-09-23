@@ -33,7 +33,6 @@ class MeOut(BaseModel):
     user_code: str
     email: str | None
     name: str | None
-    profile_image: str | None
     role: str
     credits: CreditsOut
     created_at: str | None
@@ -46,7 +45,6 @@ class MeOut(BaseModel):
             user_code=user.user_code,
             email=user.email,
             name=user.name,
-            profile_image=user.profile_image,
             role=user.role,
             credits=CreditsOut(
                 remaining=profile.credits_remaining,

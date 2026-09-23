@@ -81,7 +81,6 @@ def test_session_memory_shape() -> None:
         "status",
         "requested_at",
         "updated_at",
-        "error_message",
     }
 
 

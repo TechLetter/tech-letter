@@ -58,7 +58,7 @@ class JobRunner:
         if job is None:
             return False
 
-        bind_context(job_id=str(job.id), trace_id=job.trace_id)
+        bind_context(job_id=str(job.id))
         handler = self._handlers.get(job.type)
         if handler is None:
             # 등록되지 않은 타입을 클레임했다 — 설정 오류다. 되돌려 놓는다.

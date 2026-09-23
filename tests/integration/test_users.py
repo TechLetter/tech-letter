@@ -54,7 +54,6 @@ PROFILE = OAuthProfile(
     provider_sub="sub-1",
     email="a@example.com",
     name="테스터",
-    profile_image="https://example.com/a.png",
 )
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
@@ -22,18 +21,9 @@ if TYPE_CHECKING:  # pragma: no cover
 
 __all__ = [
     "ChatSessionRepository",
-    "SessionSummary",
     "SuggestedQuestionRepository",
     "normalize_question",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class SessionSummary:
-    """목록 항목. 메시지 본문 없이 개수만 들고 있다."""
-
-    session: ChatSession
-    message_count: int
 
 
 register_indexes(
@@ -77,31 +67,17 @@ class ChatSessionRepository:
         doc = await self._col.find_one(query)
         return ChatSession.model_validate(doc) if doc else None
 
-    async def list_sessions(self, user_code: str, page: Page) -> tuple[list[SessionSummary], int]:
-        """목록에서는 본문을 빼고 개수만 센다.
-
-        세션 하나에 메시지가 수십 개고 각 메시지에 답변 전문이 들어 있다.
-        `$size`로 서버에서 개수만 세고 `messages` 자체는 응답에서 뺀다.
-        """
+    async def list_sessions(self, user_code: str, page: Page) -> tuple[list[ChatSession], int]:
+        """목록에서는 메시지 본문을 뺀다 — 세션 하나에 답변 전문이 수십 개씩 들어 있다."""
         query = {"user_code": user_code}
         total = await self._col.count_documents(query)
-        cursor = await self._col.aggregate(
-            [
-                {"$match": query},
-                {"$sort": {"updated_at": -1}},
-                {"$skip": page.skip},
-                {"$limit": page.page_size},
-                {"$addFields": {"message_count": {"$size": {"$ifNull": ["$messages", []]}}}},
-                {"$project": {"messages": 0}},
-            ]
+        cursor = (
+            self._col.find(query, projection={"messages": 0})
+            .sort([("updated_at", DESCENDING)])
+            .skip(page.skip)
+            .limit(page.page_size)
         )
-        return [
-            SessionSummary(
-                session=ChatSession.model_validate(doc),
-                message_count=int(doc.get("message_count") or 0),
-            )
-            async for doc in cursor
-        ], total
+        return [ChatSession.model_validate(doc) async for doc in cursor], total
 
     async def append_message(self, session_id: str, message: ChatMessage) -> ChatSession | None:
         oid = to_object_id(session_id)
@@ -162,7 +138,6 @@ class ChatSessionRepository:
                             "status": "pending",
                             "requested_at": "$$NOW",
                             "updated_at": {"$ifNull": ["$memory.updated_at", None]},
-                            "error_message": None,
                         }
                     }
                 }

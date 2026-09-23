@@ -11,11 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from techletter.core.errors import PermanentError, QuotaExceededError, RetryableError
+from techletter.core.errors import PermanentError, RetryableError
 from techletter.core.llm.errors import JsonOutputError, classify_llm_error
 from techletter.core.llm.stats import ModelPurpose
 from techletter.core.logging import get_logger
-from techletter.core.time import utcnow
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Awaitable, Callable
@@ -43,17 +42,7 @@ class StatsSink(Protocol):
 
     async def demoted(self, purpose: ModelPurpose) -> set[str]: ...
 
-    async def record(
-        self,
-        model_id: str,
-        purpose: ModelPurpose,
-        *,
-        success: bool,
-        latency_ms: float | None = ...,
-        json_failure: bool = ...,
-        rate_limited: bool = ...,
-        error: str | None = ...,
-    ) -> None: ...
+    async def record(self, model_id: str, purpose: ModelPurpose, *, success: bool) -> None: ...
 
 
 logger = get_logger(__name__)
@@ -138,17 +127,14 @@ class ModelRouter:
 
         last_error: Exception | None = None
         for model_id in models:
-            started = utcnow().timestamp()
             try:
                 result = await call(model_id)
             except PermanentError:
-                await self._record(model_id, purpose, started, ok=False)
+                await self._record(model_id, purpose, ok=False)
                 raise
             except JsonOutputError as exc:
                 last_error = exc
-                await self._record(
-                    model_id, purpose, started, ok=False, json_failure=True, error=str(exc)
-                )
+                await self._record(model_id, purpose, ok=False)
                 logger.warning(
                     "model returned invalid json; trying next",
                     extra={"model_id": model_id, "purpose": purpose.value},
@@ -157,14 +143,7 @@ class ModelRouter:
             except Exception as exc:
                 classified = classify_llm_error(exc)
                 last_error = classified
-                await self._record(
-                    model_id,
-                    purpose,
-                    started,
-                    ok=False,
-                    rate_limited=isinstance(classified, QuotaExceededError | RetryableError),
-                    error=str(exc),
-                )
+                await self._record(model_id, purpose, ok=False)
                 if isinstance(classified, PermanentError):
                     raise classified from exc
                 logger.warning(
@@ -177,7 +156,7 @@ class ModelRouter:
                 )
                 continue
             else:
-                await self._record(model_id, purpose, started, ok=True)
+                await self._record(model_id, purpose, ok=True)
                 return result, model_id
 
         assert last_error is not None
@@ -187,30 +166,11 @@ class ModelRouter:
         )
         raise last_error
 
-    async def _record(
-        self,
-        model_id: str,
-        purpose: ModelPurpose,
-        started: float,
-        *,
-        ok: bool,
-        json_failure: bool = False,
-        rate_limited: bool = False,
-        error: str | None = None,
-    ) -> None:
+    async def _record(self, model_id: str, purpose: ModelPurpose, *, ok: bool) -> None:
         if self._stats is None:
             return
-        latency_ms = (utcnow().timestamp() - started) * 1000
         try:
-            await self._stats.record(
-                model_id,
-                purpose,
-                success=ok,
-                latency_ms=latency_ms,
-                json_failure=json_failure,
-                rate_limited=rate_limited,
-                error=error,
-            )
+            await self._stats.record(model_id, purpose, success=ok)
         except Exception:
             logger.warning("failed to record model stats", extra={"model_id": model_id})
 

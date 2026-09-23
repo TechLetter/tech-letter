@@ -36,7 +36,7 @@ class FakeStats:
     async def demoted(self, purpose) -> set[str]:
         return self._demoted
 
-    async def record(self, model_id, purpose, *, success, **kwargs) -> None:
+    async def record(self, model_id, purpose, *, success) -> None:
         self.records.append((model_id, success))
 
 

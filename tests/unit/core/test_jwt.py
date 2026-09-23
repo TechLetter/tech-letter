@@ -46,7 +46,6 @@ def test_roundtrip(auth):
     claims = verify_token(auth, token)
     assert claims.user_code == "google:abc"
     assert claims.role == ROLE_ADMIN
-    assert claims.is_admin is True
 
 
 def test_default_role_is_user(auth):
@@ -78,7 +77,6 @@ def test_missing_role_is_allowed(auth):
     )
     claims = verify_token(auth, token)
     assert claims.role == ""
-    assert claims.is_admin is False
 
 
 def test_missing_sub_is_rejected(auth):

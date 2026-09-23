@@ -134,7 +134,6 @@ async def enqueue_summary_requested(
     post: Post,
     *,
     priority: int = PRIORITY_NORMAL,
-    trace_id: str | None = None,
 ) -> Job | None:
     """요약 잡을 건다. 이미 대기 중이면 None(중복 억제).
 
@@ -151,7 +150,6 @@ async def enqueue_summary_requested(
         str(post.id),
         payload.to_dict(),
         priority=priority,
-        trace_id=trace_id,
     )
 
 
@@ -160,20 +158,16 @@ async def enqueue_embedding_requested(
     post_id: str,
     *,
     priority: int = PRIORITY_NORMAL,
-    trace_id: str | None = None,
 ) -> Job | None:
     return await queue.enqueue(
         JobType.EMBEDDING_REQUESTED,
         post_id,
         EmbeddingRequestedPayload(post_id=post_id).to_dict(),
         priority=priority,
-        trace_id=trace_id,
     )
 
 
-async def enqueue_embedding_delete(
-    queue: JobQueue, post_ids: list[str], *, key: str, trace_id: str | None = None
-) -> Job | None:
+async def enqueue_embedding_delete(queue: JobQueue, post_ids: list[str], *, key: str) -> Job | None:
     """벡터 삭제를 요청한다. 포스트/블로그 삭제 뒤에 부른다.
 
     삭제는 여러 건을 한 잡에 묶는다. 블로그를 지우면 포스트가 수백 개라
@@ -185,6 +179,5 @@ async def enqueue_embedding_delete(
         JobType.EMBEDDING_DELETE_REQUESTED,
         key,
         EmbeddingDeletePayload(post_ids=post_ids).to_dict(),
-        trace_id=trace_id,
         dedupe=False,
     )

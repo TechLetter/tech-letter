@@ -365,4 +365,3 @@ async def test_a_failed_compression_marks_the_session_and_reraises(
     session = await session_service.get(answer.session_id, USER)
     assert session.memory is not None
     assert session.memory.status == "failed"
-    assert session.memory.error_message == "no models available"

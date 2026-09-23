@@ -65,7 +65,7 @@ class SummaryCompletedHandler:
             "summary applied",
             extra={"post_id": payload.post_id, "model": payload.model_name},
         )
-        await enqueue_embedding_requested(self._queue, payload.post_id, trace_id=job.trace_id)
+        await enqueue_embedding_requested(self._queue, payload.post_id)
 
 
 class EmbeddingCompletedHandler:

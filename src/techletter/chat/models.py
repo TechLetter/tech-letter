@@ -60,7 +60,6 @@ class SessionMemory(SubDocument):
     status: MemoryStatus = "none"
     requested_at: MongoDateTime | None = None
     updated_at: MongoDateTime | None = None
-    error_message: str | None = None
 
 
 class ChatSession(BaseDocument):
@@ -68,10 +67,6 @@ class ChatSession(BaseDocument):
     title: str = DEFAULT_TITLE
     messages: list[ChatMessage] = Field(default_factory=list)
     memory: SessionMemory | None = None
-
-    @property
-    def message_count(self) -> int:
-        return len(self.messages)
 
     @classmethod
     def start(cls, user_code: str, first_message: str | None = None) -> ChatSession:

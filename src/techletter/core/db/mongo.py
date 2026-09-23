@@ -51,12 +51,11 @@ class MongoConnection:
     def db(self) -> AsyncDatabase:
         return self.client[self._settings.db_name]
 
-    async def connect(self, *, ping: bool = True) -> AsyncDatabase:
+    async def connect(self) -> AsyncDatabase:
         if self._client is None:
             self._client = create_client(self._settings)
-        if ping:
-            await self._client.admin.command("ping")
-            logger.info("mongo connected", extra={"db": self._settings.db_name})
+        await self._client.admin.command("ping")
+        logger.info("mongo connected", extra={"db": self._settings.db_name})
         return self.db
 
     async def close(self) -> None:

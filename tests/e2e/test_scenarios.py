@@ -148,7 +148,7 @@ async def test_no_credits_yields_402(page, ui_server, broke, sign_in) -> None:
     assert (await response.json())["error"]["code"] == "credit.insufficient"
 
 
-async def test_chat_session_list_uses_message_count(page, ui_server, seeded, sign_in) -> None:
+async def test_chat_session_list_loads(page, ui_server, seeded, sign_in) -> None:
     await sign_in()
     sessions: list[dict] = []
     page.on(

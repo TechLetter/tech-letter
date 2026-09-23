@@ -165,5 +165,4 @@ class AuthService:
             provider_sub=str(subject),
             email=payload.get("email"),
             name=payload.get("name"),
-            profile_image=payload.get("picture"),
         )
