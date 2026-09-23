@@ -28,8 +28,12 @@ class LangChainEmbedder:
             return self._client
         from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: PLC0415
 
+        # 타임아웃은 client_args로 줘야 한다. `request_options`는 받기만 하고
+        # 쓰지 않아서(langchain-google-genai 4.x), 기본값이면 타임아웃이 아예 없다.
         self._client = GoogleGenerativeAIEmbeddings(
-            model=self._settings.model_name, api_key=self._settings.api_key
+            model=self._settings.model_name,
+            api_key=self._settings.api_key,
+            client_args={"timeout": self._settings.timeout_seconds},
         )
         return self._client
 
