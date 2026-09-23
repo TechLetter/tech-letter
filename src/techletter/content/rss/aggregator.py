@@ -102,9 +102,7 @@ class Aggregator:
         if blog.id is None:
             return outcome
         try:
-            items = await self._feeder.fetch(
-                blog.rss_url, limit=self._batch_size, tls_insecure=blog.tls_insecure
-            )
+            items = await self._feeder.fetch(blog.rss_url, limit=self._batch_size)
         except Exception as exc:
             outcome.error = str(exc)
             failures = await self._blogs.record_fetch_result(blog.id, outcome.error)

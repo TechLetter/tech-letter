@@ -11,24 +11,6 @@ from techletter.content.models import Blog, Post
 pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
-async def test_creating_a_blog_persists_tls_insecure(client, admin_headers, ctx) -> None:
-    response = await client.post(
-        "/api/v1/admin/blogs",
-        json={
-            "name": "Insecure Feed",
-            "url": "https://insecure.test",
-            "rss_url": "https://insecure.test/rss",
-            "tls_insecure": True,
-        },
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 201
-    saved = await ctx.db["blogs"].find_one({"rss_url": "https://insecure.test/rss"})
-    assert saved is not None
-    assert saved["tls_insecure"] is True
-
-
 @pytest.mark.parametrize(
     "case",
     [

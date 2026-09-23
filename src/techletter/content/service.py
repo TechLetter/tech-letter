@@ -154,7 +154,6 @@ class BlogService:
         rss_url: str,
         blog_type: str = "company",
         is_active: bool = True,
-        tls_insecure: bool = False,
     ) -> Blog:
         url, rss_url = normalize_url(url), normalize_url(rss_url)
         if conflict := await self._blogs.find_conflict(url=url, rss_url=rss_url, exclude_id=None):
@@ -166,7 +165,6 @@ class BlogService:
                 rss_url=rss_url,
                 blog_type=self._check_type(blog_type),  # type: ignore[arg-type]
                 is_active=is_active,
-                tls_insecure=tls_insecure,
             )
         )
 
@@ -174,7 +172,7 @@ class BlogService:
         """부분 갱신 — 전달된 필드만 바뀐다."""
         existing = await self.get(blog_id)
         fields: dict[str, object] = {}
-        for key in ("name", "url", "rss_url", "blog_type", "is_active", "tls_insecure"):
+        for key in ("name", "url", "rss_url", "blog_type", "is_active"):
             if key not in changes:
                 continue
             value = changes[key]

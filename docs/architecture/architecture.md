@@ -137,7 +137,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 ## 7. 보안
 
 - 요청 본문·토큰·API 키는 로깅하지 않는다. LLM 키는 클라이언트 생성자 인자로만 전달한다(프로세스 환경 변수 쓰기는 하지 않는다).
-- `oauth_state` 쿠키는 운영에서 `Secure=true`. RSS 수집은 `verify=True`가 기본이며, 호스트 예외 목록이 아니라 `blogs.tls_insecure` 불리언 필드가 `true`인 블로그만 TLS 검증을 우회한다. 이 값은 어드민 `POST/PUT /admin/blogs` 의 `tls_insecure` 로 설정한다.
+- `oauth_state` 쿠키는 운영에서 `Secure=true`. RSS 수집은 항상 TLS를 검증한다(블로그별 예외 없음).
 - CORS는 `CORS_ALLOWED_ORIGINS`로 허용 출처를 지정하고, credentials는 쓰지 않는다.
 
 ## 8. 로컬 개발

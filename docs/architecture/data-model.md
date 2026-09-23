@@ -76,7 +76,7 @@ embedding: { model_name, collection_name, vector_dimension, chunk_count, embedde
 ```
 API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` → `ai_summary`로 이름이 바뀐다(변환은 DTO 레벨에서만 일어난다). `link_key`에는 정규화한 링크를 저장하고 `uniq_link_key`가 문자열 값만 대상으로 유일성을 보장한다.
 
-**`blogs`**: `_id, created_at, updated_at, name, url, rss_url(UNIQUE), blog_type("company"|"creator"), is_active, tls_insecure, consecutive_failures, last_fetched_at, last_fetch_error`
+**`blogs`**: `_id, created_at, updated_at, name, url, rss_url(UNIQUE), blog_type("company"|"creator"), is_active, consecutive_failures, last_fetched_at, last_fetch_error`
 - `last_fetch_error`는 200자 이내로 절단해서 저장한다.
 - 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 RSS 수집기가 `is_active=false`로 자동 전환한다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 

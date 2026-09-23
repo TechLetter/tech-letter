@@ -82,10 +82,9 @@ class FakeEmbedder:
 @pytest.fixture
 def http_clients() -> HttpClients:
     clients = HttpClients()
-    clients._secure = httpx.AsyncClient(
+    clients._client = httpx.AsyncClient(
         transport=httpx.MockTransport(lambda r: httpx.Response(200, text=FEED))
     )
-    clients._insecure = clients._secure
     return clients
 
 

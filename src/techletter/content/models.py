@@ -76,8 +76,6 @@ class Blog(BaseDocument):
     last_fetch_error: str | None = None
     consecutive_failures: int = 0
     """연속 실패 횟수. 임계치를 넘으면 자동 비활성화한다."""
-    tls_insecure: bool = False
-    """이 블로그만 TLS 검증을 건너뛴다. 기본은 검증한다."""
 
 
 @dataclass(slots=True)

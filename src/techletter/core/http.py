@@ -41,11 +41,7 @@ def default_headers() -> dict[str, str]:
 
 
 class HttpClients:
-    """검증하는 클라이언트와 검증하지 않는 클라이언트를 함께 들고 있는다.
-
-    `insecure` 쪽은 `blogs.tls_insecure=true`인 블로그에만 쓰고, 실제로 요청이
-    있을 때에만 만든다.
-    """
+    """프로세스가 공유하는 httpx 클라이언트. 처음 요청될 때 만든다."""
 
     def __init__(
         self,
@@ -59,33 +55,22 @@ class HttpClients:
         self._limits = httpx.Limits(
             max_connections=max_connections, max_keepalive_connections=max_connections // 2
         )
-        self._secure: httpx.AsyncClient | None = None
-        self._insecure: httpx.AsyncClient | None = None
+        self._client: httpx.AsyncClient | None = None
 
-    def _build(self, *, verify: bool) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            timeout=self._timeout,
-            verify=verify,
-            follow_redirects=True,
-            headers=self._headers,
-            limits=self._limits,
-        )
-
-    def get(self, *, verify: bool = True) -> httpx.AsyncClient:
-        if verify:
-            if self._secure is None:
-                self._secure = self._build(verify=True)
-            return self._secure
-        if self._insecure is None:
-            logger.warning("insecure http client created (tls verification disabled)")
-            self._insecure = self._build(verify=False)
-        return self._insecure
+    def get(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=self._timeout,
+                follow_redirects=True,
+                headers=self._headers,
+                limits=self._limits,
+            )
+        return self._client
 
     async def aclose(self) -> None:
-        for client in (self._secure, self._insecure):
-            if client is not None:
-                await client.aclose()
-        self._secure = self._insecure = None
+        if self._client is not None:
+            await self._client.aclose()
+        self._client = None
 
     async def __aenter__(self) -> HttpClients:
         return self

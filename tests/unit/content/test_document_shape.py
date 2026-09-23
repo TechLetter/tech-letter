@@ -66,7 +66,7 @@ def test_blog_writes_the_documented_fields_plus_the_new_ones() -> None:
 
     assert {"name", "url", "rss_url", "blog_type", "is_active"} <= set(doc)
     # 신규 필드. 기존 문서에 없어도 기본값으로 읽힌다.
-    assert {"consecutive_failures", "tls_insecure"} <= set(doc)
+    assert "consecutive_failures" in doc
     assert "_id" not in doc
 
 

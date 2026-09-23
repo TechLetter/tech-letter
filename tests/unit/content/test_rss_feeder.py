@@ -62,7 +62,7 @@ def _feeder(handler: object) -> RssFeeder:
     clients = HttpClients()
     transport = httpx.MockTransport(handler)  # type: ignore[arg-type]
     client = httpx.AsyncClient(transport=transport, base_url="https://feed.test")
-    clients._secure = client
+    clients._client = client
     return RssFeeder(clients)
 
 
@@ -101,12 +101,8 @@ async def test_connection_error_is_retryable() -> None:
         await _feeder(boom).fetch("https://feed.test/rss")
 
 
-async def test_tls_insecure_uses_a_separate_client() -> None:
+async def test_the_client_is_created_once_and_reused() -> None:
     clients = HttpClients()
 
-    secure = clients.get(verify=True)
-    insecure = clients.get(verify=False)
-
-    assert secure is not insecure
-    assert clients.get(verify=True) is secure  # 재사용된다
+    assert clients.get() is clients.get()
     await clients.aclose()
