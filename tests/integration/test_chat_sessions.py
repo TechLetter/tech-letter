@@ -64,16 +64,14 @@ async def test_a_malformed_session_id_is_not_found(sessions) -> None:
 
 
 # ── 목록 ────────────────────────────────────────────────────────────
-async def test_the_list_carries_counts_but_not_message_bodies(sessions) -> None:
-    """메시지 본문은 빼도 개수는 프론트가 알 수 있어야 한다."""
+async def test_the_list_omits_message_bodies(sessions) -> None:
     session = await sessions.create(USER, "첫 질문")
     await sessions.append(session, "assistant", "답변")
 
     rows, total = await sessions.list(USER, Page(1, 10))
 
     assert total == 1
-    assert rows[0].message_count == 2
-    assert rows[0].session.messages == []
+    assert rows[0].messages == []
 
 
 async def test_the_list_is_newest_updated_first(sessions) -> None:

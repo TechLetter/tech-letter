@@ -68,10 +68,6 @@ class ChatSession(BaseDocument):
     messages: list[ChatMessage] = Field(default_factory=list)
     memory: SessionMemory | None = None
 
-    @property
-    def message_count(self) -> int:
-        return len(self.messages)
-
     @classmethod
     def start(cls, user_code: str, first_message: str | None = None) -> ChatSession:
         now = utcnow()

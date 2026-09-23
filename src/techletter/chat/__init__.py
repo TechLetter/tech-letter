@@ -5,7 +5,6 @@ from techletter.chat.memory import MemoryBuilder, MemoryContext
 from techletter.chat.models import ChatMessage, ChatSession, SessionMemory, SuggestedQuestion
 from techletter.chat.repositories import (
     ChatSessionRepository,
-    SessionSummary,
     SuggestedQuestionRepository,
 )
 from techletter.chat.sessions import ChatSessionService
@@ -23,7 +22,6 @@ __all__ = [
     "MemoryBuilder",
     "MemoryContext",
     "SessionMemory",
-    "SessionSummary",
     "SuggestedQuestion",
     "SuggestedQuestionRepository",
     "SuggestedQuestionService",

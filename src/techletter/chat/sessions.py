@@ -11,7 +11,7 @@ from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
 
 if TYPE_CHECKING:  # pragma: no cover
-    from techletter.chat.repositories import ChatSessionRepository, SessionSummary
+    from techletter.chat.repositories import ChatSessionRepository
     from techletter.core.pagination import Page
     from techletter.settings import ChatSettings
 
@@ -34,7 +34,7 @@ class ChatSessionService:
             raise ChatSessionNotFoundError(f"chat session not found: {session_id}")
         return session
 
-    async def list(self, user_code: str, page: Page) -> tuple[list[SessionSummary], int]:
+    async def list(self, user_code: str, page: Page) -> tuple[list[ChatSession], int]:
         return await self._sessions.list_sessions(user_code, page)
 
     async def delete(self, session_id: str, user_code: str) -> None:

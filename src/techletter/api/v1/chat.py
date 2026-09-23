@@ -59,9 +59,7 @@ async def list_sessions(
 ) -> Paged[ChatSessionOut]:
     paging = parse_page(page, page_size)
     rows, total = await ctx.sessions.list(user.user_code, paging)
-    return Paged.of_page(
-        [ChatSessionOut.summary(row.session, row.message_count) for row in rows], total, paging
-    )
+    return Paged.of_page([ChatSessionOut.summary(session) for session in rows], total, paging)
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED, response_model=ChatSessionOut)

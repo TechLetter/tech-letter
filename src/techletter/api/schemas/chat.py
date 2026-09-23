@@ -64,30 +64,27 @@ class ChatMessageOut(BaseModel):
 class ChatSessionOut(BaseModel):
     id: str
     title: str
-    message_count: int
     created_at: str | None
     updated_at: str | None
     messages: list[ChatMessageOut] | None = None
 
     @classmethod
-    def of(cls, session: ChatSession, *, with_messages: bool = True) -> ChatSessionOut:
+    def of(cls, session: ChatSession) -> ChatSessionOut:
         return cls(
             id=str(session.id),
             title=session.title,
-            message_count=len(session.messages),
             created_at=to_iso_z(session.created_at),
             updated_at=to_iso_z(session.updated_at),
-            messages=[ChatMessageOut.of(m) for m in session.messages] if with_messages else None,
+            messages=[ChatMessageOut.of(m) for m in session.messages],
         )
         # user_code 는 내보내지 않는다 — 자기 세션만 조회한다.
 
     @classmethod
-    def summary(cls, session: ChatSession, message_count: int) -> ChatSessionOut:
-        """목록 항목. 본문 없이 개수만 준다."""
+    def summary(cls, session: ChatSession) -> ChatSessionOut:
+        """목록 항목. 메시지 본문은 없다."""
         return cls(
             id=str(session.id),
             title=session.title,
-            message_count=message_count,
             created_at=to_iso_z(session.created_at),
             updated_at=to_iso_z(session.updated_at),
             messages=None,

@@ -91,7 +91,6 @@ async def test_creating_a_session_returns_201(client, user_headers) -> None:
     assert set(body) == {
         "id",
         "title",
-        "message_count",
         "created_at",
         "updated_at",
         "messages",
@@ -99,17 +98,13 @@ async def test_creating_a_session_returns_201(client, user_headers) -> None:
     assert body["title"] == "New Chat"
 
 
-async def test_the_session_list_omits_messages_but_keeps_the_count(
-    client, ctx, user_headers
-) -> None:
-    """메시지 본문은 빼도 개수는 프론트가 알 수 있어야 한다."""
+async def test_the_session_list_omits_message_bodies(client, ctx, user_headers) -> None:
     session = await ctx.sessions.create("google:alice", "첫 질문")
     await ctx.sessions.append(session, "assistant", "답변")
 
     item = (await client.get("/api/v1/chat/sessions", headers=user_headers)).json()["items"][0]
 
     assert item["messages"] is None
-    assert item["message_count"] == 2
 
 
 async def test_user_code_is_not_exposed(client, ctx, user_headers) -> None:
