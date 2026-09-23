@@ -19,7 +19,7 @@ from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.router import ModelRouter
-    from techletter.settings import LlmSettings
+    from techletter.settings import GenerativeLlmSettings
 
 __all__ = [
     "ChatClient",
@@ -79,7 +79,7 @@ class ChatClient:
 class LangChainChatClient(ChatClient):
     """langchain 채팅 모델 래퍼. 모델 인스턴스를 재사용한다."""
 
-    def __init__(self, settings: LlmSettings) -> None:
+    def __init__(self, settings: GenerativeLlmSettings) -> None:
         self._settings = settings
         self._models: dict[tuple[str, int], Any] = {}
 

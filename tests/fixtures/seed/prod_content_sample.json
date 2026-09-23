@@ -319,7 +319,6 @@
         "$oid": "68d7b40543d9b84bd2a3535f"
       },
       "rss_url": "https://tech.kakao.com/feed/",
-      "blog_type": "company",
       "created_at": {
         "$date": {
           "$numberLong": "1758966789043"
@@ -344,7 +343,6 @@
         "$oid": "68d7b40543d9b84bd2a35360"
       },
       "rss_url": "https://tech.kakaopay.com/rss",
-      "blog_type": "company",
       "created_at": {
         "$date": {
           "$numberLong": "1758966789058"
@@ -369,7 +367,6 @@
         "$oid": "68d7b40543d9b84bd2a35361"
       },
       "rss_url": "https://d2.naver.com/d2.atom",
-      "blog_type": "company",
       "created_at": {
         "$date": {
           "$numberLong": "1758966789058"
@@ -394,7 +391,6 @@
         "$oid": "68d7b40543d9b84bd2a35363"
       },
       "rss_url": "https://medium.com/feed/daangn",
-      "blog_type": "company",
       "created_at": {
         "$date": {
           "$numberLong": "1758966789059"

@@ -87,8 +87,6 @@ class LlmSettings(BaseSettings):
 
     model_config = _BASE
     provider: Literal["google", "openrouter"] = "google"
-    temperature: float = 0.3
-    max_retries: int = 0
     timeout_seconds: int = 120
 
     # 역할별 `*_API_KEY` 환경변수는 없다 — pydantic 필드가 아니라 PrivateAttr이라
@@ -110,7 +108,14 @@ class LlmSettings(BaseSettings):
         return self._api_key
 
 
-class SummaryLlmSettings(LlmSettings):
+class GenerativeLlmSettings(LlmSettings):
+    """텍스트를 생성하는 모델(요약·챗봇) 공통. 임베딩에는 해당하지 않는다."""
+
+    temperature: float = 0.3
+    max_retries: int = 0
+
+
+class SummaryLlmSettings(GenerativeLlmSettings):
     model_config = _llm_config("SUMMARY_WORKER_LLM_")
     model_name: str = ""
 
@@ -127,7 +132,7 @@ class EmbeddingLlmSettings(LlmSettings):
     model_name: str = "gemini-embedding-001"
 
 
-class ChatLlmSettings(LlmSettings):
+class ChatLlmSettings(GenerativeLlmSettings):
     """챗봇 LLM 설정. 모델은 라우터가 후보에서 고르므로 모델명 설정이 없다."""
 
     model_config = _llm_config("CHATBOT_LLM_")

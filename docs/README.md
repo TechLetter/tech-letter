@@ -13,6 +13,6 @@
 | [deployment-and-ops](architecture/deployment-and-ops.md) | 배포 파이프라인, compose 구성, 관측 기준선, 런북, 롤백 |
 
 ## 기타
-- [PRIVACY_POLICY.md](PRIVACY_POLICY.md) — 개인정보처리방침
+- 개인정보처리방침은 프론트(`tech-letter_ui/src/pages/PrivacyPolicy.jsx`)가 원본이다. 사용자가 보는 것이 그 페이지다.
 - `images/` — README 이미지
 - 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포")
