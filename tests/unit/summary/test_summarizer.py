@@ -217,7 +217,8 @@ async def test_an_exhausted_budget_falls_back_to_the_router(settings) -> None:
     assert budget.consumed == []
 
 
-async def test_budget_is_not_consumed_when_a_fallback_model_answers(settings) -> None:
+async def test_the_primary_attempt_counts_even_when_a_fallback_answers(settings) -> None:
+    """1순위가 실패해 폴백이 답해도, 1순위 호출은 구글 한도를 이미 깎았다."""
     llm = FakeLlm(payload(), model="free/a")
     budget = FakeBudget(has_room=True)
 
@@ -229,7 +230,7 @@ async def test_budget_is_not_consumed_when_a_fallback_model_answers(settings) ->
         daily_limit=20,
     ).summarize("본문")
 
-    assert budget.consumed == []
+    assert budget.consumed == ["google"]
 
 
 async def test_without_a_budget_the_router_decides(settings) -> None:

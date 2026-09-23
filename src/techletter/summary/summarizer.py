@@ -144,7 +144,11 @@ class Summarizer:
         self._daily_limit = daily_limit
 
     async def _candidates(self) -> list[str] | None:
-        """예산이 남았으면 1순위 모델을 맨 앞에 세운다."""
+        """예산이 남았으면 1순위 모델을 맨 앞에 세우고, 그 자리에서 예산을 센다.
+
+        맨 앞에 선 모델은 반드시 한 번 호출된다. 실패한 호출도 구글 한도를 깎으므로
+        성공했을 때만 세면 장부가 실제 사용량보다 적게 나와 한도를 넘긴다.
+        """
         if not (self._budget and self._primary_model):
             return None
         if not await self._budget.has_room(self._primary_provider, self._daily_limit):
@@ -153,6 +157,7 @@ class Summarizer:
                 extra={"provider": self._primary_provider},
             )
             return None
+        await self._budget.consume(self._primary_provider)
         fallback = await self._llm.candidates("summary")
         return [self._primary_model, *(m for m in fallback if m != self._primary_model)]
 
@@ -168,8 +173,6 @@ class Summarizer:
             max_tokens=DEFAULT_MAX_TOKENS,
             candidates=await self._candidates(),
         )
-        if self._budget and model_id == self._primary_model:
-            await self._budget.consume(self._primary_provider)
 
         error = payload.get("error")
         if error:
