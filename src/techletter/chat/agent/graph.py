@@ -1,9 +1,9 @@
-"""에이전트 그래프.
+"""에이전트 실행.
 
-노드는 전부 async다 — 동기 코드가 섞이면 요청 하나가 이벤트 루프를 통째로 막는다.
+단계는 전부 async다 — 동기 코드가 섞이면 요청 하나가 이벤트 루프를 통째로 막는다.
 
 흐름: 계획 → (도구 하나) → 답변 → 출력 가드.
-입력 가드와 메모리 구성은 그래프 밖에 있다 — 크레딧을 깎기 전에 끝나야 한다.
+입력 가드와 메모리 구성은 여기 밖에 있다 — 크레딧을 깎기 전에 끝나야 한다.
 
 에이전트 인스턴스는 프로세스마다 하나이고 요청 여러 개가 동시에 쓴다.
 그래서 실행별 상태(진행 상황, 콜백)는 **전부 state 안에** 둔다. `self`에
@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-
-from langgraph.graph import END, START, StateGraph
 
 from techletter.chat.agent.answer import build_post_context
 from techletter.chat.agent.policies import should_return_no_result
@@ -28,12 +26,21 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from techletter.chat.agent.answer import AnswerGenerator
     from techletter.chat.agent.planner import QueryPlanner
+    from techletter.chat.agent.state import ChatTask
     from techletter.chat.agent.tools import PostLookupTool, VectorSearchTool
     from techletter.chat.memory import MemoryContext
+
+    type Step = Callable[[AgentState], Awaitable[dict[str, Any]]]
 
 __all__ = ["ActivityRecorder", "AgentResult", "ChatAgent"]
 
 logger = get_logger(__name__)
+
+
+def _apply(state: AgentState, changes: dict[str, Any]) -> None:
+    for key, value in changes.items():
+        setattr(state, key, value)
+
 
 _LABELS = {
     "plan": "질문 의도 분석",
@@ -72,7 +79,7 @@ class ActivityRecorder:
 
 @dataclass
 class AgentState:
-    """그래프가 주고받는 값. LangGraph가 노드 반환 dict를 병합한다."""
+    """단계들이 주고받는 값. 각 단계가 돌려준 dict를 여기에 덮어쓴다."""
 
     query: str = ""
     search_query: str = ""
@@ -109,49 +116,17 @@ class ChatAgent:
         self._search = search
         self._answers = answers
         self._output_guard = output_guard or OutputGuard()
-        self._graph = self._build()
+        self._tools: dict[ChatTask, Step] = {
+            "list_posts": self._list_posts,
+            # 요약/본문 기반 답변은 목록을 뽑은 뒤 본문을 채운다.
+            "summarize_posts": self._read_posts,
+            "answer_from_posts": self._read_posts,
+            "semantic_search_posts": self._semantic_search,
+            "general_rag": self._general_rag,
+            "no_result": self._no_result,
+        }
 
-    # ── 그래프 ─────────────────────────────────────────────────────
-    def _build(self) -> Any:
-        graph = StateGraph(AgentState)
-        graph.add_node("plan", self._plan)
-        graph.add_node("list_posts", self._list_posts)
-        graph.add_node("read_posts", self._read_posts)
-        graph.add_node("semantic_search_posts", self._semantic_search)
-        graph.add_node("general_rag", self._general_rag)
-        graph.add_node("no_result", self._no_result)
-        graph.add_node("answer", self._answer)
-
-        graph.add_edge(START, "plan")
-        graph.add_conditional_edges(
-            "plan",
-            self._route,
-            {
-                "list_posts": "list_posts",
-                # 요약/본문 기반 답변은 목록을 뽑은 뒤 본문을 채운다.
-                "read_posts": "read_posts",
-                "semantic_search_posts": "semantic_search_posts",
-                "general_rag": "general_rag",
-                "no_result": "no_result",
-            },
-        )
-        for node in (
-            "list_posts",
-            "read_posts",
-            "semantic_search_posts",
-            "general_rag",
-            "no_result",
-        ):
-            graph.add_edge(node, "answer")
-        graph.add_edge("answer", END)
-        return graph.compile()
-
-    @staticmethod
-    def _route(state: AgentState) -> str:
-        task = state.plan.task
-        return "read_posts" if task in {"summarize_posts", "answer_from_posts"} else task
-
-    # ── 노드 ───────────────────────────────────────────────────────
+    # ── 단계 ───────────────────────────────────────────────────────
     async def _plan(self, state: AgentState) -> dict[str, Any]:
         await state.recorder.emit("plan", "running")
         plan = await self._planner.plan(state.search_query, state.memory_metadata)
@@ -236,25 +211,28 @@ class ChatAgent:
         model_id: str | None = None,
     ) -> AgentResult:
         recorder = ActivityRecorder(on_activity)
-        final = await self._graph.ainvoke(
-            AgentState(
-                query=query,
-                search_query=memory.rewritten_query or query,
-                memory_metadata=memory.to_metadata(),
-                recorder=recorder,
-                model_id=model_id,
-            )
+        state = AgentState(
+            query=query,
+            search_query=memory.rewritten_query or query,
+            memory_metadata=memory.to_metadata(),
+            recorder=recorder,
+            model_id=model_id,
         )
 
-        result: ToolResult = final["tool_result"]
-        plan: ChatPlan = final["plan"]
-        checked = self._output_guard.inspect(final["answer"])
+        # 계획 → 도구 하나 → 답변. 분기는 계획이 고른 task 하나뿐이고 되돌아오지 않는다.
+        _apply(state, await self._plan(state))
+        _apply(state, await self._tools[state.plan.task](state))
+        _apply(state, await self._answer(state))
+
+        checked = self._output_guard.inspect(state.answer)
         return AgentResult(
             answer=checked.text,
             # 답변이 차단되면 출처도 붙이지 않는다.
-            sources=[] if checked.blocked else [source.to_dict() for source in result.sources],
-            intent=plan.task,
+            sources=[]
+            if checked.blocked
+            else [source.to_dict() for source in state.tool_result.sources],
+            intent=state.plan.task,
             activities=recorder.items,
             guard=checked.to_metadata() if checked.blocked else {},
-            model_id=final.get("model_id"),
+            model_id=state.model_id,
         )
