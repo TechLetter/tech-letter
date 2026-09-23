@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
 
 from pydantic import Field
 
@@ -16,14 +15,11 @@ from techletter.core.db.documents import BaseDocument, MongoDateTime, PyObjectId
 __all__ = [
     "AISummary",
     "Blog",
-    "BlogType",
     "EmbeddingMeta",
     "ListPostsFilter",
     "Post",
     "StatusFlags",
 ]
-
-BlogType = Literal["company", "creator"]
 
 
 class StatusFlags(SubDocument):
@@ -70,7 +66,6 @@ class Blog(BaseDocument):
     name: str = ""
     url: str = ""
     rss_url: str = ""
-    blog_type: BlogType = "company"
     is_active: bool = True
     last_fetched_at: MongoDateTime | None = None
     last_fetch_error: str | None = None

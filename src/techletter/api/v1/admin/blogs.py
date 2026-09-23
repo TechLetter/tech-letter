@@ -37,7 +37,6 @@ async def create_blog(ctx: Ctx, _: AdminUser, body: BlogIn) -> AdminBlogOut:
         name=body.name,
         url=body.url,
         rss_url=body.rss_url,
-        blog_type=body.blog_type,
         is_active=body.is_active,
     )
     return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=0))

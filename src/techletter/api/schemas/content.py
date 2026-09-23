@@ -93,7 +93,6 @@ class AdminBlogOut(BaseModel):
     name: str
     url: str
     rss_url: str
-    blog_type: str
     is_active: bool
     post_count: int
     consecutive_failures: int
@@ -110,7 +109,6 @@ class AdminBlogOut(BaseModel):
             name=blog.name,
             url=blog.url,
             rss_url=blog.rss_url,
-            blog_type=blog.blog_type,
             is_active=blog.is_active,
             post_count=row.post_count,
             consecutive_failures=blog.consecutive_failures,

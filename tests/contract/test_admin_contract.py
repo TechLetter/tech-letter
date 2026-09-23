@@ -204,22 +204,6 @@ async def test_a_duplicate_rss_url_is_409_with_the_field(client, admin_headers, 
     assert response.json()["error"]["details"]["field"] == "rss_url"
 
 
-async def test_an_unknown_blog_type_is_400(client, admin_headers) -> None:
-    response = await client.post(
-        "/api/v1/admin/blogs",
-        json={
-            "name": "X",
-            "url": "https://x.test",
-            "rss_url": "https://x.test/rss",
-            "blog_type": "podcast",
-        },
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"]["details"]["field"] == "blog_type"
-
-
 async def test_updating_a_blog_keeps_the_fetch_history(client, admin_headers, ctx, seeded) -> None:
     """전체 교체로 처리하면 `last_fetched_at`이 날아간다."""
     assert seeded["blog"].id is not None

@@ -14,7 +14,6 @@ from techletter.content.models import Blog, ListPostsFilter
 from techletter.content.repositories import BlogRepository, PostRepository
 from techletter.content.service import BlogService, PostService
 from techletter.core.errors import (
-    InvalidRequestError,
     PermanentError,
     ResourceConflictError,
     ResourceNotFoundError,
@@ -67,13 +66,6 @@ async def test_duplicate_rss_url_is_a_conflict(blog_service, blog) -> None:
 
     assert excinfo.value.status == 409
     assert excinfo.value.details["field"] == "rss_url"
-
-
-async def test_unknown_blog_type_is_a_client_error(blog_service) -> None:
-    with pytest.raises(InvalidRequestError):
-        await blog_service.create(
-            name="X", url="https://x.test", rss_url="https://x.test/rss", blog_type="podcast"
-        )
 
 
 async def test_update_is_partial_and_keeps_untouched_fields(blog_service, blogs, blog) -> None:
