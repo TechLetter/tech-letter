@@ -360,22 +360,6 @@ async def _collect_missing_link_key_posts(container: Container, batch_size: int)
     return posts
 
 
-async def _collect_future_published_posts(
-    container: Container, now: Any, batch_size: int
-) -> list[Post]:
-    posts: list[Post] = []
-    after_id = None
-    while True:
-        batch = await container.posts.find_future_published_at(now, batch_size, after_id=after_id)
-        if not batch:
-            break
-        posts.extend(batch)
-        after_id = batch[-1].id
-        if after_id is None or len(batch) < batch_size:
-            break
-    return posts
-
-
 def _link_key_collisions(
     candidates: list[tuple[Post, str]], existing: list[Post]
 ) -> tuple[set[str], list[tuple[str, str, str]]]:
@@ -435,43 +419,6 @@ def backfill_link_keys(
             if await container.posts.update_link_key(str(post.id), link_key):
                 updated += 1
         typer.echo(f"{updated}건 갱신, 충돌 {len(collision_pairs)}쌍은 건너뛰었다.")
-
-    _with_container(body)
-
-
-@backfill_app.command("published-at")
-def backfill_published_at(
-    batch_size: int = typer.Option(500, "--batch-size", min=1),
-    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
-) -> None:
-    """미래 시각으로 저장된 published_at을 created_at 기준으로 고친다."""
-
-    async def body(container: Container) -> None:
-        from techletter.core.time import utcnow  # noqa: PLC0415
-
-        now = utcnow()
-        posts = await _collect_future_published_posts(container, now, batch_size)
-
-        mode = "[dry-run]" if dry_run else "[execute]"
-        typer.echo(f"{mode} published_at 미래 문서 {len(posts)}건이 대상이다.")
-        for post in posts:
-            published_at = post.published_at.isoformat() if post.published_at else "None"
-            typer.echo(
-                f"  {post.id}  {post.title[:60]}  "
-                f"published_at={published_at}  created_at={post.created_at.isoformat()}"
-            )
-        if dry_run:
-            typer.echo("--execute 로 실행한다.")
-            return
-
-        updated = 0
-        for post in posts:
-            if post.id is None:
-                continue
-            target = min(post.created_at, now)
-            if await container.posts.update_future_published_at(str(post.id), target, now=now):
-                updated += 1
-        typer.echo(f"{updated}건 갱신")
 
     _with_container(body)
 
