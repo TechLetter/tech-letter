@@ -6,7 +6,7 @@ import pytest
 
 from techletter.core.errors import PermanentError
 from techletter.embedding.chunker import Chunker
-from techletter.embedding.pipeline import EmbeddingPipeline
+from techletter.embedding.pipeline import ChunkRateLimiter, EmbeddingPipeline
 from techletter.settings import EmbeddingSettings
 
 
@@ -102,3 +102,60 @@ async def test_empty_vectors_fail(settings) -> None:
 
     with pytest.raises(RuntimeError, match="empty vectors"):
         await pipeline.run("문장입니다. " * 20)
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.slept: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+async def test_the_limiter_waits_once_the_minute_is_full() -> None:
+    """구글은 청크 하나를 요청 한 번으로 센다. 분당 한도를 넘기기 전에 기다린다."""
+    clock = FakeClock()
+    limiter = ChunkRateLimiter(10, clock=clock, sleep=clock.sleep)
+
+    await limiter.acquire(6)
+    clock.now = 20.0
+    await limiter.acquire(4)
+    assert clock.slept == []
+
+    await limiter.acquire(3)
+    assert clock.slept == [40.0]  # 첫 6개가 1분 창을 벗어나는 시점
+    assert clock.now == 60.0
+
+
+async def test_a_zero_limit_never_waits() -> None:
+    clock = FakeClock()
+    limiter = ChunkRateLimiter(0, clock=clock, sleep=clock.sleep)
+
+    for _ in range(5):
+        await limiter.acquire(1000)
+
+    assert clock.slept == []
+
+
+async def test_batches_shrink_to_fit_the_minute_limit(settings) -> None:
+    """배치 하나가 분당 한도보다 크면 아무리 기다려도 못 보낸다."""
+    settings.embed_batch_size = 64
+    clock = FakeClock()
+    embedder = FakeEmbedder()
+    pipeline = EmbeddingPipeline(
+        Chunker(settings),
+        embedder,  # type: ignore[arg-type]
+        settings,
+        "m",
+        ChunkRateLimiter(3, clock=clock, sleep=clock.sleep),
+    )
+
+    await pipeline.run("문장입니다. " * 100)
+
+    assert embedder.batches and all(size <= 3 for size in embedder.batches)
+    assert clock.slept  # 3개를 넘는 순간부터 다음 1분을 기다렸다
