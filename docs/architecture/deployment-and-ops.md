@@ -8,7 +8,7 @@
 
 ```
 main push (docs/**·*.md 제외)
-  1. 이미지 태그 결정 — 기본은 GIT_SHA 12자. workflow_dispatch의 image_tag는 소스 ref가 아니라 이미지 태그만 덮어쓴다
+  1. 이미지 태그 결정 — GIT_SHA 12자
   2. 현재 실행 중인 태그 기록 (스모크 실패 시 롤백용)
   3. docker compose -f docker/compose.prod.yml build --pull   (기존 컨테이너는 계속 실행)
   4. docker compose -f docker/compose.prod.yml up -d --wait --wait-timeout 180 --remove-orphans
@@ -16,7 +16,7 @@ main push (docs/**·*.md 제외)
   6. Start 또는 Smoke 실패 → 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백). 직전 태그가 없거나 복구가 실패하면 명시적 오류와 함께 수동 복구 필요
   7. 성공 → 168시간 넘은 dangling 이미지 정리
 ```
-- `workflow_dispatch`는 현재 main 소스를 checkout한 뒤 `image_tag` 이름만 바꿔 빌드한다. 옛 SHA를 입력해도 옛 소스를 재배포하지 않으며, 기존 롤백 대상 태그를 현재 소스로 덮어쓸 수 있으므로 이 입력을 옛 SHA 재배포·롤백 절차로 사용하지 않는다.
+- `workflow_dispatch`는 입력 없이 현재 main을 다시 배포할 뿐이다(시크릿 교체 후 재기동 용도). 옛 버전으로 되돌리는 수단이 아니다.
 - compose의 `${VAR:?required}` 앵커가 빌드·기동 양쪽에서 시크릿 누락을 즉시 실패시킨다.
 - `down` 없이 `up -d --wait`로 교체하므로 다운타임은 컨테이너 재생성 수 초뿐이다.
 - 동시 배포는 `concurrency: production`으로 직렬화된다.
@@ -79,7 +79,7 @@ main push (docs/**·*.md 제외)
   ```bash
   git revert --no-edit <bad-sha> && git push origin main
   ```
-  이미지 태그가 커밋 SHA이므로 재빌드는 몇 분이면 끝난다. `workflow_dispatch`의 `image_tag`는 현재 main 소스에 태그만 붙이는 입력이므로, 알려진 좋은 옛 SHA를 지정하는 방식으로 재배포·롤백하지 않는다.
+  이미지 태그가 커밋 SHA이므로 재빌드는 몇 분이면 끝난다.
 
 ## 5. 로컬 개발
 ```bash
