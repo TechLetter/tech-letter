@@ -79,7 +79,6 @@ class JobQueue:
         *,
         priority: int = PRIORITY_NORMAL,
         run_at: datetime | None = None,
-        trace_id: str | None = None,
         dedupe: bool = True,
     ) -> Job | None:
         """잡을 넣는다. 이미 대기/실행 중인 같은 (key, type)이 있으면 건너뛴다.
@@ -105,7 +104,6 @@ class JobQueue:
             priority=priority,
             max_attempt=self._settings.max_attempt,
             run_at=run_at or utcnow(),
-            trace_id=trace_id,
         )
         result = await self._col.insert_one(job.to_mongo())
         job.id = result.inserted_id

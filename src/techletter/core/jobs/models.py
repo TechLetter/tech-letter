@@ -42,5 +42,4 @@ class Job(BaseDocument):
     quota_waited_seconds: int = 0
     """쿼터 대기 누적. `quota_max_wait_hours`를 넘으면 dead로 보낸다."""
 
-    trace_id: str | None = None
     finished_at: MongoDateTime | None = None

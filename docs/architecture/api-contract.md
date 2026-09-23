@@ -173,7 +173,7 @@
   "priority": 0,
   "run_at": "…", "last_error": "ai judged that this content is not summarizable: …",
   "error_kind": "permanent",
-  "trace_id": "…", "created_at": "…", "updated_at": "…", "finished_at": "…"
+  "created_at": "…", "updated_at": "…", "finished_at": "…"
 }
 ```
 

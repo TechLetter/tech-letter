@@ -81,7 +81,6 @@ class EmbeddingRequestedHandler:
                 "vector_dimension": result.vector_dimension,
                 "chunk_count": len(result.chunks),
             },
-            trace_id=job.trace_id,
         )
         logger.info(
             "post embedded",

@@ -353,7 +353,6 @@ async def test_job_shape_hides_the_payload(client, admin_headers, dead_job) -> N
         "run_at",
         "last_error",
         "error_kind",
-        "trace_id",
         "created_at",
         "updated_at",
         "finished_at",

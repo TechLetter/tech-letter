@@ -1,8 +1,8 @@
 """구조화 JSON 로깅.
 
 타임스탬프는 **UTC ISO-8601 + 밀리초 + `Z`**로 고정한다. **요청 본문은 로깅하지
-않는다** — 세션·인증 관련 요청에 토큰이 실려 있을 수 있어서다. `request_id`/
-`trace_id`/`job_id`는 contextvar로 전파해 HTTP→잡→워커 흐름을 하나로 잇는다.
+않는다** — 세션·인증 관련 요청에 토큰이 실려 있을 수 있어서다. `request_id`(HTTP)와
+`job_id`(워커)는 contextvar로 로그 줄마다 붙인다.
 """
 
 from __future__ import annotations
@@ -18,10 +18,9 @@ from techletter.core.time import to_iso_z, utcnow
 __all__ = ["bind_context", "clear_context", "get_logger", "setup_logging"]
 
 _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
-_trace_id: ContextVar[str | None] = ContextVar("trace_id", default=None)
 _job_id: ContextVar[str | None] = ContextVar("job_id", default=None)
 
-_CONTEXT_VARS = {"request_id": _request_id, "trace_id": _trace_id, "job_id": _job_id}
+_CONTEXT_VARS = {"request_id": _request_id, "job_id": _job_id}
 
 # LogRecord의 기본 속성. 이 목록에 없는 extra만 payload로 내보낸다.
 _RESERVED = frozenset(
@@ -54,7 +53,7 @@ _RESERVED = frozenset(
 
 
 def bind_context(**values: str | None) -> None:
-    """현재 컨텍스트에 request_id/trace_id/job_id를 설정한다."""
+    """현재 컨텍스트에 request_id/job_id를 설정한다."""
     for key, value in values.items():
         var = _CONTEXT_VARS.get(key)
         if var is not None:

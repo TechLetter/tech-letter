@@ -5,7 +5,6 @@
 바디에 손대면 JWT 같은 민감 값이 로그로 새어나갈 위험도 생긴다.
 
 - `X-Request-Id`가 오면 그대로 쓰고, 없으면 생성한다. 응답에도 에코한다.
-- 같은 값을 `trace_id`로도 두어 잡 큐까지 전파한다.
 - **본문은 절대 읽지 않는다.**
 """
 
@@ -43,7 +42,7 @@ class RequestTraceMiddleware:
         started = time.monotonic()
         status_code = 500
 
-        bind_context(request_id=request_id, trace_id=request_id)
+        bind_context(request_id=request_id)
 
         async def send_wrapper(message: Message) -> None:
             nonlocal status_code

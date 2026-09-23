@@ -58,7 +58,6 @@ class SummaryRequestedHandler:
                 plain_text=outcome.plain_text,
                 thumbnail_url=outcome.thumbnail_url,
             ).to_dict(),
-            trace_id=job.trace_id,
         )
         logger.info(
             "post summarized",

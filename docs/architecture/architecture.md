@@ -128,8 +128,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 ## 6. 런타임 / 관측
 
-- 로그: JSON 1줄, `ts`는 UTC ISO-8601 + ms + `Z`. 필드 `level, logger, message, service, request_id, trace_id, job_id, duration_ms`. 요청 본문은 로깅하지 않는다.
-- 추적: HTTP `X-Request-Id` → 잡 `trace_id`로 전파 → 워커 로그까지 상관관계를 따라갈 수 있다.
+- 로그: JSON 1줄, `ts`는 UTC ISO-8601 + ms + `Z`. 필드 `level, logger, message, service, request_id, job_id, duration_ms`. 요청 본문은 로깅하지 않는다.
 - 헬스: `api`는 `GET /health`(Mongo ping). 워커는 heartbeat 파일(`/tmp/techletter-heartbeat`)을 루프마다 touch, compose healthcheck가 2분 이내인지 검사한다.
 - `GET /metrics`(Prometheus 텍스트 노출 형식, 도커 네트워크 안에서만 접근 가능)이 잡 큐 상태를 노출한다.
 - 운영 대시보드: 잡 큐 상태와 실패 사유를 어드민 화면에서 확인한다.
