@@ -13,13 +13,15 @@ main push (docs/**·*.md 제외)
   3. docker compose -f docker/compose.prod.yml build --pull   (기존 컨테이너는 계속 실행)
   4. docker compose -f docker/compose.prod.yml up -d --wait --wait-timeout 180 --remove-orphans
   5. scripts/verify_prod_smoke.sh
-  6. Smoke 실패 → 조건을 만족하면 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백). Start 기동 실패는 Smoke가 skipped가 되어 자동 롤백되지 않으므로 수동 조치
+  6. Start 또는 Smoke 실패 → 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백). 직전 태그가 없거나 복구가 실패하면 명시적 오류와 함께 수동 복구 필요
   7. 성공 → 168시간 넘은 dangling 이미지 정리
 ```
 - `workflow_dispatch`는 현재 main 소스를 checkout한 뒤 `image_tag` 이름만 바꿔 빌드한다. 옛 SHA를 입력해도 옛 소스를 재배포하지 않으며, 기존 롤백 대상 태그를 현재 소스로 덮어쓸 수 있으므로 이 입력을 옛 SHA 재배포·롤백 절차로 사용하지 않는다.
 - compose의 `${VAR:?required}` 앵커가 빌드·기동 양쪽에서 시크릿 누락을 즉시 실패시킨다.
 - `down` 없이 `up -d --wait`로 교체하므로 다운타임은 컨테이너 재생성 수 초뿐이다.
 - 동시 배포는 `concurrency: production`으로 직렬화된다.
+- 롤백 조건은 `failure() && (steps.start.outcome == 'failure' || steps.smoke.outcome == 'failure')`다. Start 실패로 Smoke가 skipped여도 복구하며, Build 실패는 기존 서비스가 유지되므로 롤백하지 않는다.
+- 롤백은 `--no-build --pull never`로 서버에 저장된 직전 이미지만 사용한다. 이미지가 없으면 현재 소스를 옛 태그로 빌드하지 않고 실패한다. 복구 성공 후에도 원래 배포 실패는 워크플로 결과에 남는다.
 - 7단계의 `docker image prune -f --filter until=168h`는 `-a`가 없어 dangling 이미지만 지운다. SHA 태그 이미지는 배포 1회당 두 개씩 영구 누적되며, 현재 이를 정리하는 절차는 없다.
 
 ### 1.1 서비스 구성 (`docker/compose.prod.yml`)
@@ -71,7 +73,8 @@ main push (docs/**·*.md 제외)
 
 ## 4. 롤백
 
-- **배포 직후 스모크 실패**: 파이프라인이 같은 실행 안에서 자동으로 직전 이미지 태그로 되돌리고 스모크를 재실행한다. 단, `Start` 단계의 기동 실패는 `steps.smoke.outcome == 'failure'` 조건에 걸리지 않아 자동 롤백되지 않으므로 수동 조치가 필요하다.
+- **배포 기동 또는 스모크 실패**: 파이프라인이 같은 실행 안에서 직전 이미지 태그로 되돌리고 스모크를 재실행한다. `Start` 실패와 `Smoke` 실패를 각각 확인하므로 Smoke가 skipped인 경우도 복구한다. Build 실패는 롤백 대상이 아니다.
+- **자동 복구 불가**: 직전 태그가 없거나, 직전 이미지 기동 또는 롤백 후 스모크가 실패하면 명시적 오류를 남긴다. 컨테이너 상태·로그와 보존된 이미지 태그를 확인해 수동 복구한다. 취소·러너 중단으로 워크플로 자체가 실행되지 못한 경우도 수동 확인이 필요하다.
 - **배포는 성공했지만 나중에 문제가 발견된 경우**: 해당 커밋을 되돌리고 다시 push한다.
   ```bash
   git revert --no-edit <bad-sha> && git push origin main
