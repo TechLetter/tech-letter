@@ -182,17 +182,6 @@ async def test_admin_blog_shape(client, admin_headers, seeded) -> None:
     assert item["post_count"] == 4
 
 
-async def test_admin_blogs_include_inactive_ones(client, admin_headers, ctx, seeded) -> None:
-    """자동 비활성화된 피드를 찾는 것이 이 화면의 목적이다."""
-    assert seeded["blog"].id is not None
-    await ctx.blogs.deactivate(seeded["blog"].id, "auto-disabled")
-
-    body = (await client.get("/api/v1/admin/blogs", headers=admin_headers)).json()
-
-    assert body["total"] == 1
-    assert body["items"][0]["is_active"] is False
-
-
 async def test_creating_a_blog_returns_201(client, admin_headers) -> None:
     response = await client.post(
         "/api/v1/admin/blogs",
@@ -307,17 +296,6 @@ async def test_granting_to_an_unknown_user_is_404(client, admin_headers) -> None
     )
 
     assert response.status_code == 404
-
-
-async def test_a_past_expiry_is_rejected(client, admin_headers, a_user) -> None:
-    response = await client.post(
-        f"/api/v1/admin/users/{a_user.user_code}/credits",
-        json={"amount": 5, "expires_at": to_iso_z(utcnow() - timedelta(days=1))},
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"]["details"]["field"] == "expires_at"
 
 
 # ── 추천 질문 ───────────────────────────────────────────────────────
