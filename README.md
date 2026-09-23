@@ -153,7 +153,7 @@ uv run pyright
 
 ## 배포 · 운영
 
-운영 서버 구성, 컨테이너 4개(api/worker/summary-worker/embedding-worker) + nginx, GitHub Actions 무중단 배포(이미지 빌드 → `up -d --wait` → 스모크 → 스모크 실패 시 자동 롤백; 기동 실패는 수동 조치), 관측 기준선, 런북은 [deployment-and-ops](docs/architecture/deployment-and-ops.md)에 정리돼 있다. 실제 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포").
+운영 서버 구성, 컨테이너 4개(api/worker/summary-worker/embedding-worker) + nginx, GitHub Actions 배포(이미지 빌드 → `up -d --wait` → 스모크 → 기동·스모크 실패 시 직전 이미지로 자동 롤백), 관측 기준선, 런북은 [deployment-and-ops](docs/architecture/deployment-and-ops.md)에 정리돼 있다. 직전 태그가 없거나 복구가 실패하면 수동 조치가 필요하다. 실제 배포 절차(커밋부터 검증까지)는 워크스페이스 루트 `AGENTS.md`("변경사항 배포").
 
 ## 더 읽기
 
