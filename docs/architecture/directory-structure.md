@@ -108,7 +108,7 @@ dependencies = [
   "pymongo>=4.15",                  # pymongo.asynchronous
   "qdrant-client>=1.16",
   "httpx>=0.28", "pyjwt>=2.10", "typer>=0.15",
-  "langchain-core>=1.4", "langgraph>=1.1",
+  "langchain-core>=1.4",
   "langchain-google-genai>=3.2", "langchain-openai>=1.1", "langchain-text-splitters",
   "feedparser>=6",
 ]

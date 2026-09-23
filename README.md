@@ -12,7 +12,7 @@
 - **언어**: Python 3.12
 - **웹 프레임워크**: FastAPI + uvicorn (async 전용)
 - **데이터베이스**: MongoDB (도메인 데이터 + 잡 큐), Qdrant (벡터 검색)
-- **AI**: Google Gemini(요약·임베딩 1순위) / OpenRouter(챗봇·요약 폴백) — 요약 체인·사용자 선택·실시간 헬스체크를 결합한 LLM 모델 라우터, LangChain/LangGraph 기반
+- **AI**: Google Gemini(요약·임베딩 1순위) / OpenRouter(챗봇·요약 폴백) — 요약 체인·사용자 선택·실시간 헬스체크를 결합한 LLM 모델 라우터, LangChain 기반
 - **패키지 관리**: uv
 - **컨테이너**: Docker & Docker Compose (이미지 2개, 프로세스 4개 — 아래 참고)
 
@@ -70,7 +70,7 @@ src/techletter/
 ├── api/           HTTP 경계. 라우터(v1/*)·DTO(schemas/)·의존성(deps.py)·에러 변환. 비즈니스 로직 없음
 ├── content/       posts·blogs, RSS 수집(rss/), 필터·트렌드 집계, 잡 enqueue
 ├── users/         users·credits(원자적 차감)·bookmarks·login_sessions, Google OAuth
-├── chat/          세션·추천질문, LangGraph 에이전트(agent/), 가드(guards/), 대화 메모리, 유스케이스
+├── chat/          세션·추천질문, 챗봇 에이전트(agent/), 가드(guards/), 대화 메모리, 유스케이스
 ├── summary/       요약 파이프라인 — renderer·parser·validator·summarizer
 ├── embedding/     청킹(chunker.py)·임베딩 파이프라인(pipeline.py)
 ├── core/          settings, logging, errors, time, db(mongo/qdrant), jobs(★큐), llm(라우터·예산), security, http
@@ -116,7 +116,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 - `posts`, `blogs`, `filters`, `trends` — 공개 콘텐츠 조회
 - `me`, `bookmarks`, `auth` — 사용자 프로필, 북마크, Google OAuth 로그인
-- `chat` — 세션·크레딧·LangGraph 에이전트 질의응답(SSE 스트리밍 포함)
+- `chat` — 세션·크레딧·에이전트 질의응답(SSE 스트리밍 포함)
 - `admin/*` — 잡 큐 조회·재시도, 백필 트리거, 블로그/포스트/유저/추천질문 관리, 요약 모델 폴백 체인 설정
 
 에러 응답은 `{"error": {"code": "...", "message": "..."}}` 단일 봉투로 통일돼 있다.
