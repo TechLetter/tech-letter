@@ -78,6 +78,7 @@ jobs:
           docker image inspect "$IMAGE_REPO-browser:$IMAGE_TAG" >/dev/null
 
       - name: Start
+        id: start
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -88,13 +89,27 @@ jobs:
         run: bash scripts/verify_prod_smoke.sh
 
       - name: Roll back
-        if: failure() && steps.smoke.outcome == 'failure' && steps.previous.outputs.previous != ''
+        # Start가 실패하면 Smoke는 skipped다. 빌드 실패는 기존 서비스가
+        # 유지되므로 제외하고, 컨테이너 교체를 시도한 뒤의 실패만 복구한다.
+        if: failure() && (steps.start.outcome == 'failure' || steps.smoke.outcome == 'failure')
         env:
           IMAGE_TAG: ${{ steps.previous.outputs.previous }}
         run: |
-          echo "::warning::스모크 실패. ${{ steps.previous.outputs.previous }} 로 되돌린다."
-          docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180
-          bash scripts/verify_prod_smoke.sh
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "::error::직전 이미지 태그가 없어 자동 롤백할 수 없다. 수동 복구가 필요하다."
+            exit 1
+          fi
+          echo "::warning::기동 또는 스모크 실패. $IMAGE_TAG 로 되돌린다."
+          # 현재 소스를 옛 태그로 다시 빌드하지 않는다. 저장된 직전 이미지가
+          # 없거나 기동에 실패하면 복구 실패를 명시한다.
+          if ! docker compose -f "$COMPOSE_FILE" up -d --no-build --pull never --wait --wait-timeout 180; then
+            echo "::error::직전 이미지 기동 실패. 수동 복구가 필요하다."
+            exit 1
+          fi
+          if ! bash scripts/verify_prod_smoke.sh; then
+            echo "::error::롤백 후 스모크 실패. 수동 복구가 필요하다."
+            exit 1
+          fi
 
       - name: Prune old images
         if: success()
