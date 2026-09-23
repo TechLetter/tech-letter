@@ -94,11 +94,12 @@ class ChatSessionService:
         )
 
     async def mark_compression_failed(
-        self, session_id: str, reason: str, previous: SessionMemory | None
+        self, session_id: str, previous: SessionMemory | None
     ) -> None:
         """실패를 기록하되 **직전 요약은 보존한다**.
 
-        요약을 지우면 다음 대화가 맥락을 통째로 잃는다.
+        요약을 지우면 다음 대화가 맥락을 통째로 잃는다. 실패 사유는 잡의
+        `last_error`에 남는다(핸들러가 예외를 다시 던진다).
         """
         await self._sessions.set_memory(
             session_id,
@@ -108,6 +109,5 @@ class ChatSessionService:
                 status="failed",
                 requested_at=previous.requested_at if previous else None,
                 updated_at=utcnow(),
-                error_message=reason[:300],
             ),
         )

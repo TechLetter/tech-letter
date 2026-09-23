@@ -162,7 +162,6 @@ class ChatSessionRepository:
                             "status": "pending",
                             "requested_at": "$$NOW",
                             "updated_at": {"$ifNull": ["$memory.updated_at", None]},
-                            "error_message": None,
                         }
                     }
                 }

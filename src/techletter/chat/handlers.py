@@ -46,10 +46,10 @@ class CompressionRequestedHandler:
         previous = session.memory
         try:
             summary, covered = await self._memory.summarize(session.messages)
-        except Exception as exc:
+        except Exception:
             # 상태만 failed로 바꾸고 **직전 요약은 남긴다**. 요약을 지우면
             # 다음 대화가 맥락을 통째로 잃는다.
-            await self._sessions.mark_compression_failed(session_id, str(exc), previous)
+            await self._sessions.mark_compression_failed(session_id, previous)
             raise
 
         await self._sessions.store_summary(session_id, summary, covered)

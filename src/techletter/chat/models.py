@@ -60,7 +60,6 @@ class SessionMemory(SubDocument):
     status: MemoryStatus = "none"
     requested_at: MongoDateTime | None = None
     updated_at: MongoDateTime | None = None
-    error_message: str | None = None
 
 
 class ChatSession(BaseDocument):

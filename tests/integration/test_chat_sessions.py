@@ -235,13 +235,12 @@ async def test_a_failed_compression_keeps_the_old_summary(sessions, repo) -> Non
     await sessions.store_summary(str(session.id), "쓸만한 요약", 4)
     stored = await repo.get(str(session.id))
 
-    await sessions.mark_compression_failed(str(session.id), "boom", stored.memory)  # type: ignore[union-attr]
+    await sessions.mark_compression_failed(str(session.id), stored.memory)  # type: ignore[union-attr]
 
     after = await repo.get(str(session.id))
     assert after is not None and after.memory is not None
     assert after.memory.status == "failed"
     assert after.memory.summary == "쓸만한 요약"
-    assert after.memory.error_message == "boom"
 
 
 # ── 추천 질문 ───────────────────────────────────────────────────────
