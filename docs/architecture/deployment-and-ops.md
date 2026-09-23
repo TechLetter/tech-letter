@@ -39,7 +39,7 @@ main push (docs/**·*.md 제외)
 `SUMMARY_WORKER_LLM_*`는 `PROVIDER`와 `MODEL_NAME` 두 변수만 compose가 주입한다. `CHATBOT_LLM_MODEL_NAME`은 사용하지 않는다.
 `api`만 추가로: `SERVICE_NAME`, `API_PORT`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
 `worker`만 추가로: `SERVICE_NAME`, `CONTENT_BLOG_FETCH_BATCH_SIZE`. `JOB_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
-`summary_worker`만 추가로: `SERVICE_NAME`, `RENDERER_STRATEGY`, `SCRAPERAPI_KEY`, `SUMMARY_DAILY_BUDGET`.
+`summary_worker`만 추가로: `SERVICE_NAME`, `SUMMARY_DAILY_BUDGET`.
 `embedding_worker`만 추가로: `SERVICE_NAME`. `EMBEDDING_WORKER_CHUNK_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
 
 ## 2. 관측 기준선

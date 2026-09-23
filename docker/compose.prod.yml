@@ -130,8 +130,6 @@ services:
     environment:
       <<: [*app-env, *llm-env]
       SERVICE_NAME: techletter-summary-worker
-      RENDERER_STRATEGY: ${RENDERER_STRATEGY:-playwright}
-      SCRAPERAPI_KEY: ${SCRAPERAPI_KEY:-}
       SUMMARY_DAILY_BUDGET: ${SUMMARY_DAILY_BUDGET:-20}
     healthcheck: *heartbeat-check
     stop_grace_period: 60s

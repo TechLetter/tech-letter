@@ -209,10 +209,6 @@ class RssSettings(BaseSettings):
 
 class SummarySettings(BaseSettings):
     model_config = _BASE
-    renderer_strategy: Literal["playwright", "scraperapi"] = Field(
-        default="playwright", alias="RENDERER_STRATEGY"
-    )
-    scraperapi_key: SecretStr | None = Field(default=None, alias="SCRAPERAPI_KEY")
     max_input_chars: int = Field(default=12000, alias="SUMMARY_MAX_INPUT_CHARS")
     max_render_attempts: int = 3
     render_timeout_seconds: int = 30

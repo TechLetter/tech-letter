@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-from techletter.core.errors import PermanentError, RetryableError
+from techletter.core.errors import RetryableError
 from techletter.core.http import BROWSER_USER_AGENT
 from techletter.core.logging import get_logger
 from techletter.summary.constants import RETRY_MARKERS
@@ -19,17 +19,13 @@ from techletter.summary.constants import RETRY_MARKERS
 if TYPE_CHECKING:  # pragma: no cover
     from types import TracebackType
 
-    import httpx
-
     from techletter.settings import SummarySettings
 
-__all__ = ["PlaywrightRenderer", "Renderer", "ScraperApiRenderer", "needs_retry"]
+__all__ = ["PlaywrightRenderer", "Renderer", "needs_retry"]
 
 logger = get_logger(__name__)
 
 CHROME_PATH_ENV = "CHROME_PATH"
-SCRAPERAPI_URL = "https://api.scraperapi.com"
-SCRAPERAPI_TIMEOUT = 90.0
 # 차단 페이지는 대개 짧다. 긴 문서에서 마커를 찾으면 정상 글의 인용문일 확률이 높다.
 RETRY_MARKER_MAX_HTML = 50_000
 RETRY_WAIT_SECONDS = (5, 15, 30)
@@ -46,36 +42,6 @@ class Renderer(Protocol):
     async def render(self, url: str) -> str: ...
 
     async def aclose(self) -> None: ...
-
-
-class ScraperApiRenderer:
-    """외부 렌더링 서비스. API 키가 URL에 들어가므로 **https만** 쓴다."""
-
-    def __init__(self, api_key: str, client: httpx.AsyncClient) -> None:
-        self._api_key = api_key
-        self._client = client
-
-    async def render(self, url: str) -> str:
-        import httpx  # noqa: PLC0415
-
-        try:
-            response = await self._client.get(
-                SCRAPERAPI_URL,
-                params={"api_key": self._api_key, "url": url, "render": "true"},
-                timeout=SCRAPERAPI_TIMEOUT,
-            )
-        except httpx.RequestError as exc:
-            raise RetryableError(f"scraperapi request failed: {type(exc).__name__}") from exc
-
-        if response.status_code == 401:
-            raise PermanentError("scraperapi rejected the key", reason="scraperapi_auth")
-        if response.status_code != 200:
-            # 키를 로그에도 예외 메시지에도 남기지 않는다.
-            raise RetryableError(f"scraperapi returned HTTP {response.status_code}")
-        return response.text
-
-    async def aclose(self) -> None:
-        return
 
 
 class PlaywrightRenderer:

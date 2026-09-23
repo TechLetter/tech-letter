@@ -18,28 +18,16 @@ from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
 from techletter.summary.handlers import SummaryRequestedHandler
 from techletter.summary.pipeline import SummaryPipeline
-from techletter.summary.renderer import PlaywrightRenderer, Renderer, ScraperApiRenderer
+from techletter.summary.renderer import PlaywrightRenderer, Renderer
 from techletter.summary.summarizer import Summarizer
 from techletter.workers.runtime import Heartbeat
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.container import Container
 
-__all__ = ["build_renderer", "build_summary_worker"]
+__all__ = ["build_summary_worker"]
 
 logger = get_logger(__name__)
-
-
-def build_renderer(container: Container) -> Renderer:
-    settings = container.settings.summary
-    if settings.renderer_strategy == "scraperapi":
-        key = settings.scraperapi_key
-        if key is not None:
-            return ScraperApiRenderer(key.get_secret_value(), container.http.get())
-        # 키 없이 scraperapi를 고른 설정 실수. 요약을 통째로 멈추느니
-        # 브라우저로 떨어진다.
-        logger.warning("RENDERER_STRATEGY=scraperapi but no key; using playwright")
-    return PlaywrightRenderer(settings)
 
 
 def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
@@ -63,7 +51,7 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             LangChainChatClient(settings.chat_llm),
         ),
     )
-    renderer = build_renderer(container)
+    renderer = PlaywrightRenderer(container.settings.summary)
     summarizer = Summarizer(
         llm,
         settings.summary,

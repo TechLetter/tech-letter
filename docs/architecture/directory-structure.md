@@ -11,7 +11,7 @@ tech-letter/
 │
 ├── src/techletter/
 │   ├── __main__.py  cli.py       # typer: api | worker | summary-worker | embedding-worker | all
-│   │                             #        | jobs {list,stats,retry,purge} | backfill {summaries,embeddings,link-keys,published-at}
+│   │                             #        | jobs {list,stats,retry,purge} | backfill {summaries,embeddings,link-keys}
 │   │                             #        | ensure-indexes | settings {check,example}
 │   ├── settings.py               # pydantic-settings 단일 트리
 │   ├── app.py                    # create_app(): lifespan, 미들웨어, 라우터, 예외 핸들러
@@ -165,7 +165,7 @@ class Settings(BaseSettings):
                                       # JOB_BACKOFF_MINUTES=[5,30,120,480,1440], JOB_MAX_ATTEMPT=5,
                                       # JOB_DEAD_RETRYABLE_ALERT_THRESHOLD=5
     rss:        RssSettings           # interval=30m, CONTENT_BLOG_FETCH_BATCH_SIZE=10
-    summary:    SummarySettings       # RENDERER_STRATEGY, SCRAPERAPI_KEY, SUMMARY_MAX_INPUT_CHARS
+    summary:    SummarySettings       # SUMMARY_MAX_INPUT_CHARS
     embedding:  EmbeddingSettings     # EMBEDDING_WORKER_CHUNK_SIZE/OVERLAP
     chat:       ChatSettings          # CHATBOT_RAG_TOP_K/_SCORE_THRESHOLD, CHAT_CONTEXT_COMPRESSION_*
 
