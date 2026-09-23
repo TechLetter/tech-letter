@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from techletter.core.jobs.policy import next_quota_reset
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
 
@@ -73,6 +72,3 @@ class DailyBudget:
             return_document=True,
         )
         return int((doc or {}).get("count") or amount)
-
-    def next_reset(self, now: datetime | None = None) -> datetime:
-        return next_quota_reset(now or utcnow(), self._reset_utc_hour)

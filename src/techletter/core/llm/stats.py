@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from pymongo import UpdateOne
-
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
@@ -129,7 +127,3 @@ class ModelStatsStore:
 
     async def reset(self, model_id: str, purpose: ModelPurpose) -> None:
         await self._col.delete_one({"_id": self._key(model_id, purpose)})
-
-    async def bulk_record(self, operations: list[UpdateOne]) -> None:  # pragma: no cover
-        if operations:
-            await self._col.bulk_write(operations, ordered=False)

@@ -541,10 +541,6 @@ class BlogRepository:
         doc = await self._col.find_one({"_id": oid})
         return Blog.model_validate(doc) if doc else None
 
-    async def get_by_rss_url(self, rss_url: str) -> Blog | None:
-        doc = await self._col.find_one({"rss_url": rss_url})
-        return Blog.model_validate(doc) if doc else None
-
     async def find_conflict(
         self, *, url: str, rss_url: str, exclude_id: ObjectId | None
     ) -> str | None:

@@ -53,10 +53,6 @@ class ModelPreferenceStore:
             return []
         return self._unique(list(self._settings.summary_preference))
 
-    def _from_settings(self, purpose: ModelPurpose) -> list[str]:
-        """이전 내부 호출자와의 호환을 위해 설정 기본값을 위임한다."""
-        return self.settings_default(purpose)
-
     def _merged(self, stored: list[str]) -> list[str]:
         return self._unique([*self.settings_default(ModelPurpose.SUMMARY), *stored])
 
