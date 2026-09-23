@@ -46,7 +46,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 ## 4.1 커버리지 공백
 
 - `workers/**`, `cli.py`, `api/**`는 직접 테스트가 0건이며, API는 계약 테스트가 간접적으로 커버한다.
-- `PlaywrightRenderer` 테스트는 0건이다. 테스트는 ScraperApi 경로만 다루며, 운영 경로는 Playwright다.
+- `PlaywrightRenderer` 테스트는 0건이다. 렌더러 테스트는 차단 페이지 판정(`needs_retry`)만 다룬다.
 
 ## 5. E2E 시나리오
 
@@ -94,7 +94,7 @@ PR과 `develop`/`main` push에서 4개 잡이 병렬로 돈다.
 
 ## 7. 배포 스모크 (`scripts/verify_prod_smoke.sh`)
 
-배포 파이프라인이 이미지를 교체한 직후 실행한다. Smoke 실패는 조건을 만족하면 이전 이미지 태그로 되돌리지만, `Start` 기동 실패는 Smoke가 skipped라 자동 롤백되지 않는다.
+배포 파이프라인이 이미지를 교체한 직후 실행한다. `Start` 또는 Smoke가 실패하면 직전 이미지 태그로 자동 롤백한다.
 
 ```
 1/5 GET /health                          → 200 {"status":"ok"}

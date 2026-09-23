@@ -84,12 +84,10 @@ class RssFeeder:
     def __init__(self, clients: HttpClients) -> None:
         self._clients = clients
 
-    async def fetch(
-        self, rss_url: str, *, limit: int = 0, tls_insecure: bool = False
-    ) -> list[FeedItem]:
+    async def fetch(self, rss_url: str, *, limit: int = 0) -> list[FeedItem]:
         import httpx  # noqa: PLC0415
 
-        client = self._clients.get(verify=not tls_insecure)
+        client = self._clients.get()
         try:
             response = await client.get(rss_url)
         except httpx.RequestError as exc:

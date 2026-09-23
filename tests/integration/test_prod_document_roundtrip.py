@@ -47,7 +47,6 @@ def test_every_production_blog_validates(doc: dict) -> None:
     assert "is_active" not in doc
     assert blog.is_active is True
     assert blog.consecutive_failures == 0
-    assert blog.tls_insecure is False
 
 
 def test_summarized_post_keeps_its_summary_and_embedding_metadata() -> None:

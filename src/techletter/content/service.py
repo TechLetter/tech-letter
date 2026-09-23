@@ -16,7 +16,6 @@ from techletter.content.jobs import (
 from techletter.content.links import normalize_link
 from techletter.content.models import AISummary, Blog, Post, StatusFlags
 from techletter.core.errors import (
-    InvalidRequestError,
     ResourceConflictError,
     ResourceNotFoundError,
 )
@@ -33,8 +32,6 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = ["BlogService", "BlogWithCount", "PostService"]
 
 logger = get_logger(__name__)
-
-BLOG_TYPES = frozenset({"company", "creator"})
 
 
 def normalize_url(value: str) -> str:
@@ -136,25 +133,13 @@ class BlogService:
             raise ResourceNotFoundError(f"blog not found: {blog_id}")
         return blog
 
-    @staticmethod
-    def _check_type(blog_type: str) -> str:
-        value = blog_type.strip() or "company"
-        if value not in BLOG_TYPES:
-            raise InvalidRequestError(
-                "blog_type must be one of: company, creator",
-                details={"field": "blog_type", "allowed": sorted(BLOG_TYPES)},
-            )
-        return value
-
     async def create(
         self,
         *,
         name: str,
         url: str,
         rss_url: str,
-        blog_type: str = "company",
         is_active: bool = True,
-        tls_insecure: bool = False,
     ) -> Blog:
         url, rss_url = normalize_url(url), normalize_url(rss_url)
         if conflict := await self._blogs.find_conflict(url=url, rss_url=rss_url, exclude_id=None):
@@ -164,9 +149,7 @@ class BlogService:
                 name=name.strip(),
                 url=url,
                 rss_url=rss_url,
-                blog_type=self._check_type(blog_type),  # type: ignore[arg-type]
                 is_active=is_active,
-                tls_insecure=tls_insecure,
             )
         )
 
@@ -174,14 +157,12 @@ class BlogService:
         """부분 갱신 — 전달된 필드만 바뀐다."""
         existing = await self.get(blog_id)
         fields: dict[str, object] = {}
-        for key in ("name", "url", "rss_url", "blog_type", "is_active", "tls_insecure"):
+        for key in ("name", "url", "rss_url", "is_active"):
             if key not in changes:
                 continue
             value = changes[key]
             if key in ("url", "rss_url"):
                 fields[key] = normalize_url(str(value))
-            elif key == "blog_type":
-                fields[key] = self._check_type(str(value))
             elif key == "name":
                 fields[key] = str(value).strip()
             else:

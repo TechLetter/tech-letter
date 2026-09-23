@@ -39,8 +39,6 @@ x-llm-env: &llm-env
   EMBEDDING_WORKER_LLM_PROVIDER: ${EMBEDDING_WORKER_LLM_PROVIDER:-google}
   EMBEDDING_WORKER_LLM_MODEL_NAME: ${EMBEDDING_WORKER_LLM_MODEL_NAME:-gemini-embedding-001}
   CHATBOT_LLM_PROVIDER: ${CHATBOT_LLM_PROVIDER:-openrouter}
-  CHATBOT_EMBEDDING_PROVIDER: ${CHATBOT_EMBEDDING_PROVIDER:-google}
-  CHATBOT_EMBEDDING_MODEL_NAME: ${CHATBOT_EMBEDDING_MODEL_NAME:-gemini-embedding-001}
   # 모델 선호 목록은 실측으로 정한다(scripts/eval_models.py).
   SUMMARY_MODEL_PREFERENCE: ${SUMMARY_MODEL_PREFERENCE:-}
   LLM_STATIC_FALLBACK_MODELS: ${LLM_STATIC_FALLBACK_MODELS:-}
@@ -130,8 +128,6 @@ services:
     environment:
       <<: [*app-env, *llm-env]
       SERVICE_NAME: techletter-summary-worker
-      RENDERER_STRATEGY: ${RENDERER_STRATEGY:-playwright}
-      SCRAPERAPI_KEY: ${SCRAPERAPI_KEY:-}
       SUMMARY_DAILY_BUDGET: ${SUMMARY_DAILY_BUDGET:-20}
     healthcheck: *heartbeat-check
     stop_grace_period: 60s

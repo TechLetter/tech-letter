@@ -26,8 +26,7 @@ def feeder_for(routes: dict[str, httpx.Response]) -> RssFeeder:
         return routes.get(str(request.url), httpx.Response(404))
 
     clients = HttpClients()
-    clients._secure = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    clients._insecure = clients._secure
+    clients._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     return RssFeeder(clients)
 
 

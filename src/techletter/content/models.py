@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
 
 from pydantic import Field
 
@@ -16,14 +15,11 @@ from techletter.core.db.documents import BaseDocument, MongoDateTime, PyObjectId
 __all__ = [
     "AISummary",
     "Blog",
-    "BlogType",
     "EmbeddingMeta",
     "ListPostsFilter",
     "Post",
     "StatusFlags",
 ]
-
-BlogType = Literal["company", "creator"]
 
 
 class StatusFlags(SubDocument):
@@ -70,14 +66,11 @@ class Blog(BaseDocument):
     name: str = ""
     url: str = ""
     rss_url: str = ""
-    blog_type: BlogType = "company"
     is_active: bool = True
     last_fetched_at: MongoDateTime | None = None
     last_fetch_error: str | None = None
     consecutive_failures: int = 0
     """연속 실패 횟수. 임계치를 넘으면 자동 비활성화한다."""
-    tls_insecure: bool = False
-    """이 블로그만 TLS 검증을 건너뛴다. 기본은 검증한다."""
 
 
 @dataclass(slots=True)

@@ -74,8 +74,7 @@ def _llm_config(prefix: str) -> SettingsConfigDict:
 
 
 # provider 하나당 계정 하나뿐이라, 어떤 역할이든 이 provider를 쓰면 이 키를
-# 쓴다. 역할별로 따로 설정할 것이 없다 — google/openrouter 둘 다 실제로 쓰는
-# provider고, openai/ollama는 로컬에서만 쓰는 것이라 공유 키가 없다.
+# 쓴다. 역할별로 따로 설정할 것이 없다.
 _SHARED_API_KEY_ENV = {"google": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
 
 
@@ -87,9 +86,7 @@ class LlmSettings(BaseSettings):
     """
 
     model_config = _BASE
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
-    model_name: str = ""
-    base_url: str | None = None
+    provider: Literal["google", "openrouter"] = "google"
     temperature: float = 0.3
     max_retries: int = 0
     timeout_seconds: int = 120
@@ -115,30 +112,27 @@ class LlmSettings(BaseSettings):
 
 class SummaryLlmSettings(LlmSettings):
     model_config = _llm_config("SUMMARY_WORKER_LLM_")
+    model_name: str = ""
 
 
 class EmbeddingLlmSettings(LlmSettings):
+    """임베딩 모델. 문서 임베딩(워커)과 질의 임베딩(챗봇)이 **같이** 읽는다.
+
+    둘이 다르면 질의 벡터가 다른 공간에 떨어져 검색이 조용히 망가진다 — 그래서
+    설정을 하나만 둔다. Qdrant 컬렉션 이름도 이 모델명·차원으로 정해진다.
+    """
+
     model_config = _llm_config("EMBEDDING_WORKER_LLM_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
+    provider: Literal["google"] = "google"  # pyright: ignore[reportIncompatibleVariableOverride]
     model_name: str = "gemini-embedding-001"
 
 
 class ChatLlmSettings(LlmSettings):
-    """챗봇 LLM 설정.
-
-    모델은 라우터가 후보에서 결정하므로 `model_name`은 미사용이다. 공통
-    설정 모델과의 호환을 위해 필드는 남긴다.
-    """
+    """챗봇 LLM 설정. 모델은 라우터가 후보에서 고르므로 모델명 설정이 없다."""
 
     model_config = _llm_config("CHATBOT_LLM_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
+    provider: Literal["google", "openrouter"] = "openrouter"
     temperature: float = 0.7
-
-
-class ChatEmbeddingSettings(LlmSettings):
-    model_config = _llm_config("CHATBOT_EMBEDDING_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
-    model_name: str = "gemini-embedding-001"
 
 
 class RouterSettings(BaseSettings):
@@ -209,10 +203,6 @@ class RssSettings(BaseSettings):
 
 class SummarySettings(BaseSettings):
     model_config = _BASE
-    renderer_strategy: Literal["playwright", "scraperapi"] = Field(
-        default="playwright", alias="RENDERER_STRATEGY"
-    )
-    scraperapi_key: SecretStr | None = Field(default=None, alias="SCRAPERAPI_KEY")
     max_input_chars: int = Field(default=12000, alias="SUMMARY_MAX_INPUT_CHARS")
     max_render_attempts: int = 3
     render_timeout_seconds: int = 30
@@ -271,7 +261,6 @@ class Settings(BaseSettings):
     summary_llm: SummaryLlmSettings
     embedding_llm: EmbeddingLlmSettings
     chat_llm: ChatLlmSettings
-    chat_embedding: ChatEmbeddingSettings
 
     @property
     def auth(self) -> AuthSettings:
@@ -309,7 +298,6 @@ class Settings(BaseSettings):
             summary_llm=SummaryLlmSettings(),
             embedding_llm=EmbeddingLlmSettings(),
             chat_llm=ChatLlmSettings(),
-            chat_embedding=ChatEmbeddingSettings(),
         )
 
 

@@ -267,9 +267,9 @@ class Container:
             planner=QueryPlanner(llm),
             posts=PostLookupTool(self.posts),
             search=VectorSearchTool(
-                embedder=LangChainEmbedder(self.settings.chat_embedding),
+                embedder=LangChainEmbedder(self.settings.embedding_llm),
                 store=self.vector_store,
-                embedding_model=self.settings.chat_embedding.model_name,
+                embedding_model=self.settings.embedding_llm.model_name,
                 top_k=self.settings.chat.rag_top_k,
                 score_threshold=self.settings.chat.rag_score_threshold,
             ),

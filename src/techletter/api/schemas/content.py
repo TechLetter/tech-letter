@@ -93,9 +93,7 @@ class AdminBlogOut(BaseModel):
     name: str
     url: str
     rss_url: str
-    blog_type: str
     is_active: bool
-    tls_insecure: bool
     post_count: int
     consecutive_failures: int
     last_fetched_at: str | None
@@ -111,9 +109,7 @@ class AdminBlogOut(BaseModel):
             name=blog.name,
             url=blog.url,
             rss_url=blog.rss_url,
-            blog_type=blog.blog_type,
             is_active=blog.is_active,
-            tls_insecure=blog.tls_insecure,
             post_count=row.post_count,
             consecutive_failures=blog.consecutive_failures,
             last_fetched_at=to_iso_z(blog.last_fetched_at),

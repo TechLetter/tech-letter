@@ -92,7 +92,7 @@
 
 ### 2.2 `Blog` / `AdminBlog`
 공개: `{id, name, url}`.
-어드민: `{id, name, url, rss_url, blog_type, is_active, tls_insecure, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
+어드민: `{id, name, url, rss_url, is_active, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
 ### 2.3 `AdminPost`
 ```json
@@ -265,7 +265,7 @@
 | POST | `/admin/posts/{id}/summarize` | | `202 {job_id}` |
 | POST | `/admin/posts/{id}/embed` | | `202 {job_id}` |
 | GET | `/admin/blogs` | `page, page_size, is_active?` (`없음/인식불가`=전체, `true`=활성만, `false`=비활성만) | 목록 + `AdminBlog[]` |
-| POST | `/admin/blogs` | `{name,url,rss_url,blog_type,is_active,tls_insecure}` | `201 AdminBlog` / 409 `details.field` |
+| POST | `/admin/blogs` | `{name,url,rss_url,is_active}` | `201 AdminBlog` / 409 `details.field` |
 | PUT | `/admin/blogs/{id}` | 동일 | `200 AdminBlog` |
 | DELETE | `/admin/blogs/{id}` | `delete_posts=bool` | `200 {deleted_posts: n}` |
 | POST | `/admin/blogs/{id}/activate` | | `200 AdminBlog`(자동 비활성화 해제, `post_count` 실제 카운트) |

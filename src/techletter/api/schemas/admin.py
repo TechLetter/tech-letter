@@ -96,9 +96,7 @@ class BlogIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     url: str = Field(min_length=1, max_length=2000)
     rss_url: str = Field(min_length=1, max_length=2000)
-    blog_type: str = "company"
     is_active: bool = True
-    tls_insecure: bool = False
 
 
 class LlmModelPreferenceIn(BaseModel):

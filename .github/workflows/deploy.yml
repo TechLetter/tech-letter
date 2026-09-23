@@ -8,11 +8,8 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+  # 수동 재실행은 현재 main을 다시 배포한다(시크릿 교체 후 등). 태그는 항상 커밋 SHA다.
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "되돌릴 이미지 태그(git sha). 비우면 현재 커밋으로 배포한다."
-        required: false
 
 # 배포가 겹치면 컨테이너 교체가 서로를 덮어쓴다. 앞선 배포를 취소하지 않고
 # 끝까지 기다린다 — 중간에 죽으면 절반만 교체된 상태가 남는다.
@@ -34,7 +31,6 @@ env:
   GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-  SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
   CONTENT_BLOG_FETCH_BATCH_SIZE: ${{ vars.CONTENT_BLOG_FETCH_BATCH_SIZE || '10' }}
   SUMMARY_MODEL_PREFERENCE: ${{ vars.SUMMARY_MODEL_PREFERENCE }}
   LLM_STATIC_FALLBACK_MODELS: ${{ vars.LLM_STATIC_FALLBACK_MODELS }}
@@ -51,8 +47,7 @@ jobs:
       - name: Resolve image tag
         id: tag
         run: |
-          TAG="${{ inputs.image_tag }}"
-          if [ -z "$TAG" ]; then TAG="${GITHUB_SHA::12}"; fi
+          TAG="${GITHUB_SHA::12}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "배포 태그: $TAG"
 

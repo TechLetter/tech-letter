@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from techletter.settings import (
-    ChatEmbeddingSettings,
     ChatLlmSettings,
     EmbeddingLlmSettings,
     SummaryLlmSettings,
@@ -20,13 +19,6 @@ def test_summary_llm_falls_back_to_shared_gemini_key(monkeypatch) -> None:
 def test_embedding_llm_falls_back_to_shared_gemini_key(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "shared-gemini")
     settings = EmbeddingLlmSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
-    assert settings.api_key is not None
-    assert settings.api_key.get_secret_value() == "shared-gemini"
-
-
-def test_chat_embedding_falls_back_to_shared_gemini_key(monkeypatch) -> None:
-    monkeypatch.setenv("GEMINI_API_KEY", "shared-gemini")
-    settings = ChatEmbeddingSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
     assert settings.api_key is not None
     assert settings.api_key.get_secret_value() == "shared-gemini"
 
