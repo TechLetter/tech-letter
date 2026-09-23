@@ -224,6 +224,9 @@ class EmbeddingSettings(BaseSettings):
     chunk_overlap: int = Field(default=200, alias="EMBEDDING_WORKER_CHUNK_OVERLAP")
     embed_batch_size: int = 64
     """한 번에 임베딩 API로 보내는 청크 수. 긴 글이 요청 하나로 몰리지 않게 한다."""
+    embed_chunks_per_minute: int = 80
+    """워커가 1분에 보내는 청크 상한(0이면 무제한). 구글 무료 등급은 청크 하나를
+    요청 한 번으로 세어 RPM 100에 걸린다. 20은 API 서버의 채팅 질의 임베딩 몫이다."""
     max_chunks_per_post: int = 200
     """포스트 하나의 상한. 91K자짜리 글이 벡터를 수백 개 만드는 것을 막는다."""
 
