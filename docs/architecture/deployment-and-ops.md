@@ -14,7 +14,7 @@ main push (docs/**·*.md 제외)
   4. docker compose -f docker/compose.prod.yml up -d --wait --wait-timeout 180 --remove-orphans
   5. scripts/verify_prod_smoke.sh
   6. Start 또는 Smoke 실패 → 직전 이미지 태그로 up -d 후 스모크 재실행 (자동 롤백). 직전 태그가 없거나 복구가 실패하면 명시적 오류와 함께 수동 복구 필요
-  7. 성공 → 168시간 넘은 dangling 이미지 정리
+  7. 성공 → 이번·직전 태그 이미지만 남기고 삭제, 7일 넘은 빌드 캐시 정리
 ```
 - `workflow_dispatch`는 입력 없이 현재 main을 다시 배포할 뿐이다(시크릿 교체 후 재기동 용도). 옛 버전으로 되돌리는 수단이 아니다.
 - compose의 `${VAR:?required}` 앵커가 빌드·기동 양쪽에서 시크릿 누락을 즉시 실패시킨다.
@@ -22,7 +22,7 @@ main push (docs/**·*.md 제외)
 - 동시 배포는 `concurrency: production`으로 직렬화된다.
 - 롤백 조건은 `failure() && (steps.start.outcome == 'failure' || steps.smoke.outcome == 'failure')`다. Start 실패로 Smoke가 skipped여도 복구하며, Build 실패는 기존 서비스가 유지되므로 롤백하지 않는다.
 - 롤백은 `--no-build --pull never`로 서버에 저장된 직전 이미지만 사용한다. 이미지가 없으면 현재 소스를 옛 태그로 빌드하지 않고 실패한다. 복구 성공 후에도 원래 배포 실패는 워크플로 결과에 남는다.
-- 7단계의 `docker image prune -f --filter until=168h`는 `-a`가 없어 dangling 이미지만 지운다. SHA 태그 이미지는 배포 1회당 두 개씩 영구 누적되며, 현재 이를 정리하는 절차는 없다.
+- 7단계는 `techletter`·`techletter-browser` 태그 이미지 중 이번 태그와 직전 태그(다음 배포의 자동 롤백 대상)만 남긴다. 그보다 옛 버전으로 되돌리려면 `git revert` 후 재배포한다.
 
 ### 1.1 서비스 구성 (`docker/compose.prod.yml`)
 | 서비스 | 이미지 | 메모리(limit/reservation) | healthcheck | Traefik |

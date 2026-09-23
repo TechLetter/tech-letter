@@ -108,4 +108,15 @@ jobs:
 
       - name: Prune old images
         if: success()
-        run: docker image prune -f --filter "until=168h"
+        # 이번 태그와 직전 태그(다음 배포의 롤백 대상)만 남긴다. 태그가 붙은
+        # 이미지는 dangling이 아니라 `image prune`으로 안 지워져 배포마다 2개씩 쌓였다.
+        env:
+          KEEP_CURRENT: ${{ steps.tag.outputs.tag }}
+          KEEP_PREVIOUS: ${{ steps.previous.outputs.previous }}
+        run: |
+          docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep -E "^${IMAGE_REPO}(-browser)?:" \
+            | grep -vxE ".*:(${KEEP_CURRENT}${KEEP_PREVIOUS:+|$KEEP_PREVIOUS})" \
+            | xargs -r docker rmi || true
+          docker image prune -f
+          docker builder prune -f --filter "until=168h"
