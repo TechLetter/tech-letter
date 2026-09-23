@@ -7,15 +7,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
-
 from techletter.core.db.documents import BaseDocument, MongoDateTime
 
 __all__ = [
     "Bookmark",
     "Credit",
     "CreditSource",
-    "CreditSummary",
     "CreditTransaction",
     "IdentityPolicy",
     "LoginSession",
@@ -50,14 +47,6 @@ class Credit(BaseDocument):
     reason: str = ""
     expired_at: MongoDateTime
     """TTL 인덱스 대상. 만료된 문서는 Mongo가 지운다."""
-
-
-class CreditSummary(BaseDocument):
-    """조회 결과 묶음. 저장되지 않는다."""
-
-    user_code: str
-    total_remaining: int = 0
-    credits: list[Credit] = Field(default_factory=list)
 
 
 class CreditTransaction(BaseDocument):

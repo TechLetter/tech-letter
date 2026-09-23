@@ -191,10 +191,11 @@ async def test_grant_daily_works_right_after_utc_midnight_even_if_recent(
     assert await credit_service.remaining(USER) == DAILY_CREDITS
 
 
-async def test_daily_credit_expires_next_midnight(credit_service, credits_repo):
+async def test_daily_credit_expires_next_midnight(credit_service, mongo_db):
     await credit_service.grant_daily(USER, "google", "sub-1")
-    summary = await credits_repo.summary(USER)
-    expiry = summary.credits[0].expired_at
+    doc = await mongo_db["credits"].find_one({"user_code": USER})
+    assert doc is not None
+    expiry = doc["expired_at"]
     assert expiry.hour == 0
     assert expiry > utcnow()
 

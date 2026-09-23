@@ -18,7 +18,6 @@ from techletter.core.time import utcnow
 from techletter.users.models import (
     Bookmark,
     Credit,
-    CreditSummary,
     CreditTransaction,
     LoginSession,
     User,
@@ -158,18 +157,6 @@ class CreditRepository:
 
     def __init__(self, db: AsyncDatabase) -> None:
         self._col = db["credits"]
-
-    async def summary(self, user_code: str) -> CreditSummary:
-        now = utcnow()
-        cursor = self._col.find(
-            {"user_code": user_code, "expired_at": {"$gt": now}, "amount": {"$gt": 0}}
-        ).sort([("expired_at", ASCENDING)])
-        credits = [Credit.model_validate(doc) async for doc in cursor]
-        return CreditSummary(
-            user_code=user_code,
-            total_remaining=sum(c.amount for c in credits),
-            credits=credits,
-        )
 
     async def remaining(self, user_code: str) -> int:
         pipeline = [

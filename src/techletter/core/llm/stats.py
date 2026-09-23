@@ -7,7 +7,6 @@ scouter의 "OK"는 *응답한다*는 뜻이지 *한국어 JSON 요약을 잘한�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from techletter.settings import RouterSettings
 
-__all__ = ["COLLECTION", "ModelPurpose", "ModelStat", "ModelStatsStore"]
+__all__ = ["COLLECTION", "ModelPurpose", "ModelStatsStore"]
 
 COLLECTION = "llm_model_stats"
 logger = get_logger(__name__)
@@ -40,21 +39,6 @@ class ModelPurpose(StrEnum):
     SUMMARY = "summary"
     CHAT = "chat"
     PLANNER = "planner"
-
-
-@dataclass(frozen=True, slots=True)
-class ModelStat:
-    model_id: str
-    purpose: str
-    attempts: int
-    successes: int
-    json_failures: int
-    rate_limited: int
-    avg_latency_ms: float
-
-    @property
-    def success_rate(self) -> float:
-        return self.successes / self.attempts if self.attempts else 1.0
 
 
 class ModelStatsStore:

@@ -14,7 +14,6 @@ RiskLevel = Literal["low", "medium", "high"]
 @dataclass(frozen=True, slots=True)
 class GuardFinding:
     category: str
-    severity: RiskLevel
 
 
 @dataclass(frozen=True, slots=True)

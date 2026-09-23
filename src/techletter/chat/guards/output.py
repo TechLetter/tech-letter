@@ -20,7 +20,7 @@ class OutputGuard:
                     action="block",
                     risk_level="high",
                     text=POLICY_BLOCK_MESSAGE,
-                    findings=[GuardFinding(category=rule.category, severity="high")],
+                    findings=[GuardFinding(category=rule.category)],
                     message=POLICY_BLOCK_MESSAGE,
                 )
         return GuardResult(action="pass", risk_level="low", text=answer)

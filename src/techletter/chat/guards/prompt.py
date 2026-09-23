@@ -48,7 +48,7 @@ class PromptGuard:
         for rule in self._rules:
             if not rule.pattern.search(normalized):
                 continue
-            findings.append(GuardFinding(category=rule.category, severity="high"))
+            findings.append(GuardFinding(category=rule.category))
             if rule.action == "block":
                 return GuardResult(
                     action="block",
