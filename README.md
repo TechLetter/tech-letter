@@ -114,7 +114,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 
 경로·스키마·에러 코드 체계는 [api-contract](docs/architecture/api-contract.md)에 정리돼 있다. 라우터는 `src/techletter/api/v1/`:
 
-- `posts`, `blogs`, `filters`, `trends` — 공개 콘텐츠 조회
+- `posts`, `filters`, `trends` — 공개 콘텐츠 조회
 - `me`, `bookmarks`, `auth` — 사용자 프로필, 북마크, Google OAuth 로그인
 - `chat` — 세션·크레딧·에이전트 질의응답(SSE 스트리밍 포함)
 - `admin/*` — 잡 큐 조회·재시도, 백필 트리거, 블로그/포스트/유저/추천질문 관리, 요약 모델 폴백 체인 설정
