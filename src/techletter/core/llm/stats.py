@@ -8,7 +8,7 @@ scouter의 "OK"는 *응답한다*는 뜻이지 *한국어 JSON 요약을 잘한�
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.logging import get_logger
@@ -50,46 +50,16 @@ class ModelStatsStore:
     def _key(model_id: str, purpose: ModelPurpose) -> str:
         return f"{model_id}:{purpose.value}"
 
-    async def record(
-        self,
-        model_id: str,
-        purpose: ModelPurpose,
-        *,
-        success: bool,
-        latency_ms: float | None = None,
-        json_failure: bool = False,
-        rate_limited: bool = False,
-        error: str | None = None,
-    ) -> None:
-        inc: dict[str, int] = {"attempts": 1, "successes": int(success)}
-        if json_failure:
-            inc["json_failures"] = 1
-        if rate_limited:
-            inc["rate_limited"] = 1
-        if not success and not json_failure and not rate_limited:
-            inc["errors"] = 1
-
-        set_fields: dict[str, Any] = {
-            "model_id": model_id,
-            "purpose": purpose.value,
-            "last_used_at": utcnow(),
-            "updated_at": utcnow(),
-        }
-        if error:
-            set_fields["last_error"] = error[:300]
-        if latency_ms is not None:
-            # 지수이동평균. 최근 성능을 반영하되 튀는 값에 흔들리지 않는다.
-            existing = await self._col.find_one(
-                {"_id": self._key(model_id, purpose)}, projection={"avg_latency_ms": 1}
-            )
-            previous = (existing or {}).get("avg_latency_ms")
-            set_fields["avg_latency_ms"] = (
-                latency_ms if previous is None else previous * 0.7 + latency_ms * 0.3
-            )
-
+    async def record(self, model_id: str, purpose: ModelPurpose, *, success: bool) -> None:
+        """시도·성공 횟수만 센다. 자동 강등(`demoted`)이 읽는 것이 이 둘뿐이다."""
+        now = utcnow()
         await self._col.update_one(
             {"_id": self._key(model_id, purpose)},
-            {"$inc": inc, "$set": set_fields, "$setOnInsert": {"created_at": utcnow()}},
+            {
+                "$inc": {"attempts": 1, "successes": int(success)},
+                "$set": {"model_id": model_id, "purpose": purpose.value, "updated_at": now},
+                "$setOnInsert": {"created_at": now},
+            },
             upsert=True,
         )
 
