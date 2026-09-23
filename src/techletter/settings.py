@@ -74,8 +74,7 @@ def _llm_config(prefix: str) -> SettingsConfigDict:
 
 
 # provider 하나당 계정 하나뿐이라, 어떤 역할이든 이 provider를 쓰면 이 키를
-# 쓴다. 역할별로 따로 설정할 것이 없다 — google/openrouter 둘 다 실제로 쓰는
-# provider고, openai/ollama는 로컬에서만 쓰는 것이라 공유 키가 없다.
+# 쓴다. 역할별로 따로 설정할 것이 없다.
 _SHARED_API_KEY_ENV = {"google": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
 
 
@@ -87,9 +86,8 @@ class LlmSettings(BaseSettings):
     """
 
     model_config = _BASE
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
+    provider: Literal["google", "openrouter"] = "google"
     model_name: str = ""
-    base_url: str | None = None
     temperature: float = 0.3
     max_retries: int = 0
     timeout_seconds: int = 120
@@ -137,7 +135,7 @@ class ChatLlmSettings(LlmSettings):
     """
 
     model_config = _llm_config("CHATBOT_LLM_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
+    provider: Literal["google", "openrouter"] = "openrouter"
     temperature: float = 0.7
 
 

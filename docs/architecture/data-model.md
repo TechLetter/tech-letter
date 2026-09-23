@@ -126,6 +126,6 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 | `GEMINI_API_KEY` | Gemini 계정 하나. 요약·임베딩 워커·챗봇 임베딩이 공유한다 |
 | `OPENROUTER_API_KEY` | OpenRouter 계정 하나. 요약 폴백·챗봇·모델 헬스 스캔이 공유한다 |
 
-역할별 `*_API_KEY` 변수는 없다 — provider가 google/openrouter가 아닌 역할(로컬 전용 openai/ollama)은 공유 키 대상이 아니라서 키가 항상 비어 있다.
+역할별 `*_API_KEY` 변수는 없다 — provider는 `google`/`openrouter` 둘뿐이고 각자 위 공유 키를 쓴다.
 
 전체 목록은 `techletter settings example`로 생성한다(코드가 최신 출처).

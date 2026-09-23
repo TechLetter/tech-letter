@@ -100,23 +100,17 @@ class LangChainChatClient(ChatClient):
 
         from langchain_openai import ChatOpenAI  # noqa: PLC0415
 
-        base_url = self._settings.base_url or (
-            OPENROUTER_BASE_URL if provider == "openrouter" else None
-        )
-        extra: dict[str, Any] = {}
-        if provider == "openrouter":
-            # 추론 토큰을 응답에 포함하지 않는다. 켜 두면 max_tokens를 추론에
-            # 다 쓰고 본문이 비어 나온다(무료 모델은 대부분 추론형이다).
-            extra["reasoning"] = {"exclude": True}
+        # OpenRouter는 OpenAI 호환 API다. 추론 토큰은 응답에서 뺀다 — 켜 두면
+        # max_tokens를 추론에 다 쓰고 본문이 비어 나온다(무료 모델은 대부분 추론형이다).
         return ChatOpenAI(
             model=model_id,
             temperature=self._settings.temperature,
-            base_url=base_url,
+            base_url=OPENROUTER_BASE_URL,
             api_key=api_key,
             max_retries=self._settings.max_retries,
             max_completion_tokens=max_tokens,
             timeout=self._settings.timeout_seconds,
-            extra_body=extra or None,
+            extra_body={"reasoning": {"exclude": True}},
         )
 
     def _get(self, model_id: str, max_tokens: int) -> Any:
