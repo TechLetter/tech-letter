@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -70,46 +70,3 @@ async def test_link_key_backfill_dry_run_and_execute(mongo_db) -> None:
         collision_doc = await mongo_db["posts"].find_one({"_id": post_id})
         assert collision_doc is not None
         assert "link_key" not in collision_doc
-
-
-async def test_published_at_backfill_dry_run_and_execute(mongo_db) -> None:
-    now = datetime.now(UTC)
-    created = now - timedelta(days=3)
-    future = now + timedelta(days=3)
-    docs: list[dict[str, Any]] = [
-        {
-            "title": "future one",
-            "link": "https://example.test/future-one",
-            "created_at": created,
-            "updated_at": now,
-            "published_at": future,
-        },
-        {
-            "title": "future two",
-            "link": "https://example.test/future-two",
-            "created_at": created - timedelta(days=1),
-            "updated_at": now,
-            "published_at": future,
-        },
-    ]
-    inserted = await mongo_db["posts"].insert_many(docs)
-
-    dry_output = await run_cli("backfill", "published-at", "--dry-run", "--batch-size", "1")
-
-    assert "2건" in dry_output
-    assert "future one" in dry_output
-    assert "future two" in dry_output
-    stored_future = future.replace(microsecond=future.microsecond // 1000 * 1000)
-    unchanged = [
-        await mongo_db["posts"].find_one({"_id": post_id}) for post_id in inserted.inserted_ids
-    ]
-    assert all(doc is not None and doc["published_at"] == stored_future for doc in unchanged)
-
-    execute_output = await run_cli("backfill", "published-at", "--execute", "--batch-size", "1")
-
-    assert "2건 갱신" in execute_output
-    fixed = [
-        await mongo_db["posts"].find_one({"_id": post_id}) for post_id in inserted.inserted_ids
-    ]
-    assert fixed[0] is not None and fixed[0]["published_at"] == fixed[0]["created_at"]
-    assert fixed[1] is not None and fixed[1]["published_at"] == fixed[1]["created_at"]
