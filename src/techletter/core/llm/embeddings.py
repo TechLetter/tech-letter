@@ -26,22 +26,11 @@ class LangChainEmbedder:
     def _get(self) -> Any:
         if self._client is not None:
             return self._client
-        provider = self._settings.provider
-        api_key = self._settings.api_key
-        if provider == "google":
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: PLC0415
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: PLC0415
 
-            self._client = GoogleGenerativeAIEmbeddings(
-                model=self._settings.model_name, api_key=api_key
-            )
-        else:
-            from langchain_openai import OpenAIEmbeddings  # noqa: PLC0415
-
-            self._client = OpenAIEmbeddings(
-                model=self._settings.model_name,
-                base_url=self._settings.base_url,
-                api_key=api_key,
-            )
+        self._client = GoogleGenerativeAIEmbeddings(
+            model=self._settings.model_name, api_key=self._settings.api_key
+        )
         return self._client
 
     async def embed_query(self, text: str) -> list[float]:

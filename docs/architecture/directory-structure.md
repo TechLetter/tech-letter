@@ -173,9 +173,8 @@ class Settings(BaseSettings):
     auth:       AuthSettings          # (property) JWT_SECRET, GOOGLE_OAUTH_*, AUTH_LOGIN_SUCCESS_REDIRECT_URL
 
     summary_llm:    SummaryLlmSettings     # env prefix SUMMARY_WORKER_LLM_   (Gemini, 1순위)
-    embedding_llm:  EmbeddingLlmSettings   # env prefix EMBEDDING_WORKER_LLM_ (Gemini 고정)
+    embedding_llm:  EmbeddingLlmSettings   # env prefix EMBEDDING_WORKER_LLM_ (Gemini 고정, 워커·챗봇 공용)
     chat_llm:       ChatLlmSettings        # env prefix CHATBOT_LLM_          (OpenRouter)
-    chat_embedding: ChatEmbeddingSettings  # env prefix CHATBOT_EMBEDDING_
 
     cors_allowed_origins: list[str]   # CORS_ALLOWED_ORIGINS
     log_level: str = "INFO"

@@ -456,7 +456,6 @@ _NESTED_SETTINGS_FIELDS = frozenset(
         "summary_llm",
         "embedding_llm",
         "chat_llm",
-        "chat_embedding",
     }
 )
 
@@ -477,7 +476,6 @@ def settings_example() -> None:
     """`.env.example` 형식으로 전체 환경변수 목록을 출력한다(시크릿 값은 채우지 않는다)."""
     from techletter.settings import (  # noqa: PLC0415
         AuthSettings,
-        ChatEmbeddingSettings,
         ChatLlmSettings,
         ChatSettings,
         EmbeddingLlmSettings,
@@ -498,9 +496,8 @@ def settings_example() -> None:
         ("Qdrant", QdrantSettings),
         ("인증 (Google OAuth · JWT)", AuthSettings),
         ("요약 워커 LLM", SummaryLlmSettings),
-        ("임베딩 워커 LLM", EmbeddingLlmSettings),
+        ("임베딩 LLM (워커·챗봇 공용)", EmbeddingLlmSettings),
         ("챗봇 LLM", ChatLlmSettings),
-        ("챗봇 임베딩", ChatEmbeddingSettings),
         ("LLM 모델 라우터", RouterSettings),
         ("잡 큐", JobSettings),
         ("RSS 수집", RssSettings),

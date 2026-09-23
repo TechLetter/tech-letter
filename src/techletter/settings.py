@@ -118,8 +118,14 @@ class SummaryLlmSettings(LlmSettings):
 
 
 class EmbeddingLlmSettings(LlmSettings):
+    """임베딩 모델. 문서 임베딩(워커)과 질의 임베딩(챗봇)이 **같이** 읽는다.
+
+    둘이 다르면 질의 벡터가 다른 공간에 떨어져 검색이 조용히 망가진다 — 그래서
+    설정을 하나만 둔다. Qdrant 컬렉션 이름도 이 모델명·차원으로 정해진다.
+    """
+
     model_config = _llm_config("EMBEDDING_WORKER_LLM_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
+    provider: Literal["google"] = "google"  # pyright: ignore[reportIncompatibleVariableOverride]
     model_name: str = "gemini-embedding-001"
 
 
@@ -133,12 +139,6 @@ class ChatLlmSettings(LlmSettings):
     model_config = _llm_config("CHATBOT_LLM_")
     provider: Literal["google", "openai", "openrouter", "ollama"] = "openrouter"
     temperature: float = 0.7
-
-
-class ChatEmbeddingSettings(LlmSettings):
-    model_config = _llm_config("CHATBOT_EMBEDDING_")
-    provider: Literal["google", "openai", "openrouter", "ollama"] = "google"
-    model_name: str = "gemini-embedding-001"
 
 
 class RouterSettings(BaseSettings):
@@ -267,7 +267,6 @@ class Settings(BaseSettings):
     summary_llm: SummaryLlmSettings
     embedding_llm: EmbeddingLlmSettings
     chat_llm: ChatLlmSettings
-    chat_embedding: ChatEmbeddingSettings
 
     @property
     def auth(self) -> AuthSettings:
@@ -305,7 +304,6 @@ class Settings(BaseSettings):
             summary_llm=SummaryLlmSettings(),
             embedding_llm=EmbeddingLlmSettings(),
             chat_llm=ChatLlmSettings(),
-            chat_embedding=ChatEmbeddingSettings(),
         )
 
 
