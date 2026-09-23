@@ -94,7 +94,7 @@ tech-letter/
 ├── docker/  Dockerfile  compose.dev.yml  compose.prod.yml
 ├── scripts/  eval_models.py  dev.sh  verify_prod_smoke.sh
 ├── .github/workflows/  ci.yml  deploy.yml
-└── docs/  README.md  architecture/  PRIVACY_POLICY.md
+└── docs/  README.md  architecture/  images/
 ```
 
 ## 2. `pyproject.toml` 골격
