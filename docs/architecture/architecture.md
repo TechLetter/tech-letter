@@ -53,7 +53,7 @@ techletter
 ├── api/          HTTP 경계. DTO·라우터·의존성·에러 변환. 비즈니스 로직 없음.
 ├── content/      posts, blogs, RSS 수집, 필터·트렌드 집계
 ├── users/        users, credits, bookmarks, login_sessions
-├── chat/         sessions, suggested_questions, LangGraph 에이전트, 가드, 메모리, 채팅 유스케이스
+├── chat/         sessions, suggested_questions, 챗봇 에이전트, 가드, 메모리, 채팅 유스케이스
 ├── summary/      요약 파이프라인(렌더러·파서·검증·요약기)
 ├── embedding/    청킹·임베딩·벡터스토어(Qdrant)
 ├── core/         settings, logging, errors, time, db(mongo/qdrant), jobs(큐), llm(라우터·예산), security, http
