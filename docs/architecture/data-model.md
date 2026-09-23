@@ -92,7 +92,7 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 
 **`login_sessions`**: `_id, session_id(UNIQUE), jwt_token, expires_at(TTL 60s), created_at, updated_at`
 
-**`chat_sessions`**: `_id, user_code, title, created_at, updated_at, messages[{role, content, created_at, metadata?}], memory?{summary, covered_message_count, status, requested_at, updated_at, error_message}`
+**`chat_sessions`**: `_id, user_code, title, created_at, updated_at, messages[{role, content, created_at, metadata?}], memory?{summary, covered_message_count, status, requested_at, updated_at}`
 - API 계약은 `metadata`를 평탄화해서 노출하지만 DB 구조는 그대로 중첩돼 있다.
 
 **`chat_suggested_questions`**: `_id, created_at, updated_at, text, normalized_text, sort_order, is_active`
