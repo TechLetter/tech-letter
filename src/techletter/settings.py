@@ -87,7 +87,6 @@ class LlmSettings(BaseSettings):
 
     model_config = _BASE
     provider: Literal["google", "openrouter"] = "google"
-    model_name: str = ""
     temperature: float = 0.3
     max_retries: int = 0
     timeout_seconds: int = 120
@@ -113,6 +112,7 @@ class LlmSettings(BaseSettings):
 
 class SummaryLlmSettings(LlmSettings):
     model_config = _llm_config("SUMMARY_WORKER_LLM_")
+    model_name: str = ""
 
 
 class EmbeddingLlmSettings(LlmSettings):
@@ -128,11 +128,7 @@ class EmbeddingLlmSettings(LlmSettings):
 
 
 class ChatLlmSettings(LlmSettings):
-    """챗봇 LLM 설정.
-
-    모델은 라우터가 후보에서 결정하므로 `model_name`은 미사용이다. 공통
-    설정 모델과의 호환을 위해 필드는 남긴다.
-    """
+    """챗봇 LLM 설정. 모델은 라우터가 후보에서 고르므로 모델명 설정이 없다."""
 
     model_config = _llm_config("CHATBOT_LLM_")
     provider: Literal["google", "openrouter"] = "openrouter"

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
-    from techletter.settings import LlmSettings
+    from techletter.settings import EmbeddingLlmSettings
 
 __all__ = ["LangChainEmbedder"]
 
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 
 class LangChainEmbedder:
-    def __init__(self, settings: LlmSettings) -> None:
+    def __init__(self, settings: EmbeddingLlmSettings) -> None:
         self._settings = settings
         self._client: Any = None
 
