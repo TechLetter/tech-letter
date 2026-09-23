@@ -81,7 +81,7 @@ async def test_the_list_is_newest_updated_first(sessions) -> None:
 
     rows, _ = await sessions.list(USER, Page(1, 10))
 
-    assert [row.session.title for row in rows] == ["오래된", "새것"]
+    assert [row.title for row in rows] == ["오래된", "새것"]
 
 
 async def test_the_list_only_shows_your_own_sessions(sessions) -> None:
@@ -91,7 +91,7 @@ async def test_the_list_only_shows_your_own_sessions(sessions) -> None:
     rows, total = await sessions.list(USER, Page(1, 10))
 
     assert total == 1
-    assert rows[0].session.title == "내 것"
+    assert rows[0].title == "내 것"
 
 
 async def test_list_pagination(sessions) -> None:
