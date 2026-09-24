@@ -23,6 +23,7 @@ POST_FIELDS = {
     "status",
     "aisummary",
     "plain_text",
+    "feed_html",
     "embedding",
 }
 

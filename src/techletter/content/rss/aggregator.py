@@ -162,6 +162,7 @@ class Aggregator:
             link_key=link_key if link_key is not None else normalize_link(item.link),
             published_at=published_at,
             thumbnail_url=None,
+            feed_html=item.content_html or None,
             status=StatusFlags(),
             # 요약 전에도 aisummary 키가 있어야 프론트의 옵셔널 체이닝이 단순해진다.
             aisummary=AISummary(),

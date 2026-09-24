@@ -37,7 +37,8 @@ class SummaryRequestedHandler:
             raise PermanentError("summary.requested without a link", reason="bad_payload")
 
         try:
-            outcome = await self._pipeline.run(payload.link)
+            feed_html = await self._posts.get_feed_html(payload.post_id)
+            outcome = await self._pipeline.run(payload.link, feed_html)
         except QuotaExceededError:
             # 쿼터는 시간이 지나면 풀린다. 사유를 남기지 않는다 —
             # 어드민 화면에 "실패"로 보이면 안 된다.

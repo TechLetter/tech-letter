@@ -72,6 +72,7 @@ blog_id(ObjectId), blog_name, title, link(UNIQUE), link_key(정규화 링크), p
 status: { ai_summarized: bool, embedded: bool, failed_reason: str|null },
 aisummary: { categories[], tags[], summary, model_name, generated_at } | null,
 plain_text: str|null,
+feed_html: str|null,   # RSS 본문(요약 전 대체 입력). 요약이 끝나면 null
 embedding: { model_name, collection_name, vector_dimension, chunk_count, embedded_at } | 없음
 ```
 API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` → `ai_summary`로 이름이 바뀐다(변환은 DTO 레벨에서만 일어난다). `link_key`에는 정규화한 링크를 저장하고 `uniq_link_key`가 문자열 값만 대상으로 유일성을 보장한다.

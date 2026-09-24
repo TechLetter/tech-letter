@@ -59,6 +59,9 @@ class Post(BaseDocument):
     status: StatusFlags = Field(default_factory=StatusFlags)
     aisummary: AISummary | None = None
     plain_text: str | None = None
+    feed_html: str | None = None
+    """RSS에 실려 온 본문. 페이지가 봇 차단으로 안 열릴 때 요약의 대체 입력이 된다.
+    요약이 끝나면 비운다."""
     embedding: EmbeddingMeta | None = None
 
 

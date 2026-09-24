@@ -51,6 +51,8 @@ class SummaryCompletedHandler:
             },
             "status.ai_summarized": True,
             "status.failed_reason": None,
+            # 요약의 대체 입력이었을 뿐이다. 끝났으면 자리만 차지한다.
+            "feed_html": None,
         }
         if payload.plain_text:
             updates["plain_text"] = payload.plain_text
