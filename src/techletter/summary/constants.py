@@ -32,6 +32,8 @@ BLOCK_MARKERS_STRONG = _markers(
     "i'm not a robot",
     "bot check",
     "challenges.cloudflare.com",
+    "attention required! | cloudflare",
+    "sorry, you have been blocked",
     "enable javascript and cookies to continue",
     "apologies, but something went wrong on our end",
     "needs to review the security of your connection before proceeding",
