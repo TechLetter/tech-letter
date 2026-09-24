@@ -51,7 +51,7 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             LangChainChatClient(settings.chat_llm),
         ),
     )
-    renderer = PlaywrightRenderer(container.settings.summary)
+    renderer = PlaywrightRenderer(container.settings.summary, container.http.get())
     summarizer = Summarizer(
         llm,
         settings.summary,

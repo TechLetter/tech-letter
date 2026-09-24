@@ -2,6 +2,10 @@
 
 브라우저를 **한 번만 띄우고 재사용**한다. 재시도 대기는 `asyncio.sleep`을
 쓰고 상한이 낮다(`RETRY_WAIT_SECONDS`).
+
+헤드리스 브라우저만 막는 사이트가 있다(Medium: 브라우저는 403, 일반 HTTP는
+200). 그래서 차단 페이지가 나오면 브라우저로 다시 시도하기 전에 일반 HTTP로
+한 번 받아 본다.
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ from techletter.summary.constants import RETRY_MARKERS
 
 if TYPE_CHECKING:  # pragma: no cover
     from types import TracebackType
+
+    import httpx
 
     from techletter.settings import SummarySettings
 
@@ -45,8 +51,11 @@ class Renderer(Protocol):
 
 
 class PlaywrightRenderer:
-    def __init__(self, settings: SummarySettings) -> None:
+    def __init__(
+        self, settings: SummarySettings, http_client: httpx.AsyncClient | None = None
+    ) -> None:
         self._settings = settings
+        self._http = http_client
         self._playwright: Any = None
         self._browser: Any = None
         self._lock = asyncio.Lock()
@@ -107,11 +116,26 @@ class PlaywrightRenderer:
             return url
         return f"{url}{'&' if '?' in url else '?'}_tl_retry={attempt}"
 
+    async def _fetch_plain(self, url: str) -> str | None:
+        """일반 HTTP로 받는다. 200이고 차단 페이지가 아닐 때만 돌려준다."""
+        if self._http is None:
+            return None
+        try:
+            response = await self._http.get(url)
+        except Exception:
+            logger.info("http fallback failed", extra={"url": url})
+            return None
+        if response.status_code != 200 or needs_retry(response.text):
+            logger.info("http fallback blocked", extra={"url": url, "status": response.status_code})
+            return None
+        return response.text
+
     async def render(self, url: str) -> str:
         browser = await self._get_browser()
         attempts = max(1, self._settings.max_render_attempts)
         timeout_ms = self._settings.render_timeout_seconds * 1000
         last_html = ""
+        tried_plain = False
 
         for attempt in range(attempts):
             # 컨텍스트는 잡마다 새로 만든다. 쿠키가 이월되면 차단이 이어진다.
@@ -136,6 +160,13 @@ class PlaywrightRenderer:
 
             if not needs_retry(last_html):
                 return last_html
+
+            if not tried_plain:
+                tried_plain = True
+                plain = await self._fetch_plain(url)
+                if plain is not None:
+                    logger.info("browser blocked; used http fallback", extra={"url": url})
+                    return plain
 
             if attempt + 1 < attempts:
                 wait = RETRY_WAIT_SECONDS[min(attempt, len(RETRY_WAIT_SECONDS) - 1)]

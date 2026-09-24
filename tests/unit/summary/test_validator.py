@@ -98,7 +98,7 @@ def test_common_words_do_not_block_long_articles(word: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "page", ["Access denied. You don't have permission.", "Attention Required! | Cloudflare"]
+    "page", ["Access denied. You don't have permission.", "Error 1020 | Cloudflare Ray ID: 8f2a"]
 )
 def test_a_short_block_page_with_a_common_word_is_still_caught(page: str) -> None:
     page = page + " " + "x" * 60
