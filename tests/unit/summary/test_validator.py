@@ -86,3 +86,24 @@ def test_soft_markers_do_not_block_long_articles() -> None:
 
     assert len(article) > SOFT_MARKER_MAX_LENGTH
     validate_plain_text(article)
+
+
+@pytest.mark.parametrize("word", ["cloudflare", "access denied", "security check"])
+def test_common_words_do_not_block_long_articles(word: str) -> None:
+    """Cloudflare 블로그 글이 "cloudflare" 한 단어로 전부 dead가 된 적이 있다."""
+    article = f"{word} 설정을 운영 환경에 적용하며 겪은 문제를 정리한다. " * 20
+
+    assert len(article) > SOFT_MARKER_MAX_LENGTH
+    validate_plain_text(article)
+
+
+@pytest.mark.parametrize(
+    "page", ["Access denied. You don't have permission.", "Attention Required! | Cloudflare"]
+)
+def test_a_short_block_page_with_a_common_word_is_still_caught(page: str) -> None:
+    page = page + " " + "x" * 60
+
+    with pytest.raises(PermanentError) as excinfo:
+        validate_plain_text(page)
+
+    assert excinfo.value.reason == "error_page"
