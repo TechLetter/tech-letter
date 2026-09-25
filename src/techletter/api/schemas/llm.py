@@ -84,8 +84,8 @@ class ModelHealthOut(BaseModel):
     """최근 30일, 오래된 날부터. 기록이 없는 날은 빠진다."""
     info: ModelInfoOut | None = None
     """아직 한 번도 스캔되지 않은 모델은 없다."""
-    recommend_score: float
-    """성능 × 가용성 × 속도(`core/llm/recommend.py`). 요약·챗봇이 고르는 순서의 기준."""
+    recommend_score: float | None
+    """성능 × 가용성 × 속도(`core/llm/recommend.py`). 성능 점수가 없는 모델은 없다."""
     recommended_rank: int | None
     """1부터. 지금 응답하지 않는 모델은 없다."""
 
@@ -113,7 +113,7 @@ class ModelHealthOut(BaseModel):
                 DailyUptimeOut(date=d["date"], uptime=round(float(d["uptime"]), 1)) for d in daily
             ],
             info=ModelInfoOut.of(meta) if meta else None,
-            recommend_score=recommendation.score if recommendation else 0.0,
+            recommend_score=recommendation.score if recommendation else None,
             recommended_rank=recommendation.rank if recommendation else None,
         )
 

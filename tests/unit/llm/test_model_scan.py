@@ -187,7 +187,11 @@ def test_aggregate_respects_sample_limit() -> None:
     [
         ("OK", 99.0, "healthy"),
         ("OK", 60.0, "degraded"),
-        ("OK", 10.0, "degraded"),  # 지금 응답하면 고를 수 있다
+        (
+            "OK",
+            22.9,
+            "down",
+        ),  # 한 번 응답했다고 10번 중 8번 실패하는 모델을 쓸 수 있다고 하지 않는다
         ("429", 99.0, "down"),  # 가용률이 높아도 지금 부르면 실패한다
         ("HTTP 403", 0.0, "down"),
         ("", 100.0, "down"),
