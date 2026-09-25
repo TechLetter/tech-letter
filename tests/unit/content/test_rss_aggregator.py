@@ -29,6 +29,16 @@ class FakePosts:
         self.saved.append(post)
         return post
 
+    async def find_by_titles(self, blog_id, titles: list[str]) -> list[Post]:
+        return [p for p in self.saved if p.blog_id == blog_id and p.title in titles]
+
+    async def relink(self, post_id: str, link: str, link_key: str) -> bool:
+        for post in self.saved:
+            if str(post.id) == post_id:
+                post.link, post.link_key = link, link_key
+                return True
+        return False
+
 
 class FakeQueue:
     def __init__(self) -> None:
@@ -69,3 +79,44 @@ async def test_the_feed_body_is_stored_with_the_post() -> None:
     await aggregator._store(blog, [item])
 
     assert posts.saved[0].feed_html == "<p>본문</p>"
+
+
+async def _seed(posts: FakePosts, blog: Blog, title: str, link: str) -> Post:
+    old = Post(blog_id=blog.id, title=title, link=link, link_key=link)
+    return await posts.insert(old)
+
+
+async def test_a_post_that_moved_domains_is_relinked_not_duplicated() -> None:
+    """쏘카는 도메인을 옮기며 .html을 떼고 날짜를 하루 옮겼다. 같은 글이다."""
+    posts, queue = FakePosts(), FakeQueue()
+    aggregator = Aggregator(None, posts, None, queue)  # type: ignore[arg-type]
+    blog = Blog(name="쏘카")
+    blog.id = ObjectId()
+    old = await _seed(
+        posts, blog, "프레임 2편", "https://tech.socarcorp.kr/fe/2026/02/24/frame2-web.html"
+    )
+
+    inserted = await aggregator._store(
+        blog, [FeedItem("프레임 2편", "https://tech.socar.kr/fe/2026/02/25/frame2-web", None)]
+    )
+
+    assert inserted == 0
+    assert len(posts.saved) == 1
+    assert old.link == "https://tech.socar.kr/fe/2026/02/25/frame2-web"
+    assert queue.enqueued == []
+
+
+async def test_a_repeated_title_with_another_slug_is_a_new_post() -> None:
+    """ "월간 소식"처럼 제목이 반복되는 글은 주소 끝부분이 달라 별개다."""
+    posts, queue = FakePosts(), FakeQueue()
+    aggregator = Aggregator(None, posts, None, queue)  # type: ignore[arg-type]
+    blog = Blog(name="Alpha")
+    blog.id = ObjectId()
+    await _seed(posts, blog, "월간 소식", "https://alpha.test/news-2026-08")
+
+    inserted = await aggregator._store(
+        blog, [FeedItem("월간 소식", "https://alpha.test/news-2026-09", None)]
+    )
+
+    assert inserted == 1
+    assert len(posts.saved) == 2

@@ -8,7 +8,12 @@
 
 from __future__ import annotations
 
-from techletter.content.jobs import enqueue_embedding_requested, enqueue_summary_requested
+from techletter.content.jobs import (
+    PostRefPayload,
+    enqueue_content_fetch,
+    enqueue_embedding_requested,
+    enqueue_summary_requested,
+)
 from techletter.content.models import Post
 from techletter.core.jobs.models import PRIORITY_BACKFILL, PRIORITY_NORMAL
 from techletter.core.jobs.types import JobType
@@ -35,7 +40,7 @@ async def test_summary_enqueue_defaults_to_normal_priority() -> None:
     """RSS 수집이나 수동 등록은 기본 우선순위를 쓴다."""
     queue = FakeQueue()
 
-    await enqueue_summary_requested(queue, post())  # type: ignore[arg-type]
+    await enqueue_summary_requested(queue, PostRefPayload.of(post()))  # type: ignore[arg-type]
 
     assert queue.calls[0]["priority"] == PRIORITY_NORMAL
     assert queue.calls[0]["type"] == JobType.SUMMARY_REQUESTED
@@ -45,7 +50,7 @@ async def test_summary_enqueue_forwards_an_explicit_priority() -> None:
     """백필 호출자가 넘긴 priority가 실제로 queue.enqueue까지 전달돼야 한다."""
     queue = FakeQueue()
 
-    await enqueue_summary_requested(queue, post(), priority=PRIORITY_BACKFILL)  # type: ignore[arg-type]
+    await enqueue_summary_requested(queue, PostRefPayload.of(post()), priority=PRIORITY_BACKFILL)  # type: ignore[arg-type]
 
     assert queue.calls[0]["priority"] == PRIORITY_BACKFILL
 
@@ -68,3 +73,11 @@ async def test_embedding_enqueue_forwards_an_explicit_priority() -> None:
     )
 
     assert queue.calls[0]["priority"] == PRIORITY_BACKFILL
+
+
+async def test_a_content_fetch_is_its_own_job_type() -> None:
+    queue = FakeQueue()
+
+    await enqueue_content_fetch(queue, PostRefPayload.of(post()))  # type: ignore[arg-type]
+
+    assert queue.calls[0]["type"] == JobType.CONTENT_FETCH_REQUESTED

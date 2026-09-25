@@ -16,7 +16,7 @@ from techletter.core.llm.chat import LangChainChatClient, LlmGateway, RoutingCha
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
-from techletter.summary.handlers import SummaryRequestedHandler
+from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.pipeline import SummaryPipeline
 from techletter.summary.renderer import PlaywrightRenderer, Renderer
 from techletter.summary.summarizer import Summarizer
@@ -69,9 +69,13 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
         container.queue,
         container.settings.jobs,
         {
+            # 같은 워커가 두 단계를 모두 맡는다 — 가져오기는 브라우저가, 요약은 LLM이 필요하다.
+            JobType.CONTENT_FETCH_REQUESTED: ContentFetchHandler(
+                container.posts, pipeline, container.queue
+            ),
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
                 container.posts, pipeline, container.queue
-            )
+            ),
         },
         worker_id=f"summary-{uuid.uuid4().hex[:8]}",
         on_tick=heartbeat.touch,

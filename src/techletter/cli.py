@@ -299,10 +299,10 @@ def backfill_summaries(
     ),
     dry_run: bool = typer.Option(True, "--dry-run/--execute"),
 ) -> None:
-    """요약이 없는 포스트에 대해 요약 잡을 넣는다."""
+    """요약이 없는 포스트에 대해 잡을 넣는다. 본문이 있으면 요약만, 없으면 가져오기부터."""
 
     async def body(container: Container) -> None:
-        from techletter.content.jobs import enqueue_summary_requested  # noqa: PLC0415
+        from techletter.content.service import request_summary  # noqa: PLC0415
 
         posts = await container.posts.find_unsummarized(limit)
         if dry_run:
@@ -311,7 +311,7 @@ def backfill_summaries(
                 typer.echo(f"  {post.id}  {post.title[:60]}")
             return
         queued = [
-            await enqueue_summary_requested(container.queue, post, priority=priority)
+            (await request_summary(container.queue, container.posts, post, priority=priority))[1]
             for post in posts
         ]
         enqueued = sum(job is not None for job in queued)

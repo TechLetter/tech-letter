@@ -28,7 +28,7 @@ from techletter.embedding.chunker import Chunker
 from techletter.embedding.handlers import EmbeddingDeleteHandler, EmbeddingRequestedHandler
 from techletter.embedding.pipeline import EmbeddingPipeline
 from techletter.settings import EmbeddingSettings, SummarySettings
-from techletter.summary.handlers import SummaryRequestedHandler
+from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.pipeline import SummaryPipeline
 from techletter.summary.summarizer import Summarizer
 
@@ -100,18 +100,16 @@ async def pipeline_env(mongo_db, queue, vector_store, http_clients):
     embedding_settings = EmbeddingSettings(chunk_size=200, chunk_overlap=20)  # type: ignore[call-arg]
 
     aggregator = Aggregator(blogs, posts, RssFeeder(http_clients), queue, batch_size=10)
+    summary_pipeline = SummaryPipeline(
+        renderer,  # type: ignore[arg-type]
+        Summarizer(FakeSummaryLlm(), SummarySettings()),  # type: ignore[arg-type]
+    )
     summary_runner = JobRunner(
         queue,
         _job_settings(),
         {
-            JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
-                posts,
-                SummaryPipeline(
-                    renderer,  # type: ignore[arg-type]
-                    Summarizer(FakeSummaryLlm(), SummarySettings()),  # type: ignore[arg-type]
-                ),
-                queue,
-            )
+            JobType.CONTENT_FETCH_REQUESTED: ContentFetchHandler(posts, summary_pipeline, queue),
+            JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(posts, summary_pipeline, queue),
         },
         worker_id="summary-test",
     )
@@ -216,7 +214,9 @@ async def test_every_job_finishes(pipeline_env) -> None:
 
     assert stats["by_status"].get("dead", 0) == 0
     assert stats["by_status"].get("pending", 0) == 0
-    assert stats["by_status"]["done"] == 8  # 포스트 2건 × 잡 4종
+    assert (
+        stats["by_status"]["done"] == 10
+    )  # 포스트 2건 × 잡 5종(가져오기·요약·요약 반영·임베딩·임베딩 반영)
 
 
 async def test_the_renderer_is_called_with_the_feed_link(pipeline_env) -> None:
@@ -253,9 +253,11 @@ async def test_a_bot_blocked_page_dies_without_retrying(pipeline_env, mongo_db) 
     dead = [
         job
         async for job in mongo_db["jobs"].find(
-            {"type": JobType.SUMMARY_REQUESTED.value, "status": JobStatus.DEAD.value}
+            {"type": JobType.CONTENT_FETCH_REQUESTED.value, "status": JobStatus.DEAD.value}
         )
     ]
+    # 막힌 원문은 가져오기 단계에서 끝난다 — 요약(LLM) 잡은 생기지도 않는다.
+    assert await mongo_db["jobs"].count_documents({"type": JobType.SUMMARY_REQUESTED.value}) == 0
     assert len(dead) == 2
     assert all(job["attempt"] == 1 for job in dead)
     assert all(job["error_kind"] == "permanent" for job in dead)

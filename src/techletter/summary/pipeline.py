@@ -1,6 +1,11 @@
-"""요약 파이프라인: 렌더 → 추출 → 검증 → 요약.
+"""요약 파이프라인. 두 단계로 나뉘어 있고 각자 다른 잡이 부른다.
 
-각 단계의 실패를 **재시도 가능/불가로 나눈다**.
+- `fetch`: 원문 확보 → 추출 → 검증 → 썸네일 (`content.fetch_requested`)
+- `summarize`: 저장된 본문 → LLM 요약 (`summary.requested`)
+
+나눈 이유: 원문이 막혀 재시도할 때 LLM을 부르지 않고, LLM 한도에 걸려도
+받아 둔 원문을 버리지 않으며, 원문을 다시 받지 않고 재요약할 수 있다.
+각 단계의 실패는 **재시도 가능/불가로 나눈다**.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.summary.renderer import Renderer
     from techletter.summary.summarizer import Summarizer
 
-__all__ = ["SummaryOutcome", "SummaryPipeline"]
+__all__ = ["FetchedContent", "SummaryOutcome", "SummaryPipeline"]
 
 logger = get_logger(__name__)
 
@@ -28,13 +33,17 @@ _BLOCKED_REASONS = frozenset({"bot_blocked", "unresolved_page", "error_page", "c
 
 
 @dataclass(slots=True)
+class FetchedContent:
+    plain_text: str
+    thumbnail_url: str
+
+
+@dataclass(slots=True)
 class SummaryOutcome:
     summary: str
     categories: list[str]
     tags: list[str]
     model_name: str
-    plain_text: str
-    thumbnail_url: str
 
 
 class SummaryPipeline:
@@ -55,11 +64,11 @@ class SummaryPipeline:
         validate_plain_text(plain_text)
         return html, plain_text
 
-    async def run(self, url: str, feed_html: str | None = None) -> SummaryOutcome:
-        """`feed_html`이 있으면 페이지가 막혔을 때 그것으로 요약한다.
+    async def fetch(self, url: str, feed_html: str | None = None) -> FetchedContent:
+        """원문 본문과 썸네일. `feed_html`이 있으면 페이지가 막혔을 때 그것을 쓴다.
 
-        Medium은 서버 IP를 간헐적으로 막아 브라우저도 일반 HTTP도 403을 받는데,
-        같은 글이 RSS에는 본문째 실려 있다.
+        Medium은 서버 IP를 막아 브라우저도 일반 HTTP도 403을 받는데, 같은 글이
+        RSS에는 본문째 실려 있다.
         """
         try:
             # 대체 본문이 있으면 막힌 브라우저를 여러 번 열며 기다리지 않는다
@@ -72,24 +81,23 @@ class SummaryPipeline:
             html = feed_html
             plain_text = extract_plain_text(html)
             validate_plain_text(plain_text)
-            logger.info("page blocked; summarizing the feed content", extra={"url": url})
+            logger.info("page blocked; using the feed content", extra={"url": url})
 
-        result = await self._summarizer.summarize(plain_text)
-        if result.truncated_input:
-            logger.info("summary input truncated", extra={"url": url})
-
-        # 썸네일은 있으면 좋은 것이다. 실패해도 요약을 버리지 않는다.
+        # 썸네일은 있으면 좋은 것이다. 실패해도 본문을 버리지 않는다.
         thumbnail = ""
         try:
             thumbnail = await extract_thumbnail(html, url, self._image_client)
         except Exception:
             logger.warning("thumbnail extraction failed", extra={"url": url})
+        return FetchedContent(plain_text=plain_text, thumbnail_url=thumbnail)
 
+    async def summarize(self, plain_text: str) -> SummaryOutcome:
+        result = await self._summarizer.summarize(plain_text)
+        if result.truncated_input:
+            logger.info("summary input truncated")
         return SummaryOutcome(
             summary=result.summary,
             categories=result.categories,
             tags=result.tags,
             model_name=result.model_name,
-            plain_text=plain_text,
-            thumbnail_url=thumbnail,
         )

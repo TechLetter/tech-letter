@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from techletter.content.links import normalize_link
+from techletter.content.links import link_slug, normalize_link
 
 
 @pytest.mark.parametrize(
@@ -44,3 +44,18 @@ def test_all_known_tracking_parameters_are_removed() -> None:
     assert (
         normalize_link(f"https://example.com/article?{tracking}") == "https://example.com/article"
     )
+
+
+@pytest.mark.parametrize(
+    ("url", "slug"),
+    [
+        ("https://tech.socarcorp.kr/fe/2026/02/24/frame2-web.html", "frame2-web"),
+        ("https://tech.socar.kr/fe/2026/02/25/frame2-web", "frame2-web"),
+        ("https://insight.infograb.net/blog/2025/09/24/gitlab-dedicated/", "gitlab-dedicated"),
+        ("https://www.uber.com/us/en/blog/Taming-ML/", "taming-ml"),
+        ("https://alpha.test/", ""),
+        ("https://alpha.test/?p=123", ""),
+    ],
+)
+def test_the_slug_ignores_extension_trailing_slash_and_case(url: str, slug: str) -> None:
+    assert link_slug(url) == slug

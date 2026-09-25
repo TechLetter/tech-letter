@@ -51,13 +51,7 @@ class SummaryCompletedHandler:
             },
             "status.ai_summarized": True,
             "status.failed_reason": None,
-            # 요약의 대체 입력이었을 뿐이다. 끝났으면 자리만 차지한다.
-            "feed_html": None,
         }
-        if payload.plain_text:
-            updates["plain_text"] = payload.plain_text
-        if payload.thumbnail_url:
-            updates["thumbnail_url"] = payload.thumbnail_url
 
         if not await self._posts.apply_summary(payload.post_id, updates):
             # 요약하는 동안 포스트가 지워졌다. 재시도해도 의미가 없다.

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from techletter.content.jobs import (
+    PostRefPayload,
+    enqueue_content_fetch,
     enqueue_embedding_delete,
     enqueue_embedding_requested,
     enqueue_summary_requested,
@@ -20,12 +22,15 @@ from techletter.core.errors import (
     ResourceNotFoundError,
 )
 from techletter.core.ids import to_object_id
+from techletter.core.jobs.models import PRIORITY_NORMAL
+from techletter.core.jobs.types import JobType
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.models import ListPostsFilter
     from techletter.content.repositories import BlogRepository, PostRepository
+    from techletter.core.jobs.models import Job
     from techletter.core.jobs.queue import JobQueue
     from techletter.core.pagination import Page
 
@@ -42,6 +47,24 @@ def normalize_url(value: str) -> str:
 class BlogWithCount:
     blog: Blog
     post_count: int
+
+
+async def request_summary(
+    queue: JobQueue, posts: PostRepository, post: Post, *, priority: int = PRIORITY_NORMAL
+) -> tuple[JobType, Job | None]:
+    """본문이 이미 있으면 요약만, 없으면 가져오기부터 건다.
+
+    재요약(모델·주제 목록이 바뀌었을 때)에 원문을 다시 받지 않는다. 막힌 원문을
+    재시도하며 LLM을 부르는 일도 없다.
+    """
+    ref = PostRefPayload.of(post)
+    if await posts.get_plain_text(ref.post_id):
+        return JobType.SUMMARY_REQUESTED, await enqueue_summary_requested(
+            queue, ref, priority=priority
+        )
+    return JobType.CONTENT_FETCH_REQUESTED, await enqueue_content_fetch(
+        queue, ref, priority=priority
+    )
 
 
 class PostService:
@@ -94,7 +117,7 @@ class PostService:
         )
         if saved is None:
             raise ResourceConflictError("post with this link already exists", field="link")
-        await enqueue_summary_requested(self._queue, saved)
+        await enqueue_content_fetch(self._queue, PostRefPayload.of(saved))
         return saved
 
     async def delete(self, post_id: str) -> None:
@@ -103,9 +126,11 @@ class PostService:
         # 벡터는 별도 저장소(Qdrant)에 있어 문서와 같이 지워지지 않는다.
         await enqueue_embedding_delete(self._queue, [post_id], key=f"post:{post_id}")
 
-    async def retry_summary(self, post_id: str) -> None:
+    async def retry_summary(self, post_id: str) -> JobType:
+        """어드민의 "다시 요약". 어떤 잡을 걸었는지 돌려준다(상태 추적용)."""
         post = await self.get(post_id)
-        await enqueue_summary_requested(self._queue, post)
+        job_type, _ = await request_summary(self._queue, self._posts, post)
+        return job_type
 
     async def retry_embedding(self, post_id: str) -> None:
         await self.get(post_id)
