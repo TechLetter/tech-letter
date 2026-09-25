@@ -241,7 +241,6 @@ async def test_model_list_shape_has_no_internal_usage_fields(client, ctx) -> Non
         "uptime_24h",
         "uptime_30d",
         "avg_latency_ms",
-        "consecutive_failures",
         "latest_status",
         "daily",
     }
