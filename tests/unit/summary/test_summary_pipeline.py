@@ -99,6 +99,17 @@ def test_a_feed_body_that_extracts_to_nothing_is_not_usable() -> None:
     assert usable_feed_text(body) is None
 
 
+def test_a_feed_body_that_fails_extraction_is_not_usable() -> None:
+    """Go Blog 피드는 글 전체를 싣지만 추출기가 빈 문자열을 낸다. 잡을 죽이면 안 된다."""
+    body = (
+        '<div id="blog"><div id="content"><div class="Article"><h1>Title</h1>'
+        + "<p>Go now has a portable SIMD package for vector code.</p>" * 40
+        + "</div></div></div>"
+    )
+
+    assert usable_feed_text(body) is None
+
+
 def test_a_truncated_feed_body_is_not_usable() -> None:
     body = "<p>" + "본문 문장입니다. " * 300 + "</p><p>Continue reading on Medium »</p>"
 

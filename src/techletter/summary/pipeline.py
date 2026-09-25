@@ -47,10 +47,11 @@ def usable_feed_text(feed_html: str | None) -> str | None:
     """
     if not feed_html:
         return None
-    text = extract_plain_text(feed_html).strip()
-    if len(text) < FEED_TEXT_MIN_CHARS or _TRUNCATED_TAIL.search(text[-200:]):
-        return None
     try:
+        # 추출이 안 되는 피드도 있다(Go Blog). 페이지를 못 받는 게 아니니 잡을 죽이지 않는다.
+        text = extract_plain_text(feed_html).strip()
+        if len(text) < FEED_TEXT_MIN_CHARS or _TRUNCATED_TAIL.search(text[-200:]):
+            return None
         validate_plain_text(text)
     except PermanentError:
         return None
