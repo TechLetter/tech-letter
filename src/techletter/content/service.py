@@ -42,7 +42,12 @@ logger = get_logger(__name__)
 
 
 def normalize_url(value: str) -> str:
-    return value.strip().rstrip("/")
+    """앞뒤 공백만 지운다. 끝 슬래시는 그대로 둔다.
+
+    `/feed/`를 `/feed`로 바꿔 저장하면 301로 한 번 돌아 들어가는데, 그 경로로 오는
+    요청에 429를 주는 서버가 있다(Slack·Meta·Airbnb). 중복 검사는 두 형태를 모두 본다.
+    """
+    return value.strip()
 
 
 @dataclass(slots=True)

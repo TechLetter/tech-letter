@@ -200,7 +200,20 @@ async def test_creating_a_blog_returns_201(client, admin_headers) -> None:
     )
 
     assert response.status_code == 201
-    assert response.json()["url"] == "https://beta.test"
+    # 끝 슬래시를 지우지 않는다 — `/feed/`를 `/feed`로 바꾸면 301을 거치고, 그 요청에 429를 주는
+    # 서버가 있었다.
+    assert response.json()["url"] == "https://beta.test/"
+
+
+async def test_a_trailing_slash_does_not_hide_a_duplicate(client, admin_headers, seeded) -> None:
+    response = await client.post(
+        "/api/v1/admin/blogs",
+        json={"name": "Copy", "url": "https://other.test", "rss_url": f"{seeded['blog'].rss_url}/"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["field"] == "rss_url"
 
 
 async def test_a_duplicate_rss_url_is_409_with_the_field(client, admin_headers, seeded) -> None:

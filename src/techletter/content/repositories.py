@@ -622,9 +622,10 @@ class BlogRepository:
         기존 데이터에 끝 슬래시가 있는 것과 없는 것이 섞여 있어 두 형태를 모두 본다.
         """
         for field_name, value in (("rss_url", rss_url), ("url", url)):
-            if not value:
+            base = value.rstrip("/")
+            if not base:
                 continue
-            query: dict[str, Any] = {field_name: {"$in": [value, f"{value}/"]}}
+            query: dict[str, Any] = {field_name: {"$in": [base, f"{base}/"]}}
             if exclude_id is not None:
                 query["_id"] = {"$ne": exclude_id}
             if await self._col.find_one(query, projection={"_id": 1}):
