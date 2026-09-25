@@ -244,6 +244,8 @@ async def test_model_list_shape_has_no_internal_usage_fields(client, ctx) -> Non
         "latest_status",
         "daily",
         "info",
+        "recommend_score",
+        "recommended_rank",
     }
 
 

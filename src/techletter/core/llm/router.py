@@ -66,7 +66,7 @@ class ModelRouter:
     async def candidates(self, purpose: ModelPurpose) -> list[str]:
         """시도할 모델을 순서대로 준다.
 
-        1. 정상 모델 전체 (Intelligence 높은 순, 점수 없으면 24h 가용률·지연 순 — scouter가 정렬)
+        1. 지금 응답하는 모델 전체, 추천 점수(성능×가용성×속도) 높은 순 — scouter가 정렬
         2. scouter가 죽었으면 정적 폴백
         성적이 나쁜 모델은 뒤로 민다. 요약은 이 앞에 Gemini를 하루 예산만큼 먼저 쓴다
         (`Summarizer`).

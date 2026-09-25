@@ -7,11 +7,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from techletter.core.time import to_iso_z
+
+if TYPE_CHECKING:  # pragma: no cover
+    from techletter.core.llm.recommend import Recommendation
 
 __all__ = [
     "BenchmarksOut",
@@ -81,10 +84,18 @@ class ModelHealthOut(BaseModel):
     """최근 30일, 오래된 날부터. 기록이 없는 날은 빠진다."""
     info: ModelInfoOut | None = None
     """아직 한 번도 스캔되지 않은 모델은 없다."""
+    recommend_score: float
+    """성능 × 가용성 × 속도(`core/llm/recommend.py`). 요약·챗봇이 고르는 순서의 기준."""
+    recommended_rank: int | None
+    """1부터. 지금 응답하지 않는 모델은 없다."""
 
     @classmethod
     def of(
-        cls, row: dict[str, Any], daily: list[dict[str, Any]], meta: dict[str, Any] | None = None
+        cls,
+        row: dict[str, Any],
+        daily: list[dict[str, Any]],
+        meta: dict[str, Any] | None = None,
+        recommendation: Recommendation | None = None,
     ) -> ModelHealthOut:
         from techletter.core.llm.model_scan import classify_state  # noqa: PLC0415
 
@@ -102,6 +113,8 @@ class ModelHealthOut(BaseModel):
                 DailyUptimeOut(date=d["date"], uptime=round(float(d["uptime"]), 1)) for d in daily
             ],
             info=ModelInfoOut.of(meta) if meta else None,
+            recommend_score=recommendation.score if recommendation else 0.0,
+            recommended_rank=recommendation.rank if recommendation else None,
         )
 
 

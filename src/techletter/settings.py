@@ -151,7 +151,12 @@ class RouterSettings(BaseSettings):
     scouter_scan_concurrency: int = 2
     scouter_scan_request_delay_seconds: float = 0.3
     scouter_scan_prompt: str = "Respond with the exact text: OK"
-    min_uptime_24h: float = 90.0
+    # 추천 점수 = 성능^a × 가용성^b × 속도^c (`core/llm/recommend.py`).
+    # 지수가 클수록 그 요소가 세다. 가용성이 2인 이유: 1이면 가용률 30%인 GLM 5.2(33.7점)가
+    # 가용률 100%인 모델들 위에 섰다.
+    recommend_weight_capability: float = Field(default=1.0, alias="RECOMMEND_WEIGHT_CAPABILITY")
+    recommend_weight_availability: float = Field(default=2.0, alias="RECOMMEND_WEIGHT_AVAILABILITY")
+    recommend_weight_speed: float = Field(default=0.5, alias="RECOMMEND_WEIGHT_SPEED")
     # 스캔 1회 실패로 바로 "저하" 이벤트를 내면 단발성 네트워크 blip에도
     # 매시간 저하/복구가 반복된다(옛 스카우터가 별도로 "flapping" 이벤트까지
     # 만들어야 했던 문제). 연속 실패 횟수로 완충한다.
