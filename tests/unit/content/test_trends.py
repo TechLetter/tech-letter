@@ -1,193 +1,97 @@
-"""트렌드 집계 규칙."""
+"""주간 기술 흐름 — 순위는 다룬 회사 수, 대표 글은 회사가 겹치지 않게."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
-import pytest
+from bson import ObjectId
 
-from techletter.content.trends import TrendsService, normalize_tags, resolve_period
-from techletter.core.errors import InvalidRequestError
+from techletter.content.models import Post
+from techletter.content.repositories import TopicActivity
+from techletter.content.trends import TrendsService, pick_representatives
+
+NOW = datetime(2026, 9, 25, tzinfo=UTC)
 
 
 class FakePosts:
-    def __init__(
-        self,
-        windows: dict[tuple[datetime, datetime], list[dict[str, Any]]] | None = None,
-        series: list[dict[str, Any]] | None = None,
-    ) -> None:
-        self._windows = windows or {}
-        self._series = series or []
-        self.window_calls: list[tuple[datetime, datetime]] = []
+    def __init__(self, current: list[TopicActivity], previous: list[TopicActivity]) -> None:
+        self._by_window = {NOW - timedelta(days=7): current, NOW - timedelta(days=14): previous}
+        self.windows: list[tuple[datetime, datetime]] = []
 
-    async def tag_counts_between(self, published_from, published_to):
-        self.window_calls.append((published_from, published_to))
-        return self._windows.get((published_from, published_to), [])
+    async def topic_activity(self, published_from, published_to):
+        self.windows.append((published_from, published_to))
+        return self._by_window[published_from]
 
-    async def tag_series(self, tags, published_from, published_to, interval):
-        return self._series
+    async def activity_totals(self, published_from, published_to):
+        return 42, 9
+
+    async def get_many(self, post_ids):
+        return {pid: Post(title=pid) for pid in post_ids}
 
 
-def row(tag: str, count: int) -> dict[str, Any]:
-    return {"key": tag.lower(), "tag": tag, "count": count}
+def activity(topic: str, posts: int, blogs: int, recent=()) -> TopicActivity:
+    return TopicActivity(topic=topic, post_count=posts, blog_count=blogs, recent=list(recent))
 
 
-def test_period_lengths_match_the_current_service() -> None:
-    for period, days in (("30d", 30), ("180d", 180), ("365d", 365), ("3y", 1095)):
-        start, end = resolve_period(period)
-        assert (end - start).days == days
+def test_representatives_prefer_distinct_blogs() -> None:
+    recent = [("a1", "AWS"), ("a2", "AWS"), ("t1", "토스"), ("a3", "AWS"), ("k1", "카카오")]
+
+    assert pick_representatives(recent) == ["a1", "t1", "k1"]
 
 
-def test_unknown_period_is_a_client_error() -> None:
-    with pytest.raises(InvalidRequestError) as excinfo:
-        resolve_period("7d")
+def test_representatives_fill_up_when_few_blogs_wrote() -> None:
+    recent = [("a1", "AWS"), ("a2", "AWS"), ("a3", "AWS"), ("t1", "토스")]
 
-    assert excinfo.value.status == 400
-    assert "30d" in excinfo.value.details["allowed"]
+    assert pick_representatives(recent) == ["a1", "t1", "a2"]
 
 
-def test_normalize_tags_dedupes_case_insensitively_keeping_order() -> None:
-    assert normalize_tags([" Kafka ", "kafka", "Redis", ""]) == ["Kafka", "Redis"]
+async def test_topics_rank_by_blog_count_not_post_count() -> None:
+    """한 회사가 글을 몰아 써도 1위가 되지 않는다."""
+    posts = FakePosts(
+        current=[
+            activity("클라우드 아키텍처", posts=16, blogs=1),
+            activity("AI 에이전트·MCP", posts=6, blogs=5),
+            activity("RAG·검색", posts=7, blogs=5),
+        ],
+        previous=[activity("AI 에이전트·MCP", posts=2, blogs=2)],
+    )
+
+    result = await TrendsService(posts).weekly(limit=8, now=NOW)  # type: ignore[arg-type]
+
+    assert [i.topic for i in result.items] == ["RAG·검색", "AI 에이전트·MCP", "클라우드 아키텍처"]
+    agents = result.items[1]
+    assert (agents.previous_blog_count, agents.previous_post_count) == (2, 2)
+    assert result.items[0].previous_blog_count == 0  # 직전 주에 없던 주제
+    assert (result.post_count, result.blog_count) == (42, 9)
 
 
-async def test_previous_window_is_the_same_length_immediately_before() -> None:
-    posts = FakePosts()
+async def test_the_windows_are_last_week_and_the_week_before() -> None:
+    posts = FakePosts(current=[], previous=[])
 
-    result = await TrendsService(posts).rising_tags("30d", 10)  # type: ignore[arg-type]
+    result = await TrendsService(posts).weekly(limit=8, now=NOW)  # type: ignore[arg-type]
 
+    assert posts.windows == [
+        (NOW - timedelta(days=7), NOW),
+        (NOW - timedelta(days=14), NOW - timedelta(days=7)),
+    ]
     assert result.previous_to == result.from_at
-    assert result.from_at - result.previous_from == result.to - result.from_at
-    assert len(posts.window_calls) == 2
 
 
-async def test_growth_rate_is_undefined_for_a_brand_new_tag() -> None:
-    posts = FakePosts()
-    service = TrendsService(posts)  # type: ignore[arg-type]
-    current, previous = None, None
-
-    async def windows(published_from, published_to):
-        nonlocal current, previous
-        if current is None:
-            current = (published_from, published_to)
-            return [row("MCP", 12)]
-        previous = (published_from, published_to)
-        return []
-
-    posts.tag_counts_between = windows  # type: ignore[method-assign]
-    result = await service.rising_tags("30d", 10)
-
-    (item,) = result.items
-    assert item.previous_count == 0
-    assert item.delta == 12
-    assert item.growth_rate is None
-
-
-async def test_growth_rate_is_rounded_to_one_decimal() -> None:
-    calls = iter([[row("Rust", 7)], [row("Rust", 3)]])
-    posts = FakePosts()
-    posts.tag_counts_between = lambda *_: _next(calls)  # type: ignore[method-assign]
-
-    result = await TrendsService(posts).rising_tags("30d", 10)  # type: ignore[arg-type]
-
-    (item,) = result.items
-    assert item.delta == 4
-    assert item.growth_rate == 133.3
-
-
-async def test_ranked_by_delta_then_current_count_then_name() -> None:
-    calls = iter(
-        [
-            [row("bravo", 5), row("Alpha", 5), row("Charlie", 9)],
-            [row("Charlie", 4)],
-        ]
-    )
-    posts = FakePosts()
-    posts.tag_counts_between = lambda *_: _next(calls)  # type: ignore[method-assign]
-
-    result = await TrendsService(posts).rising_tags("30d", 10)  # type: ignore[arg-type]
-
-    # 셋 다 delta=5 동률. 다음 기준인 current_count 로 Charlie(9)가 앞서고,
-    # 남은 Alpha/bravo(5)는 대소문자를 무시한 이름순으로 갈린다.
-    assert [item.tag for item in result.items] == ["Charlie", "Alpha", "bravo"]
-
-
-async def test_limit_is_applied_after_ranking() -> None:
-    calls = iter([[row("a", 1), row("b", 9)], []])
-    posts = FakePosts()
-    posts.tag_counts_between = lambda *_: _next(calls)  # type: ignore[method-assign]
-
-    result = await TrendsService(posts).rising_tags("30d", 1)  # type: ignore[arg-type]
-
-    assert [item.tag for item in result.items] == ["b"]
-
-
-async def test_limit_below_one_still_returns_one_item() -> None:
-    calls = iter([[row("a", 1)], []])
-    posts = FakePosts()
-    posts.tag_counts_between = lambda *_: _next(calls)  # type: ignore[method-assign]
-
-    result = await TrendsService(posts).rising_tags("30d", 0)  # type: ignore[arg-type]
-
-    assert len(result.items) == 1
-
-
-async def test_bad_interval_is_rejected() -> None:
-    with pytest.raises(InvalidRequestError):
-        await TrendsService(FakePosts()).tag_series(["kafka"], "30d", "hour")  # type: ignore[arg-type]
-
-
-async def test_requested_tags_without_data_keep_an_empty_series() -> None:
-    """차트 범례가 요청한 태그 수만큼 유지돼야 한다."""
+async def test_other_is_left_out_and_the_limit_applies() -> None:
     posts = FakePosts(
-        series=[
-            {
-                "key": "kafka",
-                "tag": "Kafka",
-                "bucket": datetime(2025, 1, 1, tzinfo=UTC),
-                "post_count": 3,
-                "blog_count": 2,
-            }
-        ]
+        current=[activity("기타", 30, 20)] + [activity(f"주제{i}", 1, 10 - i) for i in range(10)],
+        previous=[],
     )
 
-    result = await TrendsService(posts).tag_series(["kafka", "redis"], "30d", "day")  # type: ignore[arg-type]
+    result = await TrendsService(posts).weekly(limit=3, now=NOW)  # type: ignore[arg-type]
 
-    assert [s.tag for s in result.series] == ["Kafka", "redis"]
-    assert len(result.series[0].points) == 1
-    assert result.series[1].points == []
+    assert [i.topic for i in result.items] == ["주제0", "주제1", "주제2"]
 
 
-async def test_display_name_comes_from_stored_documents() -> None:
-    posts = FakePosts(
-        series=[
-            {
-                "key": "kafka",
-                "tag": "Apache Kafka",
-                "bucket": datetime(2025, 1, 1, tzinfo=UTC),
-                "post_count": 1,
-                "blog_count": 1,
-            }
-        ]
-    )
+async def test_representative_posts_are_loaded_in_order() -> None:
+    oid = str(ObjectId())
+    posts = FakePosts(current=[activity("모바일", 1, 1, recent=[(oid, "라인")])], previous=[])
 
-    result = await TrendsService(posts).tag_series(["KAFKA"], "30d", "week")  # type: ignore[arg-type]
+    result = await TrendsService(posts).weekly(limit=8, now=NOW)  # type: ignore[arg-type]
 
-    assert result.series[0].tag == "Apache Kafka"
-    assert result.interval == "week"
-
-
-def _next(calls):
-    """iterator 를 코루틴처럼 쓰기 위한 어댑터."""
-
-    async def _coro():
-        return next(calls)
-
-    return _coro()
-
-
-def test_period_window_ends_at_now() -> None:
-    start, end = resolve_period("30d")
-
-    assert end - datetime.now(UTC) < timedelta(seconds=5)
-    assert start < end
+    assert [p.title for p in result.items[0].posts] == [oid]

@@ -1,7 +1,8 @@
-"""태그 트렌드 집계.
+"""주간 기술 흐름.
 
-기간 정의: `3y`는 1095일(=365*3)이며 윤년을 보정하지 않는다.
-"직전 기간"은 현재 기간과 같은 길이만큼 앞으로 민 구간이다.
+최근 7일과 직전 7일을 주제별로 비교한다. 순위는 **다룬 회사 수**로 매긴다 —
+글 수로 매기면 글을 많이 내는 한 회사(AWS 블로그 한 곳이 한 달에 16건)가
+그대로 1위가 된다. 여러 회사가 같이 다룬 주제가 흐름에 가깝다.
 """
 
 from __future__ import annotations
@@ -10,179 +11,109 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from techletter.core.errors import InvalidRequestError
 from techletter.core.time import utcnow
+from techletter.summary.topics import OTHER
 
 if TYPE_CHECKING:  # pragma: no cover
     from datetime import datetime
 
     from techletter.content.models import Post
-    from techletter.content.repositories import PostRepository
-    from techletter.core.pagination import Page
+    from techletter.content.repositories import PostRepository, TopicActivity
 
-__all__ = [
-    "INTERVALS",
-    "PERIOD_DAYS",
-    "RisingTag",
-    "RisingTags",
-    "SeriesPoint",
-    "TagSeries",
-    "TrendSeries",
-    "TrendsService",
-    "normalize_tags",
-    "resolve_period",
-]
+__all__ = ["TopicTrend", "TrendsService", "WeeklyTrends", "pick_representatives"]
 
-PERIOD_DAYS = {"30d": 30, "180d": 180, "365d": 365, "3y": 365 * 3}
-INTERVALS = frozenset({"day", "week", "month"})
+WINDOW = timedelta(days=7)
+REPRESENTATIVES = 3
 
 
 @dataclass(frozen=True, slots=True)
-class RisingTag:
-    tag: str
-    current_count: int
-    previous_count: int
-    delta: int
-    growth_rate: float | None
+class TopicTrend:
+    topic: str
+    blog_count: int
+    post_count: int
+    previous_blog_count: int
+    previous_post_count: int
+    posts: list[Post] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
-class RisingTags:
+class WeeklyTrends:
     from_at: datetime
     to: datetime
     previous_from: datetime
     previous_to: datetime
-    items: list[RisingTag]
-
-
-@dataclass(frozen=True, slots=True)
-class SeriesPoint:
-    bucket: datetime
     post_count: int
     blog_count: int
+    items: list[TopicTrend]
 
 
-@dataclass(frozen=True, slots=True)
-class TagSeries:
-    tag: str
-    points: list[SeriesPoint] = field(default_factory=list)
+def pick_representatives(recent: list[tuple[str, str]], limit: int = REPRESENTATIVES) -> list[str]:
+    """최근 글부터 고르되 회사가 겹치지 않게 한다. 모자라면 겹쳐도 채운다.
 
-
-@dataclass(frozen=True, slots=True)
-class TrendSeries:
-    from_at: datetime
-    to: datetime
-    interval: str
-    series: list[TagSeries]
-
-
-def resolve_period(period: str) -> tuple[datetime, datetime]:
-    days = PERIOD_DAYS.get(period)
-    if days is None:
-        raise InvalidRequestError(
-            f"unsupported period: {period}",
-            details={"allowed": sorted(PERIOD_DAYS)},
-        )
-    now = utcnow()
-    return now - timedelta(days=days), now
-
-
-def normalize_tags(tags: list[str]) -> list[str]:
-    """공백을 제거하고 대소문자 기준으로 중복을 없앤다. 입력 순서는 유지한다."""
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for tag in tags:
-        value = tag.strip()
-        key = value.lower()
-        if not value or key in seen:
-            continue
-        normalized.append(value)
-        seen.add(key)
-    return normalized
+    `recent`는 (post_id, blog_name)을 최근 순으로 담는다.
+    """
+    picked: list[str] = []
+    seen_blogs: set[str] = set()
+    for post_id, blog in recent:
+        if blog not in seen_blogs:
+            picked.append(post_id)
+            seen_blogs.add(blog)
+        if len(picked) == limit:
+            return picked
+    for post_id, _ in recent:
+        if post_id not in picked:
+            picked.append(post_id)
+        if len(picked) == limit:
+            break
+    return picked
 
 
 class TrendsService:
     def __init__(self, posts: PostRepository) -> None:
         self._posts = posts
 
-    async def rising_tags(self, period: str, limit: int) -> RisingTags:
-        current_from, current_to = resolve_period(period)
-        duration = current_to - current_from
-        previous_from, previous_to = current_from - duration, current_from
+    async def weekly(self, limit: int, now: datetime | None = None) -> WeeklyTrends:
+        to = now or utcnow()
+        from_at = to - WINDOW
+        previous_from = from_at - WINDOW
 
-        current_rows = await self._posts.tag_counts_between(current_from, current_to)
-        previous_rows = await self._posts.tag_counts_between(previous_from, previous_to)
-        previous_counts = {row["key"]: row["count"] for row in previous_rows}
+        current = await self._posts.topic_activity(from_at, to)
+        previous = {
+            row.topic: row for row in await self._posts.topic_activity(previous_from, from_at)
+        }
+        totals = await self._posts.activity_totals(from_at, to)
 
-        items = []
-        for row in current_rows:
-            current_count = int(row["count"])
-            previous_count = int(previous_counts.get(row["key"], 0))
-            delta = current_count - previous_count
-            items.append(
-                RisingTag(
-                    tag=str(row["tag"]),
-                    current_count=current_count,
-                    previous_count=previous_count,
-                    delta=delta,
-                    # 직전 기간에 없던 태그는 증가율을 정의할 수 없다(0으로 나눔).
-                    growth_rate=round(delta / previous_count * 100, 1) if previous_count else None,
-                )
-            )
-        items.sort(key=lambda item: (-item.delta, -item.current_count, item.tag.lower()))
+        rows = [row for row in current if row.topic != OTHER]
+        rows.sort(key=lambda row: (-row.blog_count, -row.post_count, row.topic))
+        rows = rows[: max(1, limit)]
 
-        return RisingTags(
-            from_at=current_from,
-            to=current_to,
+        picks = {row.topic: pick_representatives(row.recent) for row in rows}
+        found = await self._posts.get_many([pid for ids in picks.values() for pid in ids])
+
+        return WeeklyTrends(
+            from_at=from_at,
+            to=to,
             previous_from=previous_from,
-            previous_to=previous_to,
-            items=items[: max(1, limit)],
-        )
-
-    async def tag_series(self, tags: list[str], period: str, interval: str) -> TrendSeries:
-        if interval not in INTERVALS:
-            raise InvalidRequestError(
-                f"unsupported interval: {interval}", details={"allowed": sorted(INTERVALS)}
-            )
-        published_from, published_to = resolve_period(period)
-        wanted = normalize_tags(tags)
-        rows = await self._posts.tag_series(wanted, published_from, published_to, interval)
-
-        points: dict[str, list[SeriesPoint]] = {}
-        # 표시 이름은 요청한 표기를 기본으로 하되, DB에 실제로 저장된 표기가 있으면 그것을 쓴다.
-        display = {tag.lower(): tag for tag in wanted}
-        for row in rows:
-            key = str(row["key"])
-            display[key] = str(row["tag"])
-            points.setdefault(key, []).append(
-                SeriesPoint(
-                    bucket=row["bucket"],
-                    post_count=int(row["post_count"]),
-                    blog_count=int(row["blog_count"]),
+            previous_to=from_at,
+            post_count=totals[0],
+            blog_count=totals[1],
+            items=[
+                TopicTrend(
+                    topic=row.topic,
+                    blog_count=row.blog_count,
+                    post_count=row.post_count,
+                    previous_blog_count=_blogs(previous.get(row.topic)),
+                    previous_post_count=_posts(previous.get(row.topic)),
+                    posts=[found[pid] for pid in picks[row.topic] if pid in found],
                 )
-            )
-
-        return TrendSeries(
-            from_at=published_from,
-            to=published_to,
-            interval=interval,
-            # 요청한 태그는 데이터가 없어도 빈 시계열로 남긴다(차트 범례 유지).
-            series=[
-                TagSeries(tag=display.get(tag.lower(), tag), points=points.get(tag.lower(), []))
-                for tag in wanted
+                for row in rows
             ],
         )
 
-    async def list_posts(self, tags: list[str], period: str, page: Page) -> tuple[list[Post], int]:
-        from techletter.content.models import ListPostsFilter  # noqa: PLC0415
 
-        published_from, published_to = resolve_period(period)
-        return await self._posts.list_posts(
-            ListPostsFilter(
-                tags=normalize_tags(tags),
-                published_from=published_from,
-                published_to=published_to,
-                summarized=True,
-            ),
-            page,
-        )
+def _blogs(row: TopicActivity | None) -> int:
+    return row.blog_count if row else 0
+
+
+def _posts(row: TopicActivity | None) -> int:
+    return row.post_count if row else 0

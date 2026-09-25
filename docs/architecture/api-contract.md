@@ -156,9 +156,8 @@
 `guard.action ∈ {pass, sanitize, block}`, `memory.status ∈ {ready, pending, failed}`.
 
 ### 2.7 Trends
-- `GET /trends/rising` → `{"period": {...}, "items": [{tag, current_count, previous_count, delta, growth_rate}], "total": n}`
-- `GET /trends/series` → `{"period": {...}, "items": [{tag, points: [{bucket, post_count, blog_count}]}]}`
-- `GET /trends/posts` → 표준 목록 봉투 + `Post` 배열
+- `GET /trends/weekly` → `{"period": {from_at, to, previous_from, previous_to}, "post_count": n, "blog_count": n, "items": [{topic, blog_count, post_count, previous_blog_count, previous_post_count, posts: Post[≤3]}]}`
+  - 최근 7일 대 직전 7일. 주제(`categories`) 단위로 **다룬 회사 수** 순으로 정렬하고 `기타`는 뺀다. 대표 글은 최근 글부터, 회사가 겹치지 않게 고른다.
 
 ### 2.8 Filters
 `{"items": [{"name": "백엔드", "count": 12}], "total": 8}` / 블로그는 `{"id","name","count"}`.
@@ -218,9 +217,7 @@
 | GET | `/filters/categories` | - | `blog_id, tags[]` | `{items,total}` |
 | GET | `/filters/tags` | - | `blog_id, categories[]` | `{items,total}` |
 | GET | `/filters/blogs` | - | `categories[], tags[]` | `{items,total}` |
-| GET | `/trends/rising` | - | `period, limit` | 2.7 |
-| GET | `/trends/series` | - | `tags[], period, interval` | 2.7 |
-| GET | `/trends/posts` | - | `tags[], period, page, page_size` | 목록 + `Post[]` |
+| GET | `/trends/weekly` | - | `limit`(기본 8, 최대 30) | 2.7 |
 | GET | `/llm-models/summary` | - | | 2.11 |
 | GET | `/llm-models` | - | | 목록 + `ModelHealth[]`(2.11) |
 | GET | `/llm-models/{model_id}/history` | - | `period` | 목록 + 일별 집계[](2.11) |

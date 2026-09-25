@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.filters import BlogFilterItem, FilterItem
     from techletter.content.models import Post
     from techletter.content.service import BlogWithCount
-    from techletter.content.trends import RisingTags, TrendSeries
+    from techletter.content.trends import WeeklyTrends
 
 __all__ = [
     "AdminBlogOut",
@@ -28,12 +28,9 @@ __all__ = [
     "FilterOut",
     "PostOut",
     "PostStatusOut",
-    "RisingTagOut",
-    "RisingTagsOut",
-    "SeriesPointOut",
     "SourceOut",
-    "TagSeriesOut",
-    "TrendSeriesOut",
+    "TopicTrendOut",
+    "WeeklyTrendsOut",
 ]
 
 
@@ -209,94 +206,53 @@ class BlogFilterOut(BaseModel):
         return cls(id=item.blog_id, name=item.name, count=item.count)
 
 
-class RisingTagOut(BaseModel):
-    tag: str
-    current_count: int
-    previous_count: int
-    delta: int
-    growth_rate: float | None
+class TopicTrendOut(BaseModel):
+    topic: str
+    blog_count: int
+    post_count: int
+    previous_blog_count: int
+    previous_post_count: int
+    posts: list[PostOut]
 
 
-class RisingPeriodOut(BaseModel):
+class WeeklyPeriodOut(BaseModel):
     from_at: str | None
     to: str | None
     previous_from: str | None
     previous_to: str | None
 
 
-class RisingTagsOut(BaseModel):
-    period: RisingPeriodOut
-    items: list[RisingTagOut]
-    total: int
+class WeeklyTrendsOut(BaseModel):
+    period: WeeklyPeriodOut
+    post_count: int
+    blog_count: int
+    items: list[TopicTrendOut]
 
     @classmethod
-    def of(cls, result: RisingTags) -> RisingTagsOut:
+    def of(cls, result: WeeklyTrends, bookmarked: set[str]) -> WeeklyTrendsOut:
         return cls(
-            period=RisingPeriodOut(
+            period=WeeklyPeriodOut(
                 from_at=to_iso_z(result.from_at),
                 to=to_iso_z(result.to),
                 previous_from=to_iso_z(result.previous_from),
                 previous_to=to_iso_z(result.previous_to),
             ),
+            post_count=result.post_count,
+            blog_count=result.blog_count,
             items=[
-                RisingTagOut(
-                    tag=item.tag,
-                    current_count=item.current_count,
-                    previous_count=item.previous_count,
-                    delta=item.delta,
-                    growth_rate=item.growth_rate,
+                TopicTrendOut(
+                    topic=item.topic,
+                    blog_count=item.blog_count,
+                    post_count=item.post_count,
+                    previous_blog_count=item.previous_blog_count,
+                    previous_post_count=item.previous_post_count,
+                    posts=[
+                        PostOut.of(post, bookmarked=str(post.id) in bookmarked)
+                        for post in item.posts
+                    ],
                 )
                 for item in result.items
             ],
-            total=len(result.items),
-        )
-
-
-class SeriesPointOut(BaseModel):
-    bucket: str | None
-    post_count: int
-    blog_count: int
-
-
-class TagSeriesOut(BaseModel):
-    tag: str
-    points: list[SeriesPointOut]
-
-
-class SeriesPeriodOut(BaseModel):
-    from_at: str | None
-    to: str | None
-    interval: str
-
-
-class TrendSeriesOut(BaseModel):
-    period: SeriesPeriodOut
-    items: list[TagSeriesOut]
-    total: int
-
-    @classmethod
-    def of(cls, result: TrendSeries) -> TrendSeriesOut:
-        return cls(
-            period=SeriesPeriodOut(
-                from_at=to_iso_z(result.from_at),
-                to=to_iso_z(result.to),
-                interval=result.interval,
-            ),
-            items=[
-                TagSeriesOut(
-                    tag=series.tag,
-                    points=[
-                        SeriesPointOut(
-                            bucket=to_iso_z(point.bucket),
-                            post_count=point.post_count,
-                            blog_count=point.blog_count,
-                        )
-                        for point in series.points
-                    ],
-                )
-                for series in result.series
-            ],
-            total=len(result.series),
         )
 
 

@@ -31,9 +31,8 @@ from techletter.api.schemas.content import (
     BlogFilterOut,
     FilterOut,
     PostOut,
-    RisingTagsOut,
     SourceOut,
-    TrendSeriesOut,
+    WeeklyTrendsOut,
 )
 from techletter.api.schemas.llm import (
     ModelEventOut,
@@ -85,11 +84,10 @@ __all__ = [
     "PostIn",
     "PostOut",
     "RetryBulkIn",
-    "RisingTagsOut",
     "SourceOut",
     "SuggestedQuestionIn",
     "SuggestedQuestionOut",
     "TokenIn",
     "TokenOut",
-    "TrendSeriesOut",
+    "WeeklyTrendsOut",
 ]

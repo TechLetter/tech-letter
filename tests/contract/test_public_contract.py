@@ -26,9 +26,8 @@ POST_KEYS = {
 # ── 봉투 ────────────────────────────────────────────────────────────
 async def test_every_list_uses_one_envelope(client, seeded) -> None:
     """모든 목록 응답이 같은 봉투를 써야 한다."""
-    for path in ("/api/v1/posts", "/api/v1/trends/posts"):
-        body = (await client.get(path)).json()
-        assert set(body) == PAGED_KEYS, path
+    body = (await client.get("/api/v1/posts")).json()
+    assert set(body) == PAGED_KEYS
 
 
 async def test_total_pages_is_computed_for_the_client(client, seeded) -> None:
@@ -177,41 +176,28 @@ async def test_blog_filters_carry_an_id(client, seeded) -> None:
 
 
 # ── 트렌드 ──────────────────────────────────────────────────────────
-async def test_rising_tags_shape(client, seeded) -> None:
-    body = (await client.get("/api/v1/trends/rising")).json()
+async def test_weekly_trends_shape(client, seeded) -> None:
+    body = (await client.get("/api/v1/trends/weekly")).json()
 
-    assert set(body) == {"period", "items", "total"}
+    assert set(body) == {"period", "post_count", "blog_count", "items"}
     assert set(body["period"]) == {"from_at", "to", "previous_from", "previous_to"}
-    if body["items"]:
-        assert set(body["items"][0]) == {
-            "tag",
-            "current_count",
-            "previous_count",
-            "delta",
-            "growth_rate",
+    for item in body["items"]:
+        assert set(item) == {
+            "topic",
+            "blog_count",
+            "post_count",
+            "previous_blog_count",
+            "previous_post_count",
+            "posts",
         }
+        assert len(item["posts"]) <= 3
+        for post in item["posts"]:
+            assert set(post) == POST_KEYS
 
 
-async def test_series_uses_items_not_series(client, seeded) -> None:
-    body = (await client.get("/api/v1/trends/series?tags=Kafka")).json()
-
-    assert set(body) == {"period", "items", "total"}
-    assert body["items"][0]["tag"] == "Kafka"
-
-
-async def test_an_unknown_period_is_a_typed_400(client) -> None:
-    response = await client.get("/api/v1/trends/rising?period=7d")
-
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "request.invalid"
-    assert "30d" in response.json()["error"]["details"]["allowed"]
-
-
-async def test_an_unknown_interval_is_a_typed_400(client) -> None:
-    response = await client.get("/api/v1/trends/series?tags=Kafka&interval=hour")
-
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "request.invalid"
+async def test_the_old_trend_endpoints_are_gone(client) -> None:
+    for path in ("/api/v1/trends/rising", "/api/v1/trends/series", "/api/v1/trends/posts"):
+        assert (await client.get(path)).status_code == 404, path
 
 
 # ── 모델 상태 ───────────────────────────────────────────────────────

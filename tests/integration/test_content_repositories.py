@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -298,54 +298,33 @@ async def test_blog_counts_report_id_name_and_total(posts, blogs) -> None:
     assert rows == [(str(alpha.id), "Alpha", 2)]
 
 
-async def test_tag_counts_between_ignores_unsummarized_posts(posts, blogs) -> None:
-    blog = await make_blog(blogs, "Alpha")
-    await make_post(posts, blog, "a", tags=["Rust"], published=at(2))
-    await make_post(posts, blog, "b", tags=["Rust"], published=at(3), summarized=False)
-
-    rows = await posts.tag_counts_between(at(1), at(9))
-
-    assert rows == [{"key": "rust", "tag": "Rust", "count": 1}]
-
-
-async def test_tag_counts_between_window_excludes_the_upper_bound(posts, blogs) -> None:
-    blog = await make_blog(blogs, "Alpha")
-    await make_post(posts, blog, "inside", tags=["Go"], published=at(1))
-    await make_post(posts, blog, "edge", tags=["Go"], published=at(5))
-
-    rows = await posts.tag_counts_between(at(1), at(5))
-
-    assert rows[0]["count"] == 1
-
-
-async def test_tag_series_buckets_by_day_and_counts_distinct_blogs(posts, blogs) -> None:
+async def test_topic_activity_counts_posts_and_distinct_blogs(posts, blogs) -> None:
     alpha = await make_blog(blogs, "Alpha")
     beta = await make_blog(blogs, "Beta")
-    await make_post(posts, alpha, "a", tags=["Kafka"], published=at(1))
-    await make_post(posts, beta, "b", tags=["kafka"], published=at(1))
-    await make_post(posts, alpha, "c", tags=["Kafka"], published=at(3))
+    old = await make_post(posts, alpha, "a", categories=["RAG·검색"], published=at(1))
+    new = await make_post(posts, alpha, "b", categories=["RAG·검색", "모바일"], published=at(3))
+    other = await make_post(posts, beta, "c", categories=["RAG·검색"], published=at(2))
+    await make_post(
+        posts, beta, "draft", categories=["RAG·검색"], published=at(2), summarized=False
+    )
+    await make_post(posts, beta, "edge", categories=["RAG·검색"], published=at(9))
 
-    rows = await posts.tag_series(["Kafka"], at(1), at(9), "day")
+    rows = {row.topic: row for row in await posts.topic_activity(at(1), at(9))}
 
-    assert [(r["bucket"].day, r["post_count"], r["blog_count"]) for r in rows] == [
-        (1, 2, 2),
-        (3, 1, 1),
-    ]
-
-
-async def test_tag_series_month_buckets_collapse_the_window(posts, blogs) -> None:
-    blog = await make_blog(blogs, "Alpha")
-    await make_post(posts, blog, "a", tags=["Go"], published=at(1))
-    await make_post(posts, blog, "b", tags=["Go"], published=at(20))
-
-    rows = await posts.tag_series(["Go"], at(1), datetime(2025, 4, 1, tzinfo=UTC), "month")
-
-    assert len(rows) == 1
-    assert rows[0]["post_count"] == 2
+    rag = rows["RAG·검색"]
+    assert (rag.post_count, rag.blog_count) == (3, 2)  # 요약 전 글, 상한 경계는 뺀다
+    assert rag.recent == [(str(new.id), "Alpha"), (str(other.id), "Beta"), (str(old.id), "Alpha")]
+    assert (rows["모바일"].post_count, rows["모바일"].blog_count) == (1, 1)
 
 
-async def test_tag_series_without_tags_skips_the_query(posts) -> None:
-    assert await posts.tag_series([], at(1), at(9), "day") == []
+async def test_activity_totals_count_summarized_posts_and_blogs(posts, blogs) -> None:
+    alpha = await make_blog(blogs, "Alpha")
+    beta = await make_blog(blogs, "Beta")
+    await make_post(posts, alpha, "a", published=at(2))
+    await make_post(posts, alpha, "b", published=at(3))
+    await make_post(posts, beta, "c", published=at(3), summarized=False)
+
+    assert await posts.activity_totals(at(1), at(9)) == (2, 1)
 
 
 # ── 블로그 ──────────────────────────────────────────────────────────
@@ -488,22 +467,6 @@ async def test_indexes_use_the_existing_names(mongo_db) -> None:
         "idx_tags_published_at",
         "idx_categories_published_at",
     } <= names
-
-
-async def test_a_period_boundary_is_not_shifted_by_local_time(posts, blogs) -> None:
-    """$dateTrunc 를 UTC 로 고정하지 않으면 서버 타임존에 따라 버킷이 밀린다."""
-    blog = await make_blog(blogs, "Alpha")
-    await make_post(
-        posts, blog, "midnight", tags=["Go"], published=datetime(2025, 3, 3, 0, 30, tzinfo=UTC)
-    )
-    await make_post(
-        posts, blog, "late", tags=["Go"], published=datetime(2025, 3, 3, 23, 30, tzinfo=UTC)
-    )
-
-    rows = await posts.tag_series(["Go"], at(1) - timedelta(days=1), at(9), "day")
-
-    assert len(rows) == 1
-    assert rows[0]["bucket"] == datetime(2025, 3, 3, tzinfo=UTC)
 
 
 # ── 주제 재분류 ─────────────────────────────────────────────────────

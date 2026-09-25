@@ -36,7 +36,7 @@ TOPICS = (
     Topic(
         "ai-agents",
         "AI 에이전트·MCP",
-        "에이전트 설계, 도구 호출, MCP, 멀티 에이전트, 워크플로 자동화",
+        "AI 에이전트 설계, 도구 호출, MCP, 멀티 에이전트, LLM 기반 워크플로 자동화",
     ),
     Topic("rag-search", "RAG·검색", "검색 증강 생성, 벡터 DB, 임베딩, 검색·랭킹 시스템"),
     Topic(
