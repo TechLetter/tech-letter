@@ -57,6 +57,8 @@ class ContentFetchHandler:
             ref.post_id, fetched.plain_text, fetched.thumbnail_url
         ):
             raise PermanentError(f"post not found: {ref.post_id}", reason="post_deleted")
+        if fetched.published_at:
+            await self._posts.correct_published_at(ref.post_id, fetched.published_at)
         await enqueue_summary_requested(self._queue, ref, priority=job.priority)
         logger.info(
             "content fetched", extra={"post_id": ref.post_id, "chars": len(fetched.plain_text)}
