@@ -91,4 +91,6 @@ class ListPostsFilter:
     published_to: MongoDateTime | None = None
     summarized: bool | None = None
     embedded: bool | None = None
+    failed: bool | None = None
+    """True면 요약이 영구 실패한 글(`status.failed_reason`이 있는 글)만."""
     search: str | None = None

@@ -23,6 +23,7 @@ async def list_posts(
     summarized: StrQ = None,
     embedded: StrQ = None,
     blog_id: StrQ = None,
+    failed: StrQ = None,
     q: StrQ = None,
 ) -> Paged[AdminPostOut]:
     paging = parse_page(page, page_size)
@@ -31,6 +32,7 @@ async def list_posts(
             blog_id=(blog_id or "").strip() or None,
             summarized=lenient_bool(summarized),
             embedded=lenient_bool(embedded),
+            failed=lenient_bool(failed),
             search=(q or "").strip() or None,
         ),
         paging,
