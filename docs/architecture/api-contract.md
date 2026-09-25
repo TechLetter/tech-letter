@@ -196,7 +196,7 @@
   "uptime_24h": 96.5, "uptime_30d": 97.2, "avg_latency_ms": 1180, "consecutive_failures": 0,
   "latest_status": "OK", "daily": [{ "date": "2026-09-06", "uptime": 95.8 }] }
 ```
-`state ∈ {healthy, degraded, down}` — 24시간 가용률 90% 이상 / 50% 이상 / 그 미만(요약 숫자와 같은 기준). `daily`는 최근 30일, 오래된 날부터이며 기록이 없는 날은 빠진다.
+`state ∈ {healthy, degraded, down}` — 마지막 체크가 실패면 `down`(챗봇에서 선택 불가), 성공이면 24시간 가용률 90% 이상 `healthy`, 미만 `degraded`. 요약 숫자도 같은 기준이다. `daily`는 최근 30일, 오래된 날부터이며 기록이 없는 날은 빠진다.
 
 ## 3. 엔드포인트
 
