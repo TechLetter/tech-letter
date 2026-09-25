@@ -47,11 +47,17 @@ class WeeklyTrends:
     items: list[TopicTrend]
 
 
-def pick_representatives(recent: list[tuple[str, str]], limit: int = REPRESENTATIVES) -> list[str]:
+def pick_representatives(
+    recent: list[tuple[str, str]],
+    limit: int = REPRESENTATIVES,
+    exclude: set[str] | None = None,
+) -> list[str]:
     """최근 글부터 고르되 회사가 겹치지 않게 한다. 모자라면 겹쳐도 채운다.
 
-    `recent`는 (post_id, blog_name)을 최근 순으로 담는다.
+    `recent`는 (post_id, blog_name)을 최근 순으로 담는다. `exclude`는 윗순위
+    주제에서 이미 보여 준 글이다 — 주제가 여러 개인 글이 카드마다 반복되지 않게.
     """
+    recent = [(pid, blog) for pid, blog in recent if pid not in (exclude or set())]
     picked: list[str] = []
     seen_blogs: set[str] = set()
     for post_id, blog in recent:
@@ -87,7 +93,11 @@ class TrendsService:
         rows.sort(key=lambda row: (-row.blog_count, -row.post_count, row.topic))
         rows = rows[: max(1, limit)]
 
-        picks = {row.topic: pick_representatives(row.recent) for row in rows}
+        shown: set[str] = set()
+        picks: dict[str, list[str]] = {}
+        for row in rows:  # 순위 순. 윗순위 카드가 먼저 고른다.
+            picks[row.topic] = pick_representatives(row.recent, exclude=shown)
+            shown.update(picks[row.topic])
         found = await self._posts.get_many([pid for ids in picks.values() for pid in ids])
 
         return WeeklyTrends(
