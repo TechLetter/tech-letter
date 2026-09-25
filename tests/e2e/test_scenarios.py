@@ -85,8 +85,8 @@ async def test_bookmark_round_trip(page, ui_server, seeded, sign_in, console_err
 
 
 # ── E3: 트렌드 ──────────────────────────────────────────────────────
-async def test_trends_renders_from_items(page, ui_server, seeded, console_errors) -> None:
-    """`series` 키가 `items` 로 바뀌었다. 이름이 틀리면 차트가 빈다."""
+async def test_trends_renders_the_weekly_flow(page, ui_server, seeded, console_errors) -> None:
+    """주간 기술 흐름은 `/trends/weekly` 하나로 그린다. 오류 없이 200이어야 한다."""
     responses: list[dict] = []
     page.on(
         "response",

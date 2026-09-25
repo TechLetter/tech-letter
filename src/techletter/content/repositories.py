@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
@@ -26,7 +27,17 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from techletter.core.pagination import Page
 
-__all__ = ["BlogRepository", "PostRepository"]
+__all__ = ["BlogRepository", "PostRepository", "TopicActivity"]
+
+
+@dataclass(frozen=True, slots=True)
+class TopicActivity:
+    topic: str
+    post_count: int
+    blog_count: int
+    recent: list[tuple[str, str]] = field(default_factory=list)
+    """(post_id, blog_name), 최근 글부터."""
+
 
 register_indexes(
     "posts",
@@ -454,88 +465,61 @@ class PostRepository:
             rows.append((str(row["_id"]), str(row.get("blog_name") or ""), int(row["count"])))
         return rows
 
-    async def tag_counts_between(
+    async def topic_activity(
         self, published_from: datetime, published_to: datetime
-    ) -> list[dict[str, Any]]:
-        pipeline = [
+    ) -> list[TopicActivity]:
+        """기간 안의 주제별 글 수·회사 수, 그리고 대표 글 후보(최근 순)."""
+        pipeline: list[dict[str, Any]] = [
             {
                 "$match": {
                     "published_at": {"$gte": published_from, "$lt": published_to},
                     "status.ai_summarized": True,
-                    "aisummary.tags": {"$exists": True, "$type": "array", "$ne": []},
                 }
             },
-            {"$unwind": "$aisummary.tags"},
-            {"$match": {"aisummary.tags": {"$type": "string", "$ne": ""}}},
+            {
+                "$project": {
+                    "categories": "$aisummary.categories",
+                    "blog_name": 1,
+                    "published_at": 1,
+                }
+            },
+            {"$unwind": "$categories"},
+            {"$sort": {"published_at": -1}},
             {
                 "$group": {
-                    "_id": {"$toLower": "$aisummary.tags"},
-                    "original": {"$first": "$aisummary.tags"},
-                    "count": {"$sum": 1},
-                }
-            },
-            {"$sort": {"count": -1, "original": 1}},
-        ]
-        rows: list[dict[str, Any]] = []
-        async for row in await self._col.aggregate(pipeline):
-            key = str(row["_id"]).strip()
-            if key:
-                rows.append(
-                    {"key": key, "tag": str(row.get("original") or key), "count": int(row["count"])}
-                )
-        return rows
-
-    async def tag_series(
-        self,
-        tags: list[str],
-        published_from: datetime,
-        published_to: datetime,
-        interval: str,
-    ) -> list[dict[str, Any]]:
-        patterns = _exact_ci(tags)
-        if not patterns:
-            return []
-        pipeline = [
-            {
-                "$match": {
-                    "published_at": {"$gte": published_from, "$lt": published_to},
-                    "status.ai_summarized": True,
-                    "aisummary.tags": {"$in": patterns},
-                }
-            },
-            {"$unwind": "$aisummary.tags"},
-            {"$match": {"aisummary.tags": {"$in": patterns}}},
-            {
-                "$group": {
-                    "_id": {
-                        "tag": {"$toLower": "$aisummary.tags"},
-                        "bucket": {
-                            "$dateTrunc": {
-                                "date": "$published_at",
-                                "unit": interval,
-                                "timezone": "UTC",
-                            }
-                        },
-                    },
-                    "original": {"$first": "$aisummary.tags"},
+                    "_id": "$categories",
                     "post_count": {"$sum": 1},
-                    "blog_ids": {"$addToSet": "$blog_id"},
+                    "blogs": {"$addToSet": "$blog_name"},
+                    "recent": {"$push": {"id": {"$toString": "$_id"}, "blog": "$blog_name"}},
                 }
             },
-            {"$sort": {"_id.bucket": 1}},
         ]
-        rows: list[dict[str, Any]] = []
+        rows: list[TopicActivity] = []
         async for row in await self._col.aggregate(pipeline):
+            if not isinstance(row["_id"], str):
+                continue
             rows.append(
-                {
-                    "key": str(row["_id"]["tag"]),
-                    "tag": str(row.get("original") or row["_id"]["tag"]),
-                    "bucket": row["_id"]["bucket"],
-                    "post_count": int(row["post_count"]),
-                    "blog_count": len(row.get("blog_ids") or []),
-                }
+                TopicActivity(
+                    topic=row["_id"],
+                    post_count=int(row["post_count"]),
+                    blog_count=len(row["blogs"]),
+                    # 대표 글은 몇 개만 고른다. 후보를 다 들고 다닐 이유가 없다.
+                    recent=[(r["id"], str(r.get("blog") or "")) for r in row["recent"][:30]],
+                )
             )
         return rows
+
+    async def activity_totals(
+        self, published_from: datetime, published_to: datetime
+    ) -> tuple[int, int]:
+        """기간 안의 (요약된 글 수, 글을 낸 회사 수)."""
+        query = {
+            "published_at": {"$gte": published_from, "$lt": published_to},
+            "status.ai_summarized": True,
+        }
+        posts = await self._col.count_documents(query)
+        blogs = await self._col.distinct("blog_name", query)
+        return posts, len(blogs)
 
 
 class BlogRepository:
