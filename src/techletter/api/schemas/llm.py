@@ -28,7 +28,8 @@ class DailyUptimeOut(BaseModel):
 class ModelHealthOut(BaseModel):
     model_id: str
     state: str
-    """healthy | degraded | down — 24시간 가용률 기준(요약과 같음)."""
+    """healthy | degraded | down — 지금 쓸 수 있는가(`classify_state`).
+    down은 챗봇에서 고를 수 없다."""
     uptime_24h: float
     uptime_30d: float | None
     avg_latency_ms: float | None
@@ -46,7 +47,7 @@ class ModelHealthOut(BaseModel):
         successes = sum(int(d.get("successes") or 0) for d in daily)
         return cls(
             model_id=str(row.get("model_id") or ""),
-            state=classify_state(uptime_24h),
+            state=classify_state(row),
             uptime_24h=uptime_24h,
             uptime_30d=round(successes / checks * 100, 1) if checks else None,
             avg_latency_ms=row.get("avg_latency_24h"),

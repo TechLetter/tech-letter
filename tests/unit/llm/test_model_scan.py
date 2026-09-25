@@ -180,3 +180,21 @@ def test_aggregate_respects_sample_limit() -> None:
     stats = _aggregate({"m": ordered}, sample_limit=5)[0]
 
     assert stats["uptime_24h"] == 0.0, "sample_limit 안에 실패만 있으면 uptime 0"
+
+
+@pytest.mark.parametrize(
+    ("latest_status", "uptime", "expected"),
+    [
+        ("OK", 99.0, "healthy"),
+        ("OK", 60.0, "degraded"),
+        ("OK", 10.0, "degraded"),  # 지금 응답하면 고를 수 있다
+        ("429", 99.0, "down"),  # 가용률이 높아도 지금 부르면 실패한다
+        ("HTTP 403", 0.0, "down"),
+        ("", 100.0, "down"),
+    ],
+)
+def test_state_means_usable_now(latest_status: str, uptime: float, expected: str) -> None:
+    """모델 페이지 색과 챗봇 선택 가능 여부가 같은 기준이어야 한다."""
+    from techletter.core.llm.model_scan import classify_state
+
+    assert classify_state({"latest_status": latest_status, "uptime_24h": uptime}) == expected
