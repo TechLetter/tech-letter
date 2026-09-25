@@ -34,6 +34,7 @@ async def list_models(ctx: Ctx) -> Listing[ModelHealthOut]:
     from techletter.core.llm.model_history import history  # noqa: PLC0415
     from techletter.core.llm.model_meta import load_meta  # noqa: PLC0415
     from techletter.core.llm.model_scan import compute_health  # noqa: PLC0415
+    from techletter.core.llm.recommend import candidates_from, recommend  # noqa: PLC0415
 
     health = await compute_health(ctx.db)
     health.sort(key=lambda m: m.get("uptime_24h") or 0.0)  # 문제 있는 것부터 보여준다
@@ -41,8 +42,12 @@ async def list_models(ctx: Ctx) -> Listing[ModelHealthOut]:
     for row in await history(ctx.db, days=DAILY_DAYS):
         daily.setdefault(row["model_id"], []).append(row)
     meta = await load_meta(ctx.db)
+    # 요약·챗봇이 모델을 고르는 순서와 같은 계산이다(scouter도 이 함수를 쓴다).
+    recs = recommend(candidates_from(health, daily, meta), ctx.settings.router)
     items = []
     for row in health:
         model_id = str(row.get("model_id"))
-        items.append(ModelHealthOut.of(row, daily.get(model_id, []), meta.get(model_id)))
+        items.append(
+            ModelHealthOut.of(row, daily.get(model_id, []), meta.get(model_id), recs.get(model_id))
+        )
     return Listing.of(items)

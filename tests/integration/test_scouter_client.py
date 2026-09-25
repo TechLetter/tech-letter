@@ -105,7 +105,7 @@ async def test_scouter_client_reports_healthy_models_from_mongo(mongo_db) -> Non
         ]
     )
 
-    client = ScouterClient(RouterSettings(min_uptime_24h=50.0), mongo_db)
+    client = ScouterClient(RouterSettings(), mongo_db)
     models = await client.healthy_models()
 
     assert [m.model_id for m in models] == ["good/model:free"]
@@ -117,22 +117,27 @@ async def test_scouter_client_returns_empty_without_any_checks(mongo_db) -> None
     assert await client.healthy_models() == []
 
 
-async def test_scouter_client_orders_healthy_models_by_stored_benchmark(mongo_db) -> None:
-    """모델 스캔이 저장한 Intelligence로 줄 세운다. 가용률이 더 높아도 점수 없는 모델은 뒤."""
+async def test_scouter_client_orders_models_by_recommendation(mongo_db) -> None:
+    """추천 점수(성능 × 가용성 × 속도) 순. 점수 없는 모델은 후보 중 가장 낮은 점수로 본다."""
     from techletter.core.llm.model_meta import save_meta
 
     now = utcnow()
     await mongo_db[COLLECTION].insert_many(
         [
             {"model_id": m, "ok": True, "http_status": 200, "latency_ms": 100, "checked_at": now}
-            for m in ("unscored/model:free", "scored/model:free")
+            for m in ("unscored/model:free", "scored/model:free", "weak/model:free")
         ]
     )
-    await save_meta(mongo_db, {"scored/model:free": {"benchmarks": {"intelligence": 22.9}}})
+    await save_meta(
+        mongo_db,
+        {
+            "scored/model:free": {"benchmarks": {"intelligence": 22.9}},
+            "weak/model:free": {"benchmarks": {"intelligence": 9.9}},
+        },
+    )
 
-    models = await ScouterClient(RouterSettings(min_uptime_24h=50.0), mongo_db).healthy_models()
+    models = await ScouterClient(RouterSettings(), mongo_db).healthy_models()
 
-    assert [(m.model_id, m.intelligence) for m in models] == [
-        ("scored/model:free", 22.9),
-        ("unscored/model:free", None),
-    ]
+    assert models[0].model_id == "scored/model:free"
+    scores = {m.model_id: m.score for m in models}
+    assert scores["scored/model:free"] > scores["unscored/model:free"] == scores["weak/model:free"]
