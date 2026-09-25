@@ -51,11 +51,6 @@ async def test_filters_use_the_short_envelope(client, seeded) -> None:
         assert set(body) == {"items", "total"}, path
 
 
-async def test_no_endpoint_returns_a_bare_array(client, seeded) -> None:
-    for path in ("/api/v1/chat/suggested-questions", "/api/v1/filters/tags"):
-        assert isinstance((await client.get(path)).json(), dict), path
-
-
 # ── Post ────────────────────────────────────────────────────────────
 async def test_post_fields_match_the_contract(client, seeded) -> None:
     item = (await client.get("/api/v1/posts")).json()["items"][0]

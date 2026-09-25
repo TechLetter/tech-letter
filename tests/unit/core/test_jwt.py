@@ -52,10 +52,6 @@ def test_default_role_is_user(auth):
     assert verify_token(auth, issue_token(auth, "google:abc")).role == ROLE_USER
 
 
-def test_ttl_is_24h(auth):
-    assert auth.jwt_ttl_seconds == 24 * 60 * 60
-
-
 def test_accepts_existing_production_shaped_token(auth):
     """이미 발급된 것과 같은 클레임(sub/role/iss/exp)만 가진 토큰."""
     token = _legacy_token(

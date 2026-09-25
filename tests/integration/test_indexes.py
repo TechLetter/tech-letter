@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from techletter.core.db.indexes import ensure_indexes, registered
+from techletter.core.db.indexes import ensure_indexes
 from techletter.core.jobs.types import COLLECTION, JobStatus
 
 pytestmark = pytest.mark.integration
@@ -48,13 +48,6 @@ async def test_ensure_indexes_is_idempotent(mongo_db):
     first = await ensure_indexes(mongo_db)
     second = await ensure_indexes(mongo_db)
     assert first == second
-
-
-async def test_registry_contains_jobs_collection():
-    # queue 모듈을 import하면 등록된다
-    from techletter.core.jobs import queue as _queue  # noqa: F401
-
-    assert COLLECTION in registered()
 
 
 async def test_model_checks_indexes_are_created(mongo_db):

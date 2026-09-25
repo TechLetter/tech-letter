@@ -64,8 +64,8 @@ class EmbeddingRequestedHandler:
                 "blog_name": post.blog_name,
                 "link": post.link,
                 "published_at": to_iso_z(post.published_at),
-                "categories": post.aisummary.categories if post.aisummary else [],
-                "tags": post.aisummary.tags if post.aisummary else [],
+                # 주제·키워드는 넣지 않는다. 검색은 Mongo에서 거르고, 여기 두면
+                # 재분류할 때마다 벡터 쪽도 따라 고쳐야 한다.
             },
         )
 

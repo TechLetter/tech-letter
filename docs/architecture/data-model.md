@@ -109,7 +109,7 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 |---|---|
 | 컬렉션 | `tech_letter_posts__gemini-embedding-001__3072` (규칙 `{base}__{model}__{dim}`) |
 | 벡터 | 3072-dim, Cosine |
-| payload | `post_id, title, blog_name, link, published_at, categories, tags, chunk_index, chunk_text, model_name` |
+| payload | `post_id, title, blog_name, link, published_at, chunk_index, chunk_text, model_name` |
 | payload index | `post_id` (Qdrant payload index) |
 | on_disk_payload | 서버 기본값에 의존(애플리케이션에서 `true`를 지정하지 않음) |
 

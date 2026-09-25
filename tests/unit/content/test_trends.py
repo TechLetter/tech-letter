@@ -95,3 +95,20 @@ async def test_representative_posts_are_loaded_in_order() -> None:
     result = await TrendsService(posts).weekly(limit=8, now=NOW)  # type: ignore[arg-type]
 
     assert [p.title for p in result.items[0].posts] == [oid]
+
+
+async def test_a_post_is_shown_under_one_topic_only() -> None:
+    """주제가 여러 개인 글은 순위가 높은 카드에만 나온다."""
+    shared = [("p1", "Apple ML"), ("p2", "Meta")]
+    posts = FakePosts(
+        current=[
+            activity("멀티모달·비전·음성", 2, 3, recent=[*shared, ("p3", "구글")]),
+            activity("온디바이스·엣지 AI", 2, 2, recent=[*shared, ("p4", "라인")]),
+        ],
+        previous=[],
+    )
+
+    result = await TrendsService(posts).weekly(limit=8, now=NOW)  # type: ignore[arg-type]
+
+    assert [p.title for p in result.items[0].posts] == ["p1", "p2", "p3"]
+    assert [p.title for p in result.items[1].posts] == ["p4"]
