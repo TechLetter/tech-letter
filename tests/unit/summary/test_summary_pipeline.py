@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from techletter.core.errors import PermanentError, RetryableError
-from techletter.summary.pipeline import SummaryPipeline
+from techletter.summary.pipeline import SummaryPipeline, usable_feed_text
 from techletter.summary.summarizer import SummaryResult
 
 FEED_HTML = (
-    "<html><body><article><p>" + "피드 본문 문장입니다. " * 50 + "</p></article></body></html>"
+    "<html><body><article><p>" + "피드 본문 문장입니다. " * 120 + "</p></article></body></html>"
 )
 
 
@@ -90,3 +90,30 @@ async def test_summarizing_uses_only_the_given_body() -> None:
 
     assert outcome.summary == "요약"
     assert summarizer.inputs == ["저장된 본문"]
+
+
+def test_a_feed_body_that_extracts_to_nothing_is_not_usable() -> None:
+    """CMU 피드는 HTML이 9천 자인데 내용 없는 태그 틀뿐이라 추출하면 3자였다."""
+    body = "<h4></h4><sup></sup><br /><p><em><em>&amp;</em></em></p>" * 150
+
+    assert usable_feed_text(body) is None
+
+
+def test_a_truncated_feed_body_is_not_usable() -> None:
+    body = "<p>" + "본문 문장입니다. " * 300 + "</p><p>Continue reading on Medium »</p>"
+
+    assert usable_feed_text(body) is None
+
+
+def test_a_full_feed_body_is_usable() -> None:
+    assert usable_feed_text(FEED_HTML)
+
+
+async def test_an_unusable_feed_body_does_not_cut_browser_attempts() -> None:
+    pipeline, _ = _pipeline(RetryableError("blocked"))
+
+    with pytest.raises(RetryableError):
+        truncated = "<p>" + "본문 문장입니다. " * 300 + "</p><p>Continue reading on Medium »</p>"
+        await pipeline.fetch("https://example.com/a", truncated)
+
+    assert pipeline.renderer_for_test.attempts == [None]  # type: ignore[attr-defined]
