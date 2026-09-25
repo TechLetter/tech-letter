@@ -32,10 +32,6 @@ def test_post_writes_exactly_the_documented_fields() -> None:
     assert set(Post().to_mongo()) == POST_FIELDS
 
 
-def test_id_is_not_written_on_insert() -> None:
-    assert "_id" not in Post().to_mongo()
-
-
 def test_nested_documents_carry_no_id_or_timestamps() -> None:
     """`BaseDocument`를 중첩에 쓰면 `status`에 `_id: null`이 박힌다."""
     doc = Post(status=StatusFlags(), aisummary=AISummary()).to_mongo()

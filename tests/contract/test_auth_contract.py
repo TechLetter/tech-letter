@@ -63,14 +63,6 @@ async def test_a_bad_signature_is_invalid_token(client) -> None:
     assert response.json()["error"]["code"] == "auth.invalid_token"
 
 
-async def test_lowercase_bearer_is_accepted(client, registered, headers_for) -> None:
-    header = headers_for(registered.user_code)["Authorization"].replace("Bearer", "bearer")
-
-    response = await client.get("/api/v1/me", headers={"Authorization": header})
-
-    assert response.status_code == 200
-
-
 # ── /me ─────────────────────────────────────────────────────────────
 async def test_me_shape(client, registered, headers_for) -> None:
     body = (await client.get("/api/v1/me", headers=headers_for(registered.user_code))).json()

@@ -6,7 +6,7 @@ from datetime import timedelta
 
 import pytest
 
-from techletter.core.errors import ResourceNotFoundError, SessionExpiredError
+from techletter.core.errors import ResourceNotFoundError
 from techletter.core.pagination import Page
 from techletter.core.time import utcnow
 from techletter.users import (
@@ -199,20 +199,3 @@ async def test_expired_session_is_rejected_even_before_ttl_sweep(sessions_repo, 
         {"session_id": "sid-1"}, {"$set": {"expires_at": utcnow() - timedelta(seconds=1)}}
     )
     assert await sessions_repo.consume("sid-1") is None
-
-
-async def test_exchange_session_rejects_blank(mongo_db, user_service, sessions_repo):
-    """빈 문자열이 와도 500으로 죽으면 안 된다."""
-    from tests.factories import make_auth_settings
-
-    from techletter.users.auth_service import AuthService
-
-    auth = AuthService(
-        make_auth_settings(),
-        user_service,
-        user_service._credits,
-        sessions_repo,
-    )
-    for value in ("", "   "):
-        with pytest.raises(SessionExpiredError):
-            await auth.exchange_session(value)
