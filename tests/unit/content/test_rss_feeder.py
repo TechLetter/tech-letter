@@ -133,18 +133,20 @@ def test_an_excerpt_is_not_mistaken_for_the_body() -> None:
     assert item.content_html == ""
 
 
-def test_a_feed_body_that_extracts_to_nothing_is_ignored() -> None:
-    """CMU 피드는 HTML이 9천 자인데 내용 없는 태그 틀뿐이라 추출하면 3자였다."""
-    body = "<h4></h4><sup></sup><br /><p><em><em>&amp;</em></em></p>" * 150
+def test_the_feed_parser_does_not_need_the_extraction_library() -> None:
+    """RSS 수집은 추출 라이브러리가 없는 워커 이미지에서 돈다.
 
-    [item] = parse_feed(_rss_with_content(body))
+    피드 본문 검사가 trafilatura를 부르자 본문을 싣는 블로그 24곳의 수집이 통째로
+    실패했다(`No module named 'trafilatura'`). 무거운 검사는 요약 워커가 한다.
+    """
+    import ast
 
-    assert item.content_html == ""
-
-
-def test_a_truncated_feed_body_is_ignored() -> None:
-    body = "<p>" + "본문 문장입니다. " * 300 + "</p><p>Continue reading on Medium »</p>"
-
-    [item] = parse_feed(_rss_with_content(body))
-
-    assert item.content_html == ""
+    source = Path(__file__).parents[3] / "src/techletter/content/rss/feeder.py"
+    imported = {
+        node.module if isinstance(node, ast.ImportFrom) else alias.name
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Import | ast.ImportFrom)
+        for alias in node.names
+    }
+    assert not any(str(name).startswith("techletter.summary") for name in imported)
+    assert "trafilatura" not in imported and "bs4" not in imported

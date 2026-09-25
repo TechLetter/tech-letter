@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,34 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = ["FetchedContent", "SummaryOutcome", "SummaryPipeline"]
 
 logger = get_logger(__name__)
+
+# 추출한 피드 본문이 이보다 짧으면 발췌다.
+FEED_TEXT_MIN_CHARS = 1000
+# 발췌 피드의 끝맺음. 본문 끝에 이게 있으면 잘린 글이다.
+_TRUNCATED_TAIL = re.compile(
+    r"(continue reading|read more|read the full|계속 읽기|더 보기|원문 보기)[^\n]{0,40}$"
+    r"|(…|\.\.\.)\s*$",
+    re.I,
+)
+
+
+def usable_feed_text(feed_html: str | None) -> str | None:
+    """피드 본문을 원문 대신 써도 되면 추출한 텍스트, 아니면 None.
+
+    HTML 길이만 보면 안 된다 — CMU 피드는 9천 자인데 내용 없는 태그 틀뿐이라
+    추출하면 3자다. 앞부분만 싣고 "Continue reading"으로 끝나는 피드도 있다.
+    """
+    if not feed_html:
+        return None
+    text = extract_plain_text(feed_html).strip()
+    if len(text) < FEED_TEXT_MIN_CHARS or _TRUNCATED_TAIL.search(text[-200:]):
+        return None
+    try:
+        validate_plain_text(text)
+    except PermanentError:
+        return None
+    return text
+
 
 # 페이지가 아니라 차단·오류 화면을 받았다는 뜻의 검증 실패. 피드 본문으로 대신한다.
 _BLOCKED_REASONS = frozenset({"bot_blocked", "unresolved_page", "error_page", "content_too_short"})
@@ -70,17 +99,16 @@ class SummaryPipeline:
         Medium은 서버 IP를 막아 브라우저도 일반 HTTP도 403을 받는데, 같은 글이
         RSS에는 본문째 실려 있다.
         """
+        feed_text = usable_feed_text(feed_html)
         try:
-            # 대체 본문이 있으면 막힌 브라우저를 여러 번 열며 기다리지 않는다
+            # 쓸 만한 대체 본문이 있으면 막힌 브라우저를 여러 번 열며 기다리지 않는다
             # (Medium은 서버 IP에서 매번 막힌다 — 재시도마다 수십 초가 샌다).
-            html, plain_text = await self._page_text(url, attempts=1 if feed_html else None)
+            html, plain_text = await self._page_text(url, attempts=1 if feed_text else None)
         except (RetryableError, PermanentError) as exc:
             blocked = isinstance(exc, RetryableError) or exc.reason in _BLOCKED_REASONS
-            if not (feed_html and blocked):
+            if not (feed_html and feed_text and blocked):
                 raise
-            html = feed_html
-            plain_text = extract_plain_text(html)
-            validate_plain_text(plain_text)
+            html, plain_text = feed_html, feed_text
             logger.info("page blocked; using the feed content", extra={"url": url})
 
         # 썸네일은 있으면 좋은 것이다. 실패해도 본문을 버리지 않는다.
