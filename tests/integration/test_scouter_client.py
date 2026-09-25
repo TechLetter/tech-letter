@@ -115,3 +115,24 @@ async def test_scouter_client_returns_empty_without_any_checks(mongo_db) -> None
     client = ScouterClient(RouterSettings(), mongo_db)
 
     assert await client.healthy_models() == []
+
+
+async def test_scouter_client_orders_healthy_models_by_stored_benchmark(mongo_db) -> None:
+    """모델 스캔이 저장한 Intelligence로 줄 세운다. 가용률이 더 높아도 점수 없는 모델은 뒤."""
+    from techletter.core.llm.model_meta import save_meta
+
+    now = utcnow()
+    await mongo_db[COLLECTION].insert_many(
+        [
+            {"model_id": m, "ok": True, "http_status": 200, "latency_ms": 100, "checked_at": now}
+            for m in ("unscored/model:free", "scored/model:free")
+        ]
+    )
+    await save_meta(mongo_db, {"scored/model:free": {"benchmarks": {"intelligence": 22.9}}})
+
+    models = await ScouterClient(RouterSettings(min_uptime_24h=50.0), mongo_db).healthy_models()
+
+    assert [(m.model_id, m.intelligence) for m in models] == [
+        ("scored/model:free", 22.9),
+        ("unscored/model:free", None),
+    ]

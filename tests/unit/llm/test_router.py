@@ -175,3 +175,22 @@ async def test_run_records_stats():
 def test_truncate_for_model():
     assert truncate_for_model("abc", 10) == ("abc", False)
     assert truncate_for_model("abcdef", 3) == ("abc", True)
+
+
+def test_ranking_puts_scored_models_first_by_intelligence():
+    """점수 있는 모델이 점수순으로 앞에, 없는 모델은 예전처럼 가용률순으로 뒤에."""
+    from techletter.core.llm.scouter import rank_models
+
+    models = [
+        ModelHealth("fast/unscored:free", 100.0, 500, 0, "OK"),
+        ModelHealth("low/score:free", 95.0, 900, 0, "OK", intelligence=9.9),
+        ModelHealth("high/score:free", 90.0, 3000, 0, "OK", intelligence=22.9),
+        ModelHealth("slow/unscored:free", 99.0, 800, 0, "OK"),
+    ]
+
+    assert [m.model_id for m in rank_models(models)] == [
+        "high/score:free",
+        "low/score:free",
+        "fast/unscored:free",
+        "slow/unscored:free",
+    ]
