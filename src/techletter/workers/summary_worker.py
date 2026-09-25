@@ -25,15 +25,14 @@ from techletter.workers.runtime import Heartbeat
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.container import Container
 
-__all__ = ["build_summary_worker"]
+__all__ = ["build_summarizer", "build_summary_worker"]
 
 logger = get_logger(__name__)
 
 
-def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
+def build_summarizer(container: Container) -> Summarizer:
+    """요약 워커와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다."""
     settings = container.settings
-    heartbeat = Heartbeat()
-
     # 요약은 Gemini를 1순위로 쓰고 예산이 다하면 OpenRouter 무료 모델로
     # 넘어간다. 후보 목록에 두 provider의 모델 id가 섞여 오므로,
     # 하나의 provider만 아는 LangChainChatClient 로는 처리할 수 없다 —
@@ -51,8 +50,7 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             LangChainChatClient(settings.chat_llm),
         ),
     )
-    renderer = PlaywrightRenderer(container.settings.summary, container.http.get())
-    summarizer = Summarizer(
+    return Summarizer(
         llm,
         settings.summary,
         budget=DailyBudget(container.db, reset_utc_hour=settings.router.quota_reset_utc_hour),
@@ -60,10 +58,16 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
         primary_provider=settings.summary_llm.provider,
         daily_limit=settings.router.summary_daily_budget,
     )
+
+
+def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
+    heartbeat = Heartbeat()
+    renderer = PlaywrightRenderer(container.settings.summary, container.http.get())
+    summarizer = build_summarizer(container)
     pipeline = SummaryPipeline(renderer, summarizer, container.http.get())
     runner = JobRunner(
         container.queue,
-        settings.jobs,
+        container.settings.jobs,
         {
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
                 container.posts, pipeline, container.queue

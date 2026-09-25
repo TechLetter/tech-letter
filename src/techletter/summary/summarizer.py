@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -15,7 +16,7 @@ from techletter.core.errors import PermanentError
 from techletter.core.llm.chat import DEFAULT_MAX_TOKENS
 from techletter.core.llm.router import truncate_for_model
 from techletter.core.logging import get_logger
-from techletter.summary.constants import CATEGORIES
+from techletter.summary.topics import normalize_topics, topic_prompt_lines
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.budget import DailyBudget
@@ -23,17 +24,18 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.settings import SummarySettings
 
 __all__ = [
+    "TOPIC_CLASSIFY_INSTRUCTION",
     "Summarizer",
     "SummaryResult",
     "clip_to_sentence",
-    "normalize_categories",
     "normalize_tags",
 ]
 
 logger = get_logger(__name__)
 
-_CATEGORY_BY_KEY = {name.lower(): name for name in CATEGORIES}
 _SENTENCE_END = re.compile(r"[.!?。]|다\.|요\.")
+
+_TOPICS = "\n".join(f"   {line}" for line in topic_prompt_lines().splitlines())
 
 SYSTEM_INSTRUCTION = f"""\
 You are a content summarization assistant for technical blog posts.
@@ -46,8 +48,14 @@ Respond with a valid JSON object containing exactly these four keys:
    details or extra optimizations. Keep a polite tone and aim for about 200 characters.
    End by briefly suggesting what a reader can observe from the post, without
    asserting it as a guaranteed benefit.
-2. "categories": 1-3 items chosen ONLY from this list: {list(CATEGORIES)}.
-3. "tags": 3-7 concrete English keywords naming technologies, libraries, frameworks,
+2. "categories": 1-3 topic slugs chosen ONLY from the list below, most central
+   first. Choose by what the post is mainly about, not by technologies mentioned
+   in passing. Add a second or third topic only when a substantial part of the post
+   is about it (e.g. an AI-based fraud detector -> the AI topic and "security";
+   a team onboarding retrospective -> "culture" and the team's field).
+   Topics (slug | name | definition):
+{_TOPICS}
+3. "tags": 3-5 concrete English keywords naming technologies, libraries, frameworks,
    tools, languages, or protocols explicitly mentioned in the text
    (e.g. "Hadoop", "React", "Kubernetes"). No generic concepts, no long phrases,
    no duplicates.
@@ -88,16 +96,24 @@ def clip_to_sentence(text: str, target: int, tolerance: int) -> str:
     return window.rstrip() + "…"
 
 
-def normalize_categories(values: Any) -> list[str]:
-    """화이트리스트 밖의 값은 버린다. 하나도 안 남으면 `Other`."""
-    if not isinstance(values, list):
-        return ["Other"]
-    kept: list[str] = []
-    for value in values:
-        name = _CATEGORY_BY_KEY.get(str(value).strip().lower())
-        if name and name not in kept:
-            kept.append(name)
-    return kept[:3] or ["Other"]
+# 이미 요약된 글의 주제만 다시 매긴다. 본문 대신 제목·요약·키워드를 넣어
+# 한 번에 여러 건을 보낸다(1,900건을 한 건씩 부르면 무료 한도로 며칠 걸린다).
+TOPIC_CLASSIFY_INSTRUCTION = f"""\
+You classify tech blog posts into topics.
+Input is a JSON array of posts with id, title, blog, summary and keywords.
+Return ONLY a JSON object: {{"results": [{{"id": "...", "topics": ["slug", ...]}}]}}
+with one entry per input post.
+Pick 1-3 topic slugs per post from the list below, most central first.
+Choose by what the post is mainly about, not by technologies mentioned in passing.
+Add a second or third topic only when a substantial part of the post is about it
+(e.g. an AI-based fraud detector -> the AI topic and "security"; a team onboarding
+retrospective -> "culture" and the team's field). Use "other" only when nothing fits.
+
+Topics (slug | name | definition):
+{topic_prompt_lines()}
+"""
+# 추론 토큰을 쓰는 모델이 결과를 쓰기도 전에 한도를 다 쓰지 않게 넉넉히 준다.
+_CLASSIFY_MAX_TOKENS = 8000
 
 
 def normalize_tags(values: Any, limit: int) -> list[str]:
@@ -193,8 +209,34 @@ class Summarizer:
 
         return SummaryResult(
             summary=summary,
-            categories=normalize_categories(payload.get("categories")),
+            categories=normalize_topics(payload.get("categories")),
             tags=normalize_tags(payload.get("tags"), self._settings.max_tags),
             model_name=model_id,
             truncated_input=truncated,
         )
+
+    async def classify_topics(self, posts: list[dict[str, Any]]) -> dict[str, list[str]]:
+        """`{id, title, blog, summary, keywords}` 목록 → id별 주제 이름.
+
+        모델이 빠뜨린 글은 결과에 없다. 호출한 쪽이 다음에 다시 시도한다.
+        """
+        payload, model_id = await self._llm.complete_json(
+            "summary",
+            TOPIC_CLASSIFY_INSTRUCTION,
+            json.dumps(posts, ensure_ascii=False),
+            max_tokens=_CLASSIFY_MAX_TOKENS,
+            candidates=await self._candidates(),
+        )
+        wanted = {str(post["id"]) for post in posts}
+        results: dict[str, list[str]] = {}
+        for row in payload.get("results") or []:
+            if not isinstance(row, dict):
+                continue
+            post_id = str(row.get("id") or "")
+            if post_id in wanted:
+                results[post_id] = normalize_topics(row.get("topics"))
+        logger.info(
+            "topics classified",
+            extra={"model": model_id, "asked": len(posts), "answered": len(results)},
+        )
+        return results

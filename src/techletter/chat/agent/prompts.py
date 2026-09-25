@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from techletter.summary.topics import TOPIC_NAMES
+
 __all__ = ["ANSWER_SYSTEM_PROMPT", "PLANNER_SYSTEM_PROMPT"]
 
-PLANNER_SYSTEM_PROMPT = """\
+_TOPIC_LIST = ", ".join(TOPIC_NAMES)
+
+PLANNER_SYSTEM_PROMPT_TEMPLATE = """\
 You are the planning node for the Tech-Letter chatbot.
 
 Convert the current Korean user question into a structured execution plan.
@@ -30,6 +34,8 @@ Rules:
 - If the user asks a technical explanation without explicit post constraints, use general_rag.
 - If a date/time/blog/tag/category constraint exists, set strict_scope=true.
 - When strict_scope=true, downstream nodes must not fall back to unrelated posts.
+- "categories" are topics. Use ONLY exact names from this list, or leave it empty:
+  {topics}
 
 JSON shape:
 {{
@@ -48,6 +54,9 @@ JSON shape:
   "reason": "short Korean reason"
 }}
 """
+
+# 주제 목록은 고정이라 import 시점에 한 번 채운다. {now_iso}는 요청마다 채운다.
+PLANNER_SYSTEM_PROMPT = PLANNER_SYSTEM_PROMPT_TEMPLATE.replace("{topics}", _TOPIC_LIST)
 
 ANSWER_SYSTEM_PROMPT = """\
 You are the answer generation node for Tech-Letter.

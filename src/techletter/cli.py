@@ -320,6 +320,71 @@ def backfill_summaries(
     _with_container(body)
 
 
+@backfill_app.command("topics")
+def backfill_topics(
+    limit: int = typer.Option(0, help="0이면 대상 전부"),
+    batch_size: int = typer.Option(20, min=1, max=40),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
+) -> None:
+    """주제 목록 밖의 카테고리를 가진 글을 다시 분류한다.
+
+    제목·요약·키워드만 보내 여러 건을 한 번에 분류한다. 중간에 멈춰도 다시
+    돌리면 남은 글부터 이어진다. dry-run은 첫 묶음을 분류해 보여 주기만 한다.
+    """
+
+    async def body(container: Container) -> None:
+        from techletter.summary.topics import TOPIC_NAMES  # noqa: PLC0415
+        from techletter.workers.summary_worker import build_summarizer  # noqa: PLC0415
+
+        summarizer = build_summarizer(container)
+        done = failed_batches = 0
+        while True:
+            want = batch_size if limit <= 0 else min(batch_size, limit - done)
+            if want <= 0:
+                break
+            posts = await container.posts.find_needing_topics(TOPIC_NAMES, want)
+            if not posts:
+                break
+            try:
+                results = await summarizer.classify_topics([_topic_input(p) for p in posts])
+            except Exception as exc:
+                typer.echo(f"분류 실패: {type(exc).__name__}: {str(exc)[:200]}")
+                failed_batches += 1
+                if failed_batches >= 3:
+                    typer.echo("연속 실패 3회 — 멈춘다. 나중에 다시 돌리면 이어진다.")
+                    break
+                continue
+            failed_batches = 0
+            if dry_run:
+                for post in posts:
+                    topics = ", ".join(results.get(str(post.id), ["(누락)"]))
+                    typer.echo(f"  {post.title[:50]}  →  {topics}")
+                typer.echo("[dry-run] 첫 묶음만 분류했다. --execute 로 실행한다.")
+                return
+            for post in posts:
+                topics = results.get(str(post.id))
+                if topics and await container.posts.set_categories(str(post.id), topics):
+                    done += 1
+            if not results:
+                failed_batches += 1
+            typer.echo(f"{done}건 분류")
+        remaining = len(await container.posts.find_needing_topics(TOPIC_NAMES, 10_000))
+        typer.echo(f"완료: {done}건 분류, 남은 대상 {remaining}건")
+
+    _with_container(body)
+
+
+def _topic_input(post: Post) -> dict[str, Any]:
+    summary = post.aisummary
+    return {
+        "id": str(post.id),
+        "title": post.title,
+        "blog": post.blog_name,
+        "summary": (summary.summary if summary else "") or "",
+        "keywords": (summary.tags if summary else [])[:7],
+    }
+
+
 @backfill_app.command("embeddings")
 def backfill_embeddings(
     limit: int = typer.Option(50),

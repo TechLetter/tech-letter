@@ -213,7 +213,7 @@ class SummarySettings(BaseSettings):
     render_timeout_seconds: int = 30
     summary_target_chars: int = 200
     summary_tolerance_chars: int = 20
-    max_tags: int = 7
+    max_tags: int = 5
 
 
 class EmbeddingSettings(BaseSettings):

@@ -10,7 +10,6 @@ __all__ = [
     "BLOCK_MARKERS_SOFT",
     "BLOCK_MARKERS_STRONG",
     "BLOCK_MARKERS_UNKNOWN",
-    "CATEGORIES",
     "MIN_TEXT_LENGTH",
     "RETRY_MARKERS",
 ]
@@ -72,20 +71,3 @@ RETRY_MARKERS = (
 )
 
 MIN_TEXT_LENGTH = 50
-
-# 요약 카테고리 화이트리스트. 모델이 목록 밖의 값을 만들어 내면 버린다
-# (실측에서 `lfm-2.5-2.6b`가 Frontend 글을 Infrastructure로 분류했다).
-CATEGORIES = (
-    "Backend",
-    "Frontend",
-    "Mobile",
-    "AI",
-    "Data Engineering",
-    "DevOps",
-    "Security",
-    "Cloud",
-    "Database",
-    "Programming Languages",
-    "Infrastructure",
-    "Other",
-)

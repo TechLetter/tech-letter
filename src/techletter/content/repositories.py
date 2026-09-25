@@ -342,6 +342,33 @@ class PostRepository:
         )
         return [Post.model_validate(doc) async for doc in cursor]
 
+    async def find_needing_topics(self, names: tuple[str, ...], limit: int) -> list[Post]:
+        """주제 목록 밖의 카테고리를 가진 요약 글. 최근 글부터 — 트렌드가 먼저 쓴다."""
+        cursor = (
+            self._col.find(
+                {
+                    "status.ai_summarized": True,
+                    "$or": [
+                        {"aisummary.categories": {"$elemMatch": {"$nin": list(names)}}},
+                        {"aisummary.categories": {"$size": 0}},
+                    ],
+                },
+                projection=_WITHOUT_BODIES,
+            )
+            .sort([("published_at", DESCENDING)])
+            .limit(limit)
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
+    async def set_categories(self, post_id: str, categories: list[str]) -> bool:
+        oid = to_object_id(post_id)
+        if oid is None:
+            return False
+        result = await self._col.update_one(
+            {"_id": oid}, {"$set": {"aisummary.categories": categories, "updated_at": utcnow()}}
+        )
+        return result.matched_count > 0
+
     async def find_summarized_not_embedded(self, limit: int) -> list[Post]:
         cursor = self._col.find(
             {
