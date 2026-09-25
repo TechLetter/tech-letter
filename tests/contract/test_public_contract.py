@@ -237,10 +237,13 @@ async def test_model_list_shape_has_no_internal_usage_fields(client, ctx) -> Non
     assert set(body) == {"items", "total"}
     assert set(body["items"][0]) == {
         "model_id",
+        "state",
         "uptime_24h",
+        "uptime_30d",
         "avg_latency_ms",
         "consecutive_failures",
         "latest_status",
+        "daily",
     }
 
 
@@ -253,71 +256,25 @@ async def test_model_list_sorts_worst_first(client, ctx) -> None:
     assert body["items"][0]["model_id"] == "broken/free"
 
 
-async def test_model_events_shape(client, ctx) -> None:
-    await _seed_model_check(ctx, "a/free")
-    from techletter.core.llm.model_events import detect_and_record
-    from techletter.core.llm.model_scan import ModelCheck
-    from techletter.core.time import utcnow
-
-    await detect_and_record(
-        ctx.db,
-        [ModelCheck("a/free", True, 200, 500, None, utcnow())],
-    )
-
-    body = (await client.get("/api/v1/llm-models/events")).json()
-
-    assert set(body) == {"items", "total"}
-    assert set(body["items"][0]) == {"model_id", "type", "detected_at", "reason"}
-    assert body["items"][0]["type"] == "model_added"
-
-
-async def test_model_events_filter_by_model_id(client, ctx) -> None:
-    from techletter.core.llm.model_events import detect_and_record
-    from techletter.core.llm.model_scan import ModelCheck
-    from techletter.core.time import utcnow
-
-    now = utcnow()
-    await detect_and_record(
-        ctx.db,
-        [
-            ModelCheck("a/free", True, 200, 500, None, now),
-            ModelCheck("b/free", True, 200, 500, None, now),
-        ],
-    )
-
-    body = (await client.get("/api/v1/llm-models/events?model_id=a/free")).json()
-
-    assert all(e["model_id"] == "a/free" for e in body["items"])
-
-
-async def test_model_history_shape(client, ctx) -> None:
+async def test_model_list_carries_state_and_daily_uptime(client, ctx) -> None:
+    """상태 페이지의 배지와 일별 막대가 이 한 번의 호출로 그려진다."""
     from techletter.core.llm.model_history import rollup_daily
 
-    await _seed_model_check(ctx, "a/free")
+    await _seed_model_check(ctx, "healthy/free", ok=True)
+    await _seed_model_check(ctx, "broken/free", ok=False)
     await rollup_daily(ctx.db)
 
-    body = (await client.get("/api/v1/llm-models/a%2Ffree/history")).json()
+    items = {i["model_id"]: i for i in (await client.get("/api/v1/llm-models")).json()["items"]}
 
-    assert set(body) == {"items", "total"}
-    assert set(body["items"][0]) == {
-        "date",
-        "checks",
-        "successes",
-        "uptime",
-        "rate_limited",
-        "avg_latency_ms",
-    }
+    assert items["healthy/free"]["state"] == "healthy"
+    assert items["broken/free"]["state"] == "down"
+    assert items["healthy/free"]["uptime_30d"] == 100.0
+    assert set(items["healthy/free"]["daily"][0]) == {"date", "uptime"}
 
 
-async def test_model_history_accepts_a_period_query(client, ctx) -> None:
-    from techletter.core.llm.model_history import rollup_daily
-
-    await _seed_model_check(ctx, "a/free")
-    await rollup_daily(ctx.db)
-
-    response = await client.get("/api/v1/llm-models/a%2Ffree/history?period=1y")
-
-    assert response.status_code == 200
+async def test_the_model_events_and_history_endpoints_are_gone(client) -> None:
+    for path in ("/api/v1/llm-models/events", "/api/v1/llm-models/a%2Ffree/history"):
+        assert (await client.get(path)).status_code == 404, path
 
 
 # ── 헬스 ────────────────────────────────────────────────────────────

@@ -9,10 +9,17 @@ from techletter.core.llm.model_events import (
     EVENTS_COLLECTION,
     EventType,
     detect_and_record,
-    list_events,
 )
 from techletter.core.llm.model_scan import ModelCheck
 from techletter.core.time import utcnow
+
+
+async def list_events(db, model_id: str | None = None) -> list[dict]:
+    """감지 결과 확인용. 공개 API가 없어져 테스트에서 컬렉션을 직접 읽는다."""
+    query = {"model_id": model_id} if model_id else {}
+    cursor = db[EVENTS_COLLECTION].find(query, projection={"_id": 0}).sort("detected_at", -1)
+    return [doc async for doc in cursor]
+
 
 pytestmark = pytest.mark.integration
 
@@ -107,15 +114,6 @@ async def test_custom_degrade_threshold_is_respected(mongo_db):
 async def test_empty_scan_does_nothing_when_catalog_is_empty(mongo_db):
     assert await detect_and_record(mongo_db, []) == 0
     assert await list_events(mongo_db) == []
-
-
-async def test_list_events_respects_limit(mongo_db):
-    for i in range(5):
-        await detect_and_record(mongo_db, [_check(f"model-{i}/free", ok=True)])
-
-    events = await list_events(mongo_db, limit=2)
-
-    assert len(events) == 2
 
 
 async def test_model_events_indexes_are_created(mongo_db):
