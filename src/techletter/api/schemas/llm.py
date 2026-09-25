@@ -14,28 +14,47 @@ from pydantic import BaseModel
 from techletter.core.time import to_iso_z
 
 __all__ = [
-    "ModelEventOut",
+    "DailyUptimeOut",
     "ModelHealthOut",
     "ModelHealthSummaryOut",
-    "ModelHistoryPointOut",
 ]
+
+
+class DailyUptimeOut(BaseModel):
+    date: str
+    uptime: float
 
 
 class ModelHealthOut(BaseModel):
     model_id: str
+    state: str
+    """healthy | degraded | down — 24시간 가용률 기준(요약과 같음)."""
     uptime_24h: float
+    uptime_30d: float | None
     avg_latency_ms: float | None
     consecutive_failures: int
     latest_status: str
+    daily: list[DailyUptimeOut]
+    """최근 30일, 오래된 날부터. 기록이 없는 날은 빠진다."""
 
     @classmethod
-    def of(cls, row: dict[str, Any]) -> ModelHealthOut:
+    def of(cls, row: dict[str, Any], daily: list[dict[str, Any]]) -> ModelHealthOut:
+        from techletter.core.llm.model_scan import classify_state  # noqa: PLC0415
+
+        uptime_24h = round(float(row.get("uptime_24h") or 0.0), 1)
+        checks = sum(int(d.get("checks") or 0) for d in daily)
+        successes = sum(int(d.get("successes") or 0) for d in daily)
         return cls(
             model_id=str(row.get("model_id") or ""),
-            uptime_24h=round(float(row.get("uptime_24h") or 0.0), 1),
+            state=classify_state(uptime_24h),
+            uptime_24h=uptime_24h,
+            uptime_30d=round(successes / checks * 100, 1) if checks else None,
             avg_latency_ms=row.get("avg_latency_24h"),
             consecutive_failures=int(row.get("consecutive_failures") or 0),
             latest_status=str(row.get("latest_status") or ""),
+            daily=[
+                DailyUptimeOut(date=d["date"], uptime=round(float(d["uptime"]), 1)) for d in daily
+            ],
         )
 
 
@@ -54,40 +73,4 @@ class ModelHealthSummaryOut(BaseModel):
             degraded_count=summary["degraded_count"],
             down_count=summary["down_count"],
             last_checked_at=to_iso_z(last_checked_at),
-        )
-
-
-class ModelHistoryPointOut(BaseModel):
-    date: str
-    checks: int
-    successes: int
-    uptime: float
-    rate_limited: int
-    avg_latency_ms: float | None
-
-    @classmethod
-    def of(cls, row: dict[str, Any]) -> ModelHistoryPointOut:
-        return cls(
-            date=row["date"],
-            checks=row["checks"],
-            successes=row["successes"],
-            uptime=round(row["uptime"], 1),
-            rate_limited=row["rate_limited"],
-            avg_latency_ms=row.get("avg_latency_ms"),
-        )
-
-
-class ModelEventOut(BaseModel):
-    model_id: str
-    type: str
-    detected_at: str | None
-    reason: str | None
-
-    @classmethod
-    def of(cls, row: dict[str, Any]) -> ModelEventOut:
-        return cls(
-            model_id=row["model_id"],
-            type=row["type"],
-            detected_at=to_iso_z(row.get("detected_at")),
-            reason=row.get("reason"),
         )

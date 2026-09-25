@@ -296,21 +296,25 @@ async def last_scan_at(db: AsyncDatabase) -> datetime | None:
     return doc["checked_at"] if doc else None
 
 
+def classify_state(uptime: float) -> str:
+    """24시간 가용률로 3단 분류한다. 요약 숫자와 목록 배지가 같은 기준을 쓴다."""
+    if uptime >= 90.0:
+        return "healthy"
+    if uptime >= 50.0:
+        return "degraded"
+    return "down"
+
+
 def summarize_health(health: list[dict[str, Any]]) -> dict[str, Any]:
     """공개 요약 카드용 집계(순수 함수). uptime으로 3단 분류한다.
 
     라우터의 `is_healthy`(최신 핑 1회 기준)보다 느슨하다 — "지금 이 요청에
     쓸 수 있는가"가 아니라 "요즘 대체로 잘 버티는가"를 보여주는 용도라서다.
     """
-    healthy = degraded = down = 0
+    counts = {"healthy": 0, "degraded": 0, "down": 0}
     for model in health:
-        uptime = float(model.get("uptime_24h") or 0.0)
-        if uptime >= 90.0:
-            healthy += 1
-        elif uptime >= 50.0:
-            degraded += 1
-        else:
-            down += 1
+        counts[classify_state(float(model.get("uptime_24h") or 0.0))] += 1
+    healthy, degraded, down = counts["healthy"], counts["degraded"], counts["down"]
     return {
         "total_models": len(health),
         "healthy_count": healthy,

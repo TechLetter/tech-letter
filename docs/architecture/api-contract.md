@@ -192,15 +192,11 @@
 { "total_models": 42, "healthy_count": 30, "degraded_count": 8, "down_count": 4,
   "last_checked_at": "…" }
 // GET /llm-models → items: ModelHealth[]
-{ "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
-  "uptime_24h": 96.5, "avg_latency_ms": 1180, "consecutive_failures": 0, "latest_status": "OK" }
-// GET /llm-models/{model_id}/history?period=1d|1w|1m|1y → items: 일별 집계[]
-{ "date": "2026-09-06", "checks": 24, "successes": 23, "uptime": 95.8,
-  "rate_limited": 1, "avg_latency_ms": 1150 }
-// GET /llm-models/events?model_id=&limit= → items: ModelEvent[]
-{ "model_id": "…", "type": "model_degraded", "detected_at": "…", "reason": "rate_limited" }
+{ "model_id": "nvidia/nemotron-3-super-120b-a12b:free", "state": "healthy",
+  "uptime_24h": 96.5, "uptime_30d": 97.2, "avg_latency_ms": 1180, "consecutive_failures": 0,
+  "latest_status": "OK", "daily": [{ "date": "2026-09-06", "uptime": 95.8 }] }
 ```
-`type ∈ {model_added, model_removed, model_degraded, model_recovered}`.
+`state ∈ {healthy, degraded, down}` — 24시간 가용률 90% 이상 / 50% 이상 / 그 미만(요약 숫자와 같은 기준). `daily`는 최근 30일, 오래된 날부터이며 기록이 없는 날은 빠진다.
 
 ## 3. 엔드포인트
 
@@ -220,8 +216,6 @@
 | GET | `/trends/weekly` | - | `limit`(기본 8, 최대 30) | 2.7 |
 | GET | `/llm-models/summary` | - | | 2.11 |
 | GET | `/llm-models` | - | | 목록 + `ModelHealth[]`(2.11) |
-| GET | `/llm-models/{model_id}/history` | - | `period` | 목록 + 일별 집계[](2.11) |
-| GET | `/llm-models/events` | - | `model_id, limit` | 목록 + `ModelEvent[]`(2.11) |
 
 공개 `/posts`는 요약이 완료된 포스트만 반환한다.
 

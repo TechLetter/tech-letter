@@ -31,7 +31,6 @@ __all__ = [
     "EventType",
     "detect_and_record",
     "known_model_ids",
-    "list_events",
 ]
 
 CATALOG_COLLECTION = "llm_model_catalog"
@@ -260,20 +259,3 @@ async def known_model_ids(db: AsyncDatabase) -> set[str]:
     cache.ids = ids
     cache.fetched_at = now
     return set(ids)
-
-
-async def list_events(
-    db: AsyncDatabase, *, model_id: str | None = None, limit: int = 50
-) -> list[dict[str, Any]]:
-    """최신순 이벤트 피드."""
-    query: dict[str, Any] = {}
-    if model_id is not None:
-        query["model_id"] = model_id
-
-    rows: list[dict[str, Any]] = []
-    cursor = (
-        db[EVENTS_COLLECTION].find(query, projection={"_id": 0}).sort("detected_at", DESCENDING)
-    )
-    async for doc in cursor.limit(limit):
-        rows.append(doc)
-    return rows
