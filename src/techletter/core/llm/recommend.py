@@ -2,10 +2,12 @@
 
     추천 점수 = 성능^a × 가용성^b × 속도^c
 
-- 성능: Artificial Analysis Intelligence. 없으면 후보 중 가장 낮은 점수로 본다 — 모르는
-  모델이 검증된 점수를 이기지 못하게.
-- 가용성: (24h 가용률 + 30일 가용률) / 2. 지금 응답하지 않으면 0 — 후보에서 빠진다.
+- 성능: Artificial Analysis Intelligence. 없으면 추정하지 않는다 — 추천 점수도 없다.
+- 가용성: (24h 가용률 + 30일 가용률) / 2.
 - 속도: 평균 응답이 5초 이하면 1, 느릴수록 √(5/초)로 깎인다.
+
+순위는 상태(`classify_state`: 정상 → 불안정) 안에서 점수 있는 모델을 점수순으로, 그 뒤에
+점수 없는 모델을 가용성 × 속도 순으로 둔다. 사용 불가 모델은 순위가 없다.
 
 더하지 않고 곱한다. 더하면 점수가 높은 모델이 가용률 30%여도 위로 올라온다.
 가중치(지수)는 설정값이다(`RECOMMEND_WEIGHT_*`, 기본 성능 1 · 가용성 2 · 속도 0.5).
@@ -15,6 +17,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from techletter.core.llm.model_scan import classify_state
 
 if TYPE_CHECKING:  # pragma: no cover
     from pymongo.asynchronous.database import AsyncDatabase
@@ -29,8 +33,8 @@ SPEED_TARGET_MS = 5_000
 @dataclass(frozen=True, slots=True)
 class Candidate:
     model_id: str
-    available: bool
-    """지금 응답하는가(마지막 체크 성공)."""
+    state: str
+    """healthy | degraded | down (`classify_state`)."""
     uptime_24h: float
     uptime_30d: float | None
     latency_ms: float | None
@@ -39,36 +43,46 @@ class Candidate:
 
 @dataclass(frozen=True, slots=True)
 class Recommendation:
-    score: float
+    score: float | None
+    """성능 점수가 없거나 사용 불가인 모델은 없다."""
     rank: int | None
     """1부터. 지금 응답하지 않는 모델은 없다."""
 
 
 def recommend(candidates: list[Candidate], settings: RouterSettings) -> dict[str, Recommendation]:
-    known = [c.intelligence for c in candidates if c.intelligence is not None]
-    floor = min(known) if known else 1.0
-
-    def score(c: Candidate) -> float:
-        if not c.available:
-            return 0.0
-        capability = (c.intelligence if c.intelligence is not None else floor) / 100
+    def reliability(c: Candidate) -> float:
         uptime_30d = c.uptime_30d if c.uptime_30d is not None else c.uptime_24h
         availability = (c.uptime_24h + uptime_30d) / 200
         speed = min(1.0, (SPEED_TARGET_MS / c.latency_ms) ** 0.5) if c.latency_ms else 1.0
         return (
-            capability**settings.recommend_weight_capability
-            * availability**settings.recommend_weight_availability
+            availability**settings.recommend_weight_availability
             * speed**settings.recommend_weight_speed
-            * 100
         )
 
+    def score(c: Candidate) -> float | None:
+        if c.intelligence is None or c.state == "down":
+            return None
+        return (c.intelligence / 100) ** settings.recommend_weight_capability * reliability(c) * 100
+
     scores = {c.model_id: score(c) for c in candidates}
+    tier = {"healthy": 0, "degraded": 1}
     ordered = sorted(
-        (c for c in candidates if c.available and scores[c.model_id] > 0),
-        key=lambda c: (-scores[c.model_id], c.model_id),
+        (c for c in candidates if c.state in tier),
+        key=lambda c: (
+            tier[c.state],
+            scores[c.model_id] is None,
+            -(scores[c.model_id] or 0.0),
+            -reliability(c),
+            c.model_id,
+        ),
     )
     ranks = {c.model_id: i + 1 for i, c in enumerate(ordered)}
-    return {mid: Recommendation(round(s, 1), ranks.get(mid)) for mid, s in scores.items()}
+    return {
+        c.model_id: Recommendation(
+            round(s, 1) if (s := scores[c.model_id]) is not None else None, ranks.get(c.model_id)
+        )
+        for c in candidates
+    }
 
 
 def candidates_from(
@@ -86,7 +100,7 @@ def candidates_from(
         out.append(
             Candidate(
                 model_id=model_id,
-                available=str(row.get("latest_status") or "").upper() == "OK",
+                state=classify_state(row),
                 uptime_24h=float(row.get("uptime_24h") or 0.0),
                 uptime_30d=successes / checks * 100 if checks else None,
                 latency_ms=row.get("avg_latency_24h"),

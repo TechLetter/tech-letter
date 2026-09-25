@@ -316,17 +316,23 @@ async def last_scan_at(db: AsyncDatabase) -> datetime | None:
     return doc["checked_at"] if doc else None
 
 
-def classify_state(model: dict[str, Any]) -> str:
-    """지금 쓸 수 있는가로 3단 분류한다. 모델 페이지·챗봇 선택·요약 숫자가 같이 쓴다.
+# 모델 페이지의 일별 막대 색과 같은 경계다(90% 이상 초록, 50% 이상 노랑, 그 아래 빨강).
+HEALTHY_UPTIME = 90.0
+USABLE_UPTIME = 50.0
 
-    - down: 마지막 체크가 실패(429·403·타임아웃…). 라우터의 `is_healthy`와 같다 —
-      지금 부르면 실패할 모델이라 챗봇에서 고르지 못하게 한다.
-    - degraded: 지금은 응답하지만 24시간 가용률이 90% 미만.
-    - healthy: 지금 응답하고 24시간 동안도 안정적.
+
+def classify_state(model: dict[str, Any]) -> str:
+    """지금 쓸 수 있는가로 3단 분류한다. 모델 페이지·챗봇 선택·추천 순위·요약 숫자가 같이 쓴다.
+
+    - down: 마지막 체크가 실패했거나 24시간 가용률이 50% 미만. 한 번 운 좋게 응답했다고
+      10번 중 8번 실패하는 모델을 쓸 수 있다고 하지 않는다.
+    - degraded: 지금 응답하고 24시간 가용률 50~90%.
+    - healthy: 지금 응답하고 24시간 가용률 90% 이상.
     """
-    if str(model.get("latest_status") or "").upper() != "OK":
+    uptime = float(model.get("uptime_24h") or 0.0)
+    if str(model.get("latest_status") or "").upper() != "OK" or uptime < USABLE_UPTIME:
         return "down"
-    if float(model.get("uptime_24h") or 0.0) >= 90.0:
+    if uptime >= HEALTHY_UPTIME:
         return "healthy"
     return "degraded"
 

@@ -1,4 +1,4 @@
-"""추천 점수 = 성능 × 가용성 × 속도."""
+"""추천 순위 = 상태 안에서 성능 × 가용성 × 속도. 성능 점수가 없으면 추정하지 않는다."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from techletter.settings import RouterSettings
 def model(model_id: str, intelligence: float | None, uptime: float = 100.0, **kw) -> Candidate:
     return Candidate(
         model_id=model_id,
-        available=kw.get("available", True),
+        state=kw.get("state", "healthy" if uptime >= 90 else "degraded"),
         uptime_24h=uptime,
         uptime_30d=kw.get("uptime_30d", uptime),
         latency_ms=kw.get("latency_ms", 1000),
@@ -23,18 +23,26 @@ def ranks(candidates: list[Candidate], **settings) -> list[str]:
     return sorted(ranked, key=lambda mid: recs[mid].rank or 0)
 
 
-def test_a_high_score_does_not_make_up_for_poor_availability() -> None:
-    """GLM 5.2(33.7점, 가용률 30%)가 22.9점·97%인 모델을 이기면 안 된다."""
-    assert ranks([model("glm", 33.7, uptime=30), model("ultra", 22.9, uptime=97)]) == [
+def test_a_healthy_model_comes_before_an_unstable_one_whatever_the_score() -> None:
+    assert ranks([model("glm", 33.7, uptime=60), model("ultra", 22.9, uptime=97)]) == [
         "ultra",
         "glm",
     ]
 
 
-def test_an_unscored_model_counts_as_the_lowest_known_score() -> None:
-    recs = recommend([model("known", 9.9), model("unknown", None)], RouterSettings())
+def test_an_unscored_model_has_no_score_and_follows_the_scored_ones() -> None:
+    """성능을 추정하지 않는다. 점수 없는 모델은 같은 상태의 점수 있는 모델 뒤, 가용성순."""
+    recs = recommend(
+        [model("unknown", None), model("known", 9.9, uptime=92), model("flaky", None, uptime=91)],
+        RouterSettings(),
+    )
 
-    assert recs["unknown"].score == recs["known"].score
+    assert recs["unknown"].score is None
+    assert [m for m, _ in sorted(recs.items(), key=lambda x: x[1].rank or 99)] == [
+        "known",
+        "unknown",
+        "flaky",
+    ]
 
 
 def test_a_slow_model_is_pushed_down() -> None:
@@ -45,14 +53,14 @@ def test_a_slow_model_is_pushed_down() -> None:
     ]
 
 
-def test_a_model_that_does_not_answer_now_gets_no_rank() -> None:
-    recs = recommend([model("down", 33.7, available=False)], RouterSettings())
+def test_an_unusable_model_gets_no_rank() -> None:
+    recs = recommend([model("down", 33.7, uptime=20, state="down")], RouterSettings())
 
-    assert (recs["down"].score, recs["down"].rank) == (0.0, None)
+    assert recs["down"].rank is None
 
 
 def test_weights_come_from_settings() -> None:
-    candidates = [model("smart", 30.0, uptime=60), model("steady", 20.0, uptime=100)]
+    candidates = [model("smart", 30.0, uptime=92), model("steady", 20.0, uptime=100)]
 
-    assert ranks(candidates) == ["steady", "smart"]
-    assert ranks(candidates, RECOMMEND_WEIGHT_CAPABILITY=3.0) == ["smart", "steady"]
+    assert ranks(candidates, RECOMMEND_WEIGHT_AVAILABILITY=40.0) == ["steady", "smart"]
+    assert ranks(candidates) == ["smart", "steady"]

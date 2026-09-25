@@ -118,7 +118,7 @@ async def test_scouter_client_returns_empty_without_any_checks(mongo_db) -> None
 
 
 async def test_scouter_client_orders_models_by_recommendation(mongo_db) -> None:
-    """추천 점수(성능 × 가용성 × 속도) 순. 점수 없는 모델은 후보 중 가장 낮은 점수로 본다."""
+    """추천 순위(성능 × 가용성 × 속도) 순."""
     from techletter.core.llm.model_meta import save_meta
 
     now = utcnow()
@@ -138,6 +138,10 @@ async def test_scouter_client_orders_models_by_recommendation(mongo_db) -> None:
 
     models = await ScouterClient(RouterSettings(), mongo_db).healthy_models()
 
-    assert models[0].model_id == "scored/model:free"
-    scores = {m.model_id: m.score for m in models}
-    assert scores["scored/model:free"] > scores["unscored/model:free"] == scores["weak/model:free"]
+    # 점수 있는 모델이 점수순으로 먼저, 점수 없는 모델은 그 뒤(추정하지 않는다).
+    assert [m.model_id for m in models] == [
+        "scored/model:free",
+        "weak/model:free",
+        "unscored/model:free",
+    ]
+    assert [m.rank for m in models] == [1, 2, 3]
