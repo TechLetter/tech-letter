@@ -53,9 +53,10 @@ async def blog(blog_service) -> Blog:
 
 
 # ── 블로그 ──────────────────────────────────────────────────────────
-async def test_create_strips_the_trailing_slash(blog) -> None:
-    assert blog.url == "https://alpha.test"
-    assert blog.rss_url == "https://alpha.test/rss"
+async def test_create_keeps_the_url_as_given(blog) -> None:
+    """`/rss/`를 `/rss`로 바꾸면 301을 거친다. 그 요청에 429를 주는 서버가 있었다."""
+    assert blog.url == "https://alpha.test/"
+    assert blog.rss_url == "https://alpha.test/rss/"
 
 
 async def test_duplicate_rss_url_is_a_conflict(blog_service, blog) -> None:
@@ -75,7 +76,7 @@ async def test_update_is_partial_and_keeps_untouched_fields(blog_service, blogs,
     updated = await blog_service.update(str(blog.id), {"name": "Alpha Renamed"})
 
     assert updated.name == "Alpha Renamed"
-    assert updated.rss_url == "https://alpha.test/rss"
+    assert updated.rss_url == "https://alpha.test/rss/"
     # 전체 교체였다면 여기서 사라진다.
     assert updated.last_fetched_at is not None
 
