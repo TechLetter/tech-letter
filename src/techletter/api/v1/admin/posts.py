@@ -55,8 +55,8 @@ async def delete_post(ctx: Ctx, _: AdminUser, post_id: str) -> Response:
 )
 async def summarize(ctx: Ctx, _: AdminUser, post_id: str) -> JobAccepted:
     """요약을 다시 요청한다. 이미 대기 중이면 새 잡을 만들지 않는다."""
-    await ctx.post_service.retry_summary(post_id)
-    return JobAccepted(job_id=await _job_id(ctx, JobType.SUMMARY_REQUESTED, post_id))
+    job_type = await ctx.post_service.retry_summary(post_id)
+    return JobAccepted(job_id=await _job_id(ctx, job_type, post_id))
 
 
 @router.post("/{post_id}/embed", status_code=status.HTTP_202_ACCEPTED, response_model=JobAccepted)

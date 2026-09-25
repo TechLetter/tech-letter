@@ -120,9 +120,10 @@ async def test_admin_posts_can_search(client, admin_headers, seeded) -> None:
     assert body["total"] == 1
 
 
-async def test_creating_a_post_returns_201_and_queues_a_summary(
+async def test_creating_a_post_returns_201_and_queues_a_fetch(
     client, admin_headers, ctx, seeded
 ) -> None:
+    """새 글은 원문 가져오기부터 시작한다. 요약은 본문이 저장된 뒤에 걸린다."""
     response = await client.post(
         "/api/v1/admin/posts",
         json={
@@ -135,7 +136,7 @@ async def test_creating_a_post_returns_201_and_queues_a_summary(
 
     assert response.status_code == 201
     assert response.json()["status"]["summarized"] is False
-    assert await ctx.db["jobs"].count_documents({"type": "summary.requested"}) == 1
+    assert await ctx.db["jobs"].count_documents({"type": "content.fetch_requested"}) == 1
 
 
 async def test_a_duplicate_link_is_409_with_a_field(client, admin_headers, seeded) -> None:

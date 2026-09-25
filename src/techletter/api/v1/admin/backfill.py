@@ -6,7 +6,8 @@ from fastapi import APIRouter, status
 
 from techletter.api.deps import AdminUser, Ctx
 from techletter.api.schemas import BackfillIn, BackfillStatusOut
-from techletter.content.jobs import enqueue_embedding_requested, enqueue_summary_requested
+from techletter.content.jobs import enqueue_embedding_requested
+from techletter.content.service import request_summary
 from techletter.core.jobs.types import JobStatus, JobType
 from techletter.core.logging import get_logger
 
@@ -19,13 +20,17 @@ async def summary_status(ctx: Ctx, _: AdminUser) -> BackfillStatusOut:
     return BackfillStatusOut(
         unsummarized=len(await ctx.posts.find_unsummarized(10_000)),
         unembedded=len(await ctx.posts.find_summarized_not_embedded(10_000)),
-        pending_jobs=await ctx.queue.count(
-            status=JobStatus.PENDING.value, job_type=JobType.SUMMARY_REQUESTED.value
-        ),
-        dead_jobs=await ctx.queue.count(
-            status=JobStatus.DEAD.value, job_type=JobType.SUMMARY_REQUESTED.value
-        ),
+        pending_jobs=await _count(ctx, JobStatus.PENDING),
+        dead_jobs=await _count(ctx, JobStatus.DEAD),
     )
+
+
+async def _count(ctx: Ctx, job_status: JobStatus) -> int:
+    """요약까지 가는 두 단계(가져오기·요약)를 합쳐 센다."""
+    total = 0
+    for job_type in (JobType.CONTENT_FETCH_REQUESTED, JobType.SUMMARY_REQUESTED):
+        total += await ctx.queue.count(status=job_status.value, job_type=job_type.value)
+    return total
 
 
 @router.post("/summary", status_code=status.HTTP_202_ACCEPTED)
@@ -37,7 +42,8 @@ async def enqueue_summaries(ctx: Ctx, _: AdminUser, body: BackfillIn) -> dict[st
     """
     posts = await ctx.posts.find_unsummarized(body.limit)
     queued = [
-        await enqueue_summary_requested(ctx.queue, post, priority=body.priority) for post in posts
+        (await request_summary(ctx.queue, ctx.posts, post, priority=body.priority))[1]
+        for post in posts
     ]
     enqueued = sum(job is not None for job in queued)
     logger.info(

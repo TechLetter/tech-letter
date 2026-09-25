@@ -487,3 +487,14 @@ async def test_posts_with_categories_outside_the_topics_need_reclassifying(posts
 
     assert await posts.set_categories(str(old.id), ["모바일"])
     assert old.id not in {p.id for p in await posts.find_needing_topics(names, 10)}
+
+
+async def test_relinking_onto_another_posts_link_is_refused(posts, blogs) -> None:
+    """새 주소가 이미 다른 글의 것이면 옮기지 않는다 — 고유 키가 깨진다."""
+    blog = await make_blog(blogs, "Alpha")
+    a = await make_post(posts, blog, "a")
+    b = await make_post(posts, blog, "b")
+
+    assert not await posts.relink(str(a.id), b.link, b.link_key or b.link)
+    assert await posts.relink(str(a.id), "https://alpha.test/a-moved", "https://alpha.test/a-moved")
+    assert [p.id for p in await posts.find_by_titles(blog.id, ["a"])] == [a.id]

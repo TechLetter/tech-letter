@@ -51,19 +51,18 @@ def _pipeline(error: Exception) -> tuple[SummaryPipeline, FakeSummarizer]:
     ],
 )
 async def test_a_blocked_page_falls_back_to_the_feed_body(error: Exception) -> None:
-    pipeline, summarizer = _pipeline(error)
+    pipeline, _ = _pipeline(error)
 
-    outcome = await pipeline.run("https://example.com/a", FEED_HTML)
+    fetched = await pipeline.fetch("https://example.com/a", FEED_HTML)
 
-    assert outcome.summary == "요약"
-    assert "피드 본문" in summarizer.inputs[0]
+    assert "피드 본문" in fetched.plain_text
 
 
 async def test_without_a_feed_body_the_failure_stands() -> None:
     pipeline, _ = _pipeline(RetryableError("blocked after 3 render attempts"))
 
     with pytest.raises(RetryableError):
-        await pipeline.run("https://example.com/a", None)
+        await pipeline.fetch("https://example.com/a", None)
 
 
 async def test_a_non_blocking_failure_is_not_papered_over() -> None:
@@ -71,13 +70,23 @@ async def test_a_non_blocking_failure_is_not_papered_over() -> None:
     pipeline, _ = _pipeline(PermanentError("failed to extract", reason="extract_failed"))
 
     with pytest.raises(PermanentError):
-        await pipeline.run("https://example.com/a", FEED_HTML)
+        await pipeline.fetch("https://example.com/a", FEED_HTML)
 
 
 async def test_a_feed_body_means_one_browser_attempt() -> None:
     """Medium은 서버에서 매번 막힌다. 대체 본문이 있으면 여러 번 열며 기다리지 않는다."""
     pipeline, _ = _pipeline(RetryableError("blocked after 1 render attempts"))
 
-    await pipeline.run("https://example.com/a", FEED_HTML)
+    await pipeline.fetch("https://example.com/a", FEED_HTML)
 
     assert pipeline.renderer_for_test.attempts == [1]  # type: ignore[attr-defined]
+
+
+async def test_summarizing_uses_only_the_given_body() -> None:
+    """요약 단계는 원문을 열지 않는다 — 저장된 본문만 쓴다."""
+    pipeline, summarizer = _pipeline(AssertionError("renderer must not be called"))
+
+    outcome = await pipeline.summarize("저장된 본문")
+
+    assert outcome.summary == "요약"
+    assert summarizer.inputs == ["저장된 본문"]

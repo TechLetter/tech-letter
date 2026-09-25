@@ -94,7 +94,7 @@ enqueue ──▶ pending ──claim──▶ running ──성공──▶ don
 스테일 락(running & locked_at < now-timeout) ──▶ pending
 ```
 
-- 잡 타입: `summary.requested/completed`, `embedding.requested/completed/delete_requested`, `chat.compression_requested`.
+- 잡 타입: `content.fetch_requested`, `summary.requested/completed`, `embedding.requested/completed/delete_requested`, `chat.compression_requested`.
 - 우선순위: 신규 포스트 `priority=0`, 백필 `priority=10` — 백필이 신규 처리를 밀어내지 않는다.
 - 중복 억제: 같은 `(key, type)`가 pending/running이면 enqueue 생략.
 - 조회: `GET /api/v1/admin/jobs`, `/admin/jobs/stats`, CLI `techletter jobs list|stats|retry|purge`.

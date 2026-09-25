@@ -232,8 +232,6 @@ async def test_summary_is_written_and_embedding_is_queued(
                 categories=["Backend"],
                 tags=["Kafka"],
                 model_name="nvidia/nemotron",
-                plain_text="본문",
-                thumbnail_url="https://alpha.test/thumb.png",
             )
         )
     )
@@ -245,8 +243,6 @@ async def test_summary_is_written_and_embedding_is_queued(
     assert found.aisummary.summary == "요약문"
     assert found.aisummary.tags == ["Kafka"]
     assert found.aisummary.generated_at is not None
-    assert found.thumbnail_url == "https://alpha.test/thumb.png"
-    assert await posts.get_plain_text(str(post.id)) == "본문"
     assert await mongo_db["jobs"].count_documents({"type": JobType.EMBEDDING_REQUESTED.value}) == 1
 
 
@@ -264,18 +260,48 @@ async def test_applying_a_summary_keeps_the_embedded_flag(post_service, posts, q
     assert found.status.embedded is True
 
 
-async def test_an_empty_body_does_not_erase_the_stored_one(
+async def test_fetched_content_is_stored_and_the_feed_copy_dropped(
     post_service, posts, queue, blog
 ) -> None:
+    """가져오기 단계가 본문·썸네일을 남긴다. 피드 본문은 대체 입력이었을 뿐이다."""
     post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
-    handler = SummaryCompletedHandler(posts, queue)
-    await handler(
-        completed_job(SummaryCompletedPayload(post_id=str(post.id), summary="s", plain_text="본문"))
+    await posts.apply_summary(str(post.id), {"feed_html": "<p>피드</p>"})
+
+    assert await posts.save_content(str(post.id), "본문", "https://alpha.test/thumb.png")
+
+    found = await posts.get(str(post.id))
+    assert found is not None
+    assert found.thumbnail_url == "https://alpha.test/thumb.png"
+    assert await posts.get_plain_text(str(post.id)) == "본문"
+    assert await posts.get_feed_html(str(post.id)) is None
+
+
+async def test_applying_a_summary_keeps_the_fetched_body(post_service, posts, queue, blog) -> None:
+    post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
+    await posts.save_content(str(post.id), "본문", "")
+
+    await SummaryCompletedHandler(posts, queue)(
+        completed_job(SummaryCompletedPayload(post_id=str(post.id), summary="s2"))
     )
 
-    await handler(completed_job(SummaryCompletedPayload(post_id=str(post.id), summary="s2")))
-
     assert await posts.get_plain_text(str(post.id)) == "본문"
+
+
+async def test_a_new_post_starts_with_a_content_fetch(post_service, mongo_db, blog) -> None:
+    await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
+
+    types = [j["type"] async for j in mongo_db["jobs"].find({}, {"type": 1})]
+    assert types == [JobType.CONTENT_FETCH_REQUESTED.value]
+
+
+async def test_resummarizing_skips_the_fetch_when_the_body_is_stored(
+    post_service, posts, mongo_db, blog
+) -> None:
+    """주제 목록이나 모델이 바뀌어 다시 요약할 때 원문을 다시 받지 않는다."""
+    post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
+    await posts.save_content(str(post.id), "본문", "")
+
+    assert await post_service.retry_summary(str(post.id)) == JobType.SUMMARY_REQUESTED
 
 
 async def test_a_summary_for_a_deleted_post_is_permanent(posts, queue) -> None:
@@ -302,9 +328,7 @@ async def test_replaying_the_same_summary_is_idempotent(
     """잡은 최소 1회 전달이다. 같은 결과가 두 번 와도 상태와 큐가 같아야 한다."""
     post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
     handler = SummaryCompletedHandler(posts, queue)
-    payload = SummaryCompletedPayload(
-        post_id=str(post.id), summary="s", tags=["Go"], plain_text="본문"
-    )
+    payload = SummaryCompletedPayload(post_id=str(post.id), summary="s", tags=["Go"])
 
     await handler(completed_job(payload))
     first = await posts.get(str(post.id))

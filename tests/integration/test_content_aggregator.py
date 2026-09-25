@@ -51,7 +51,9 @@ async def test_new_items_are_stored_and_queued(mongo_db, queue, blog) -> None:
     assert result.blogs[0].fetched == 2
     _, total = await PostRepository(mongo_db).list_posts(ListPostsFilter(), Page(1, 10))
     assert total == 2
-    assert await mongo_db["jobs"].count_documents({"type": JobType.SUMMARY_REQUESTED.value}) == 2
+    assert (
+        await mongo_db["jobs"].count_documents({"type": JobType.CONTENT_FETCH_REQUESTED.value}) == 2
+    )
 
 
 async def test_a_second_cycle_inserts_nothing(mongo_db, queue, blog) -> None:
@@ -77,7 +79,7 @@ async def test_queued_job_carries_what_the_summary_worker_needs(mongo_db, queue,
         queue,
     ).run()
 
-    job = await mongo_db["jobs"].find_one({"type": JobType.SUMMARY_REQUESTED.value})
+    job = await mongo_db["jobs"].find_one({"type": JobType.CONTENT_FETCH_REQUESTED.value})
 
     assert job is not None
     assert set(job["payload"]) == {"post_id", "title", "link", "blog_name"}

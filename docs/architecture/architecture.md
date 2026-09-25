@@ -40,7 +40,7 @@ flowchart LR
 |---|---|---|---|
 | **api** | `techletter api` | HTTP 전부(공개·어드민), 인증/인가, 채팅 오케스트레이션(가드→세션→크레딧→에이전트→기록/환불), SSE, OpenAPI. 잡은 **enqueue만** | 잡 소비, 스케줄러, Playwright |
 | **worker** | `techletter worker` | RSS 수집(30분 주기), 잡 소비: `summary.completed` 반영·`embedding.requested` enqueue / `embedding.completed` → posts 임베딩 메타 반영 / `chat.compression_requested`. `model_scan`·`model_history_rollup`(각 1시간, 시작 시 실행)도 담당한다. run_at 도래분은 클레임 쿼리가 자동 pending 복귀시킨다 + **스테일 락 회수** + done 잡 TTL 관리 | Qdrant upsert/delete, HTTP 서빙 |
-| **summary-worker** | `techletter summary-worker` | `summary.requested` 잡 → 렌더링·파싱·검증 → 요약 → 썸네일 → `summary.completed` enqueue. 요약이 실패하면 뒤의 썸네일도 버려지며, 영구 실패 사유는 posts에 기록한다. LLM 예산·모델 라우팅 적용 | Qdrant, 영구 실패 사유 외의 도메인 쓰기 |
+| **summary-worker** | `techletter summary-worker` | 두 단계를 맡는다. `content.fetch_requested` → 렌더링(HTTP 상태·늦은 렌더 대기·HTTP/피드 본문 폴백)·추출·검증·썸네일 → 본문을 posts에 저장 → `summary.requested`. `summary.requested` → 저장된 본문으로 LLM 요약 → `summary.completed`. 막힌 원문은 LLM을 부르지 않고, 재요약은 원문을 다시 받지 않는다. 영구 실패 사유는 posts에 기록한다. LLM 예산·모델 라우팅 적용 | Qdrant, 영구 실패 사유 외의 도메인 쓰기 |
 | **embedding-worker** | `techletter embedding-worker` | `embedding.requested` 잡 → 청킹·임베딩 → Qdrant upsert → `embedding.completed` enqueue. `embedding.delete_requested` 잡은 Qdrant delete로 처리한다 | HTTP 서빙 |
 
 - 로컬 개발용 `techletter all`(api + worker 단일 프로세스)을 제공한다.
@@ -72,8 +72,9 @@ techletter
 ### 3.1 잡 타입
 | type | enqueue | 처리 | payload |
 |---|---|---|---|
-| `summary.requested` | worker(RSS 신규·백필), api(어드민 트리거) | summary-worker | `{post_id, title, link, blog_name}` |
-| `summary.completed` | summary-worker | worker | `{post_id, summary, categories, tags, model_name, plain_text, thumbnail_url}` |
+| `content.fetch_requested` | worker(RSS 신규), api(수동 등록·본문 없는 글의 재요약·백필) | summary-worker | `{post_id, title, link, blog_name}` |
+| `summary.requested` | summary-worker(가져오기 뒤), api(본문 있는 글의 재요약·백필) | summary-worker | `{post_id, title, link, blog_name}` — 본문이 없으면 가져오기부터 다시 건다 |
+| `summary.completed` | summary-worker | worker | `{post_id, summary, categories, tags, model_name}` (본문·썸네일은 가져오기 단계가 이미 저장) |
 | `embedding.requested` | worker(요약 반영 후), api(어드민 트리거) | embedding-worker | `{post_id}` |
 | `embedding.completed` | embedding-worker | worker | `{post_id, model_name, collection_name, vector_dimension, chunk_count}` (벡터는 잡으로 흐르지 않음) |
 | `embedding.delete_requested` | api(포스트·블로그 삭제) | embedding-worker | `{post_ids:[...]}` |

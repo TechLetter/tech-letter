@@ -22,8 +22,9 @@ __all__ = [
     "EmbeddingCompletedPayload",
     "EmbeddingDeletePayload",
     "EmbeddingRequestedPayload",
+    "PostRefPayload",
     "SummaryCompletedPayload",
-    "SummaryRequestedPayload",
+    "enqueue_content_fetch",
     "enqueue_embedding_delete",
     "enqueue_embedding_requested",
     "enqueue_summary_requested",
@@ -31,7 +32,9 @@ __all__ = [
 
 
 @dataclass(slots=True)
-class SummaryRequestedPayload:
+class PostRefPayload:
+    """`content.fetch_requested`와 `summary.requested`가 같이 쓰는 글 참조."""
+
     post_id: str
     title: str
     link: str
@@ -41,7 +44,11 @@ class SummaryRequestedPayload:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SummaryRequestedPayload:
+    def of(cls, post: Post) -> PostRefPayload:
+        return cls(post_id=str(post.id), title=post.title, link=post.link, blog_name=post.blog_name)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PostRefPayload:
         return cls(
             post_id=str(data.get("post_id") or ""),
             title=str(data.get("title") or ""),
@@ -52,18 +59,13 @@ class SummaryRequestedPayload:
 
 @dataclass(slots=True)
 class SummaryCompletedPayload:
-    """요약 워커가 만든 결과. 본문(`plain_text`)까지 담는다.
-
-    페이로드가 커지지만(수십 KB) Mongo 문서 한도(16MB)에는 한참 못 미친다.
-    """
+    """요약 결과. 본문·썸네일은 가져오기 단계가 이미 글에 저장했다."""
 
     post_id: str
     summary: str
     categories: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     model_name: str = ""
-    plain_text: str = ""
-    thumbnail_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,8 +78,6 @@ class SummaryCompletedPayload:
             categories=[str(c) for c in (data.get("categories") or [])],
             tags=[str(t) for t in (data.get("tags") or [])],
             model_name=str(data.get("model_name") or ""),
-            plain_text=str(data.get("plain_text") or ""),
-            thumbnail_url=str(data.get("thumbnail_url") or ""),
         )
 
 
@@ -129,27 +129,35 @@ class EmbeddingDeletePayload:
         return cls(post_ids=[str(p) for p in (data.get("post_ids") or [])])
 
 
-async def enqueue_summary_requested(
+async def enqueue_content_fetch(
     queue: JobQueue,
-    post: Post,
+    ref: PostRefPayload,
     *,
     priority: int = PRIORITY_NORMAL,
 ) -> Job | None:
-    """요약 잡을 건다. 이미 대기 중이면 None(중복 억제).
+    """원문 가져오기를 건다. 새 글의 첫 단계다. 이미 대기 중이면 None(중복 억제)."""
+    if not ref.post_id:
+        return None
+    return await queue.enqueue(
+        JobType.CONTENT_FETCH_REQUESTED, ref.post_id, ref.to_dict(), priority=priority
+    )
+
+
+async def enqueue_summary_requested(
+    queue: JobQueue,
+    ref: PostRefPayload,
+    *,
+    priority: int = PRIORITY_NORMAL,
+) -> Job | None:
+    """저장된 본문으로 요약을 건다. 이미 대기 중이면 None(중복 억제).
 
     `priority`는 백필 호출자가 `PRIORITY_BACKFILL`을 넘긴다 — 신규 수집
     포스트가 항상 먼저 처리되게 하기 위해서다.
     """
-    if post.id is None:
+    if not ref.post_id:
         return None
-    payload = SummaryRequestedPayload(
-        post_id=str(post.id), title=post.title, link=post.link, blog_name=post.blog_name
-    )
     return await queue.enqueue(
-        JobType.SUMMARY_REQUESTED,
-        str(post.id),
-        payload.to_dict(),
-        priority=priority,
+        JobType.SUMMARY_REQUESTED, ref.post_id, ref.to_dict(), priority=priority
     )
 
 

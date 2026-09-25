@@ -10,8 +10,8 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from techletter.content.jobs import enqueue_summary_requested
-from techletter.content.links import normalize_link
+from techletter.content.jobs import PostRefPayload, enqueue_content_fetch
+from techletter.content.links import link_slug, normalize_link
 from techletter.content.models import AISummary, Post, StatusFlags
 from techletter.core.errors import PermanentError
 from techletter.core.logging import get_logger
@@ -132,9 +132,22 @@ class Aggregator:
         known = await self._posts.existing_link_keys(
             [item.link for item, _ in item_keys], [link_key for _, link_key in item_keys]
         )
+        fresh = [(i, k) for i, k in item_keys if i.link not in known and k not in known]
+        moved = await self._moved_posts(blog, [item for item, _ in fresh])
         inserted = 0
-        for item, link_key in item_keys:
+        for item, link_key in fresh:
             if item.link in known or link_key in known:
+                continue
+            old = moved.get((item.title, link_slug(item.link)))
+            if old is not None and old.id is not None:
+                # 도메인을 옮긴 같은 글이다. 새로 넣으면 같은 글이 두 번 공개된다
+                # (쏘카·컬리·Uber가 도메인을 옮기면서 실제로 그랬다).
+                if await self._posts.relink(str(old.id), item.link, link_key):
+                    logger.info(
+                        "post moved to a new link",
+                        extra={"blog": blog.name, "post_id": str(old.id), "link": item.link},
+                    )
+                known.update((item.link, link_key))
                 continue
             post = self._build(blog, item, link_key=link_key)
             saved = await self._posts.insert(post)
@@ -143,8 +156,24 @@ class Aggregator:
             inserted += 1
             # 같은 RSS 응답 안의 중복도 저장소 왕복 없이 걸러낸다.
             known.update((item.link, link_key))
-            await enqueue_summary_requested(self._queue, saved)
+            await enqueue_content_fetch(self._queue, PostRefPayload.of(saved))
         return inserted
+
+    async def _moved_posts(self, blog: Blog, items: list[FeedItem]) -> dict[tuple[str, str], Post]:
+        """링크는 처음 보지만 제목·주소 끝부분이 같은 기존 글. (제목, slug)로 찾는다.
+
+        제목만으로 보면 "월간 소식"처럼 반복되는 제목이 합쳐진다. 주소 끝부분까지
+        같아야 같은 글로 본다.
+        """
+        titles = list({item.title for item in items if item.title})
+        if not titles:
+            return {}
+        found: dict[tuple[str, str], Post] = {}
+        for post in await self._posts.find_by_titles(blog.id, titles):
+            slug = link_slug(post.link)
+            if slug:
+                found.setdefault((post.title, slug), post)
+        return found
 
     @staticmethod
     def _build(blog: Blog, item: FeedItem, *, link_key: str | None = None) -> Post:

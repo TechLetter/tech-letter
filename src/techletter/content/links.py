@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 __all__ = ["normalize_link"]
@@ -72,3 +73,20 @@ def normalize_link(url: str) -> str:
         # urlsplit의 잘못된 IPv6/포트 등 파싱 예외도 링크 하나 때문에 전체
         # 수집을 중단하지 않도록 원문을 안전한 fallback으로 사용한다.
         return value
+
+
+_PAGE_SUFFIX = re.compile(r"\.(html?|php|aspx?)$", re.I)
+
+
+def link_slug(url: str) -> str:
+    """주소의 마지막 경로 조각. 도메인을 옮긴 같은 글인지 가늠하는 데 쓴다.
+
+    `/2026/02/24/frame2-web.html`과 `/2026/02/25/frame2-web`은 같은 `frame2-web`이다
+    (쏘카는 이전하면서 확장자를 떼고 날짜를 하루 옮겼다). 조각이 없으면 빈 문자열.
+    """
+    try:
+        path = urlsplit(url.strip()).path
+    except ValueError:
+        return ""
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    return _PAGE_SUFFIX.sub("", last).lower()

@@ -12,6 +12,7 @@ COLLECTION = "jobs"
 class JobType(StrEnum):
     """잡 종류."""
 
+    CONTENT_FETCH_REQUESTED = "content.fetch_requested"
     SUMMARY_REQUESTED = "summary.requested"
     SUMMARY_COMPLETED = "summary.completed"
     EMBEDDING_REQUESTED = "embedding.requested"

@@ -298,6 +298,41 @@ class PostRepository:
         )
         return result.matched_count > 0
 
+    async def find_by_titles(self, blog_id: Any, titles: list[str]) -> list[Post]:
+        """같은 블로그에서 제목이 같은 글. 도메인을 옮긴 글을 알아보는 데 쓴다."""
+        if not titles:
+            return []
+        cursor = self._col.find(
+            {"blog_id": blog_id, "title": {"$in": titles}}, projection=_WITHOUT_BODIES
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
+    async def relink(self, post_id: str, link: str, link_key: str) -> bool:
+        """글의 주소를 옮긴다. 새 주소가 이미 다른 글의 것이면 건드리지 않는다."""
+        oid = to_object_id(post_id)
+        if oid is None:
+            return False
+        try:
+            result = await self._col.update_one(
+                {"_id": oid},
+                {"$set": {"link": link, "link_key": link_key, "updated_at": utcnow()}},
+            )
+        except DuplicateKeyError:
+            return False
+        return result.modified_count > 0
+
+    async def save_content(self, post_id: str, plain_text: str, thumbnail_url: str) -> bool:
+        """가져오기 결과를 저장한다. 요약은 이 본문으로 한다 — 재요약에 원문이 필요 없다."""
+        fields: dict[str, Any] = {
+            "plain_text": plain_text,
+            # 원문 대신 쓸 대체 본문이었을 뿐이다. 본문을 얻었으면 자리만 차지한다.
+            "feed_html": None,
+            "status.failed_reason": None,
+        }
+        if thumbnail_url:
+            fields["thumbnail_url"] = thumbnail_url
+        return await self.apply_summary(post_id, fields)
+
     async def mark_summary_failed(self, post_id: str, reason: str) -> bool:
         """영구 실패 사유를 남긴다. 어드민이 "왜 요약이 안 됐나"를 볼 수 있게."""
         return await self.apply_summary(post_id, {"status.failed_reason": reason[:300]})
