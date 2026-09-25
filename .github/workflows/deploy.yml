@@ -119,4 +119,5 @@ jobs:
             | grep -vxE ".*:(${KEEP_CURRENT}${KEEP_PREVIOUS:+|$KEEP_PREVIOUS})" \
             | xargs -r docker rmi || true
           docker image prune -f
-          docker builder prune -f --filter "until=168h"
+          # 기간 필터만으로는 하루에 배포가 몰리면 캐시가 50GB까지 쌓였다. 크기로도 묶는다.
+          docker builder prune -f --keep-storage 5gb
