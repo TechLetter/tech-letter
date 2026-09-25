@@ -70,7 +70,7 @@ llm_model_events  idx_model_events_detected {detected_at:-1} · idx_model_events
 _id, created_at, updated_at,
 blog_id(ObjectId), blog_name, title, link(UNIQUE), link_key(정규화 링크), published_at, thumbnail_url, view_count,
 status: { ai_summarized: bool, embedded: bool, failed_reason: str|null },
-aisummary: { categories[], tags[], summary, model_name, generated_at } | null,
+aisummary: { categories[], tags[], summary, model_name, generated_at } | null,   # categories = 주제 이름(summary/topics.py), tags = 키워드 3~5개
 plain_text: str|null,
 feed_html: str|null,   # RSS 본문(요약 전 대체 입력). 요약이 끝나면 null
 embedding: { model_name, collection_name, vector_dimension, chunk_count, embedded_at } | 없음

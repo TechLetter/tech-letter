@@ -504,3 +504,23 @@ async def test_a_period_boundary_is_not_shifted_by_local_time(posts, blogs) -> N
 
     assert len(rows) == 1
     assert rows[0]["bucket"] == datetime(2025, 3, 3, tzinfo=UTC)
+
+
+# ── 주제 재분류 ─────────────────────────────────────────────────────
+async def test_posts_with_categories_outside_the_topics_need_reclassifying(posts, blogs) -> None:
+    """목록 밖의 값이 하나라도 있으면 대상이다. 그래서 버전 필드 없이 이어서 돌릴 수 있다."""
+    blog = await make_blog(blogs, "Alpha")
+    names = ("RAG·검색", "모바일")
+    await make_post(posts, blog, "done", categories=["RAG·검색", "모바일"], published=at(1))
+    mixed = await make_post(posts, blog, "mixed", categories=["RAG·검색", "AI"], published=at(2))
+    old = await make_post(posts, blog, "old", categories=["Backend"], published=at(3))
+    empty = await make_post(posts, blog, "empty", categories=[], published=at(4))
+    await make_post(posts, blog, "pending", categories=["AI"], summarized=False)
+
+    found = await posts.find_needing_topics(names, 10)
+
+    assert [p.id for p in found] == [empty.id, old.id, mixed.id]  # 최근 글부터
+    assert all(p.plain_text is None for p in found)  # 본문은 싣지 않는다
+
+    assert await posts.set_categories(str(old.id), ["모바일"])
+    assert old.id not in {p.id for p in await posts.find_needing_topics(names, 10)}

@@ -6,14 +6,14 @@ import pytest
 
 from techletter.core.errors import PermanentError
 from techletter.settings import SummarySettings
-from techletter.summary.constants import CATEGORIES
 from techletter.summary.summarizer import (
     SYSTEM_INSTRUCTION,
+    TOPIC_CLASSIFY_INSTRUCTION,
     Summarizer,
     clip_to_sentence,
-    normalize_categories,
     normalize_tags,
 )
+from techletter.summary.topics import OTHER, TOPIC_NAMES, TOPICS, normalize_topics
 
 
 class FakeLlm:
@@ -42,7 +42,7 @@ def settings() -> SummarySettings:
 def payload(**overrides) -> dict:
     return {
         "summary": "Kafka 리밸런싱의 원인과 대응을 정리한 글입니다.",
-        "categories": ["Backend"],
+        "categories": ["streaming"],
         "tags": ["Kafka"],
         "error": None,
         **overrides,
@@ -57,9 +57,10 @@ def test_the_prompt_declares_the_right_number_of_keys() -> None:
         assert f'"{key}"' in SYSTEM_INSTRUCTION
 
 
-def test_the_prompt_lists_the_category_whitelist() -> None:
-    assert "Backend" in SYSTEM_INSTRUCTION
-    assert "Programming Languages" in SYSTEM_INSTRUCTION
+def test_the_prompt_lists_every_topic() -> None:
+    for topic in TOPICS:
+        assert f"{topic.slug} | {topic.name}" in SYSTEM_INSTRUCTION
+        assert f"{topic.slug} | {topic.name}" in TOPIC_CLASSIFY_INSTRUCTION
 
 
 # ── 길이 후처리 ─────────────────────────────────────────────────────
@@ -93,24 +94,29 @@ def test_english_sentence_ends_are_recognized() -> None:
     assert clipped.endswith(".")
 
 
-# ── 카테고리·태그 후처리 ────────────────────────────────────────────
-def test_categories_outside_the_whitelist_are_dropped() -> None:
+# ── 주제·태그 후처리 ────────────────────────────────────────────────
+def test_topics_outside_the_list_are_dropped() -> None:
     """`lfm-2.5-2.6b`가 Frontend 글을 Infrastructure로 분류한 실측이 있다."""
-    assert normalize_categories(["Backend", "우주공학", "Frontend"]) == ["Backend", "Frontend"]
+    assert normalize_topics(["frontend", "우주공학", "mobile"]) == ["프론트엔드", "모바일"]
 
 
-def test_category_matching_ignores_case() -> None:
-    assert normalize_categories(["backend", "  AI  "]) == ["Backend", "AI"]
+def test_a_topic_may_come_back_as_its_name() -> None:
+    assert normalize_topics(["  RAG·검색 ", "KUBERNETES"]) == ["RAG·검색", "쿠버네티스·컨테이너"]
 
 
-def test_categories_fall_back_to_other() -> None:
-    assert normalize_categories([]) == ["Other"]
-    assert normalize_categories("nope") == ["Other"]
-    assert normalize_categories(["존재하지 않음"]) == ["Other"]
+def test_topics_fall_back_to_other() -> None:
+    assert normalize_topics([]) == [OTHER]
+    assert normalize_topics("nope") == [OTHER]
+    assert normalize_topics(["Infrastructure"]) == [OTHER]  # 옛 카테고리 이름
 
 
-def test_categories_are_capped_at_three() -> None:
-    assert len(normalize_categories(list(CATEGORIES))) == 3
+def test_topics_are_capped_at_three() -> None:
+    assert len(normalize_topics([t.slug for t in TOPICS])) == 3
+
+
+def test_topic_names_are_unique() -> None:
+    assert len(TOPIC_NAMES) == len(set(TOPIC_NAMES))
+    assert len({t.slug for t in TOPICS}) == len(TOPICS)
 
 
 def test_tags_are_deduped_case_insensitively() -> None:
@@ -136,7 +142,7 @@ async def test_a_normal_summary_is_returned(settings) -> None:
     result = await Summarizer(llm, settings).summarize("본문")  # type: ignore[arg-type]
 
     assert result.summary.startswith("Kafka")
-    assert result.categories == ["Backend"]
+    assert result.categories == ["메시징·스트리밍"]
     assert result.model_name == "nvidia/nemotron:free"
     assert result.truncated_input is False
 
@@ -239,3 +245,25 @@ async def test_without_a_budget_the_router_decides(settings) -> None:
     await Summarizer(llm, settings).summarize("본문")  # type: ignore[arg-type]
 
     assert llm.candidate_lists[0] is None
+
+
+# ── 주제 재분류 ─────────────────────────────────────────────────────
+async def test_topics_are_classified_in_one_call(settings) -> None:
+    llm = FakeLlm(
+        {
+            "results": [
+                {"id": "a", "topics": ["security", "llm-apps"]},
+                {"id": "b", "topics": ["없는-주제"]},
+                {"id": "zzz", "topics": ["mobile"]},  # 묻지 않은 id는 버린다
+            ]
+        }
+    )
+    posts = [
+        {"id": "a", "title": "t", "blog": "b", "summary": "s", "keywords": []},
+        {"id": "b", "title": "t", "blog": "b", "summary": "s", "keywords": []},
+        {"id": "c", "title": "t", "blog": "b", "summary": "s", "keywords": []},
+    ]
+
+    result = await Summarizer(llm, settings).classify_topics(posts)  # type: ignore[arg-type]
+
+    assert result == {"a": ["보안·인증", "LLM 활용·프롬프트"], "b": [OTHER]}  # c는 누락

@@ -24,7 +24,7 @@ def test_a_full_payload_is_parsed() -> None:
                 "published_from": "2025-03-01T00:00:00Z",
                 "published_to": "2025-03-31T23:59:59+09:00",
                 "blog_name": " 카카오 ",
-                "categories": ["AI", " ai ", ""],
+                "categories": ["RAG·검색", " RAG·검색 ", "", "AI"],
                 "tags": ["Kafka"],
                 "limit": 5,
             },
@@ -37,7 +37,8 @@ def test_a_full_payload_is_parsed() -> None:
     assert plan.task == "list_posts"
     assert plan.constraints.published_from == datetime(2025, 3, 1, tzinfo=UTC)
     assert plan.constraints.blog_name == "카카오"
-    assert plan.constraints.categories == ["AI"]  # 공백·중복 제거
+    # 공백·중복 제거, 주제 목록 밖의 값("AI")은 버린다 — 남으면 결과가 0건이 된다.
+    assert plan.constraints.categories == ["RAG·검색"]
     assert plan.constraints.limit == 5
     assert plan.reason == "목록 요청"
 

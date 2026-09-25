@@ -15,6 +15,7 @@ from techletter.chat.agent.prompts import PLANNER_SYSTEM_PROMPT
 from techletter.chat.agent.state import ChatPlan, PostConstraints
 from techletter.core.logging import get_logger
 from techletter.core.time import ensure_utc
+from techletter.summary.topics import TOPIC_NAMES
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.chat import LlmGateway
@@ -81,7 +82,8 @@ def parse_plan(payload: dict[str, Any]) -> ChatPlan:
                 published_from=_datetime(constraints.get("published_from")),
                 published_to=_datetime(constraints.get("published_to")),
                 blog_name=_text(constraints.get("blog_name")),
-                categories=_strings(constraints.get("categories")),
+                # 목록 밖의 값이 조건에 남으면 strict_scope에서 결과가 0건이 된다.
+                categories=[c for c in _strings(constraints.get("categories")) if c in TOPIC_NAMES],
                 tags=_strings(constraints.get("tags")),
                 limit=_limit(constraints.get("limit")),
             ),
