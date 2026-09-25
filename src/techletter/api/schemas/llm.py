@@ -33,7 +33,6 @@ class ModelHealthOut(BaseModel):
     uptime_24h: float
     uptime_30d: float | None
     avg_latency_ms: float | None
-    consecutive_failures: int
     latest_status: str
     daily: list[DailyUptimeOut]
     """최근 30일, 오래된 날부터. 기록이 없는 날은 빠진다."""
@@ -51,7 +50,6 @@ class ModelHealthOut(BaseModel):
             uptime_24h=uptime_24h,
             uptime_30d=round(successes / checks * 100, 1) if checks else None,
             avg_latency_ms=row.get("avg_latency_24h"),
-            consecutive_failures=int(row.get("consecutive_failures") or 0),
             latest_status=str(row.get("latest_status") or ""),
             daily=[
                 DailyUptimeOut(date=d["date"], uptime=round(float(d["uptime"]), 1)) for d in daily
