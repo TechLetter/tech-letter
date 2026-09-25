@@ -17,9 +17,12 @@ from typing import TYPE_CHECKING
 from techletter.core.errors import PermanentError, RetryableError
 from techletter.core.logging import get_logger
 from techletter.summary.parser import extract_plain_text, extract_thumbnail
+from techletter.summary.published import extract_published_at
 from techletter.summary.validator import validate_plain_text
 
 if TYPE_CHECKING:  # pragma: no cover
+    from datetime import datetime
+
     import httpx
 
     from techletter.summary.renderer import Renderer
@@ -66,6 +69,8 @@ _BLOCKED_REASONS = frozenset({"bot_blocked", "unresolved_page", "error_page", "c
 class FetchedContent:
     plain_text: str
     thumbnail_url: str
+    published_at: datetime | None = None
+    """페이지에 적힌 발행일. 피드에 날짜가 없던 글만 이것으로 바로잡는다(`correct_published_at`)."""
 
 
 @dataclass(slots=True)
@@ -118,7 +123,9 @@ class SummaryPipeline:
             thumbnail = await extract_thumbnail(html, url, self._image_client)
         except Exception:
             logger.warning("thumbnail extraction failed", extra={"url": url})
-        return FetchedContent(plain_text=plain_text, thumbnail_url=thumbnail)
+        return FetchedContent(
+            plain_text=plain_text, thumbnail_url=thumbnail, published_at=extract_published_at(html)
+        )
 
     async def summarize(self, plain_text: str) -> SummaryOutcome:
         result = await self._summarizer.summarize(plain_text)

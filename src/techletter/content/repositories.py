@@ -30,6 +30,10 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = ["BlogPostStats", "BlogRepository", "PostRepository", "TopicActivity"]
 
 
+# 발행일이 생성 시각과 이만큼 가까우면 피드가 날짜를 안 준 글이다.
+ESTIMATED_PUBLISHED_WINDOW_MS = 60_000
+
+
 @dataclass(frozen=True, slots=True)
 class BlogPostStats:
     count: int
@@ -346,6 +350,29 @@ class PostRepository:
         if thumbnail_url:
             fields["thumbnail_url"] = thumbnail_url
         return await self.apply_summary(post_id, fields)
+
+    async def correct_published_at(self, post_id: str, published_at: datetime) -> bool:
+        """피드에 날짜가 없어 수집 시각을 발행일로 넣어 둔 글만 페이지 날짜로 바꾼다.
+
+        그런 글은 발행일과 생성 시각이 사실상 같다(`Aggregator._build`가 now를 넣는다).
+        피드가 날짜를 준 글은 건드리지 않는다.
+        """
+        oid = to_object_id(post_id)
+        if oid is None:
+            return False
+        result = await self._col.update_one(
+            {
+                "_id": oid,
+                "$expr": {
+                    "$lt": [
+                        {"$abs": {"$subtract": ["$published_at", "$created_at"]}},
+                        ESTIMATED_PUBLISHED_WINDOW_MS,
+                    ]
+                },
+            },
+            {"$set": {"published_at": published_at, "updated_at": utcnow()}},
+        )
+        return result.modified_count > 0
 
     async def mark_summary_failed(self, post_id: str, reason: str) -> bool:
         """영구 실패 사유를 남긴다. 어드민이 "왜 요약이 안 됐나"를 볼 수 있게."""

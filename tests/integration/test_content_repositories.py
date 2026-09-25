@@ -429,6 +429,23 @@ async def test_delete_by_blog_removes_only_that_blogs_posts(posts, blogs) -> Non
     assert total == 1
 
 
+async def test_page_date_replaces_only_a_filled_in_published_at(posts, blogs, mongo_db) -> None:
+    """피드에 날짜가 없으면 수집 시각을 넣는다(발행일 ≈ 생성 시각). 그런 글만 바로잡는다."""
+    blog = await make_blog(blogs, "Alpha")
+    filled = await make_post(posts, blog, "no date")
+    dated = await make_post(posts, blog, "dated", published=at(3))
+    doc = await mongo_db["posts"].find_one({"_id": filled.id})
+    await mongo_db["posts"].update_one(
+        {"_id": filled.id}, {"$set": {"published_at": doc["created_at"]}}
+    )
+
+    assert await posts.correct_published_at(str(filled.id), at(2)) is True
+    assert await posts.correct_published_at(str(dated.id), at(2)) is False
+
+    assert (await mongo_db["posts"].find_one({"_id": filled.id}))["published_at"] == at(2)
+    assert (await mongo_db["posts"].find_one({"_id": dated.id}))["published_at"] == at(3)
+
+
 async def test_blog_stats_count_posts_and_the_last_new_one(posts, blogs, mongo_db) -> None:
     """최근 수집은 RSS를 읽은 때가 아니라 새 글이 들어온 때다."""
     alpha = await make_blog(blogs, "Alpha")

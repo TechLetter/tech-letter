@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -21,6 +22,7 @@ class FakePosts:
         self.feed_html = feed_html
         self.saved: list[tuple[str, str]] = []
         self.failures: list[str] = []
+        self.dated: list[datetime] = []
 
     async def get_feed_html(self, post_id: str) -> str | None:
         return self.feed_html
@@ -36,6 +38,10 @@ class FakePosts:
         self.failures.append(reason)
         return True
 
+    async def correct_published_at(self, post_id: str, published_at: datetime) -> bool:
+        self.dated.append(published_at)
+        return True
+
 
 class FakeQueue:
     def __init__(self) -> None:
@@ -46,8 +52,11 @@ class FakeQueue:
 
 
 class FakePipeline:
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self, error: Exception | None = None, published_at: datetime | None = None
+    ) -> None:
         self.error = error
+        self.published_at = published_at
         self.fetched_with: list[str | None] = []
         self.summarized: list[str] = []
 
@@ -55,7 +64,9 @@ class FakePipeline:
         self.fetched_with.append(feed_html)
         if self.error:
             raise self.error
-        return FetchedContent(plain_text="본문", thumbnail_url="https://a.test/t.png")
+        return FetchedContent(
+            plain_text="본문", thumbnail_url="https://a.test/t.png", published_at=self.published_at
+        )
 
     async def summarize(self, plain_text: str) -> SummaryOutcome:
         self.summarized.append(plain_text)
@@ -74,6 +85,16 @@ async def test_a_fetch_stores_the_body_then_asks_for_a_summary() -> None:
     assert pipeline.fetched_with == ["<p>피드</p>"]
     assert posts.saved == [("본문", "https://a.test/t.png")]
     assert [t for t, _ in queue.enqueued] == [JobType.SUMMARY_REQUESTED]
+
+
+async def test_a_fetch_hands_the_page_date_to_the_repository() -> None:
+    """피드에 날짜가 없던 글은 페이지 날짜로 바로잡는다 — 어느 글인지는 저장소가 가린다."""
+    page_date = datetime(2026, 9, 24, tzinfo=UTC)
+    posts, pipeline = FakePosts(), FakePipeline(published_at=page_date)
+
+    await ContentFetchHandler(posts, pipeline, FakeQueue())(job(JobType.CONTENT_FETCH_REQUESTED))  # type: ignore[arg-type]
+
+    assert posts.dated == [page_date]
 
 
 async def test_a_blocked_fetch_never_reaches_the_llm() -> None:
