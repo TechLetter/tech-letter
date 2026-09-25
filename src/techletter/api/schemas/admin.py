@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -17,8 +17,6 @@ __all__ = [
     "BlogIn",
     "JobOut",
     "JobStatsOut",
-    "LlmModelPreferenceIn",
-    "LlmModelPreferenceOut",
     "PostIn",
     "RetryBulkIn",
 ]
@@ -100,30 +98,6 @@ class BlogIn(BaseModel):
     url: str = Field(min_length=1, max_length=2000)
     rss_url: str = Field(min_length=1, max_length=2000)
     is_active: bool = True
-
-
-class LlmModelPreferenceIn(BaseModel):
-    """요약 모델 폴백 체인에 붙일 추가 후보. 순서가 곧 우선순위다."""
-
-    # 비우면 DB 추가 후보를 지우고 환경변수 기본값만 사용한다.
-    models: list[str] = Field(default_factory=list, max_length=50)
-
-
-class LlmModelPreferenceOut(BaseModel):
-    purpose: str
-    models: list[str]
-    source: str
-    default_models: list[str]
-    """`default_models`는 환경변수 기본값, `models`는 최종 폴백 순서다."""
-
-    @classmethod
-    def of(cls, row: dict[str, Any]) -> LlmModelPreferenceOut:
-        return cls(
-            purpose=str(row.get("purpose") or ""),
-            models=[str(m) for m in (row.get("models") or [])],
-            source=str(row.get("source") or "settings"),
-            default_models=[str(m) for m in (row.get("default_models") or [])],
-        )
 
 
 def _text(value: object) -> str | None:

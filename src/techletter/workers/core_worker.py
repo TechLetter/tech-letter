@@ -112,7 +112,6 @@ def build_core_worker(container: Container) -> CoreWorker:
             settings.router,
             ScouterClient(settings.router, container.db),
             container.model_stats,
-            container.model_preferences,
         ),
         LangChainChatClient(settings.chat_llm),
     )

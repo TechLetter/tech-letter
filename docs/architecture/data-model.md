@@ -16,7 +16,6 @@
 | `chat_sessions` | `chat` | |
 | `chat_suggested_questions` | `chat` | |
 | `jobs` | `core.jobs` | 잡 큐. 상태 4종: pending/running/done/dead |
-| `llm_model_preferences` | `core.llm` | 요약 폴백 체인 추가분. `_id=summary`, `models:[str]`, `created_at/updated_at`; 어드민 `GET/PUT /admin/llm-models/preferences` 저장소 |
 | `llm_model_stats` | `core.llm` | 모델×용도별 성적 기록과 자동 강등용. `_id = "{model_id}:{purpose}"` |
 | `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 없음(영구 누적, 하루 1~2건) |
 | `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 원시 기록(1시간 주기). TTL 30일 |
@@ -24,8 +23,8 @@
 | `llm_model_catalog` | `core.llm` | 모델별 "지금까지 알던 상태" 1건씩(카탈로그 변동 감지용) |
 | `llm_model_events` | `core.llm` | 모델 추가·삭제·저하·복구 이벤트. TTL 90일 |
 
-요약 모델 선호목록은 `SUMMARY_MODEL_PREFERENCE` 환경변수 기본값 뒤에 DB(`llm_model_preferences`)의
-추가 후보를 붙인다. 챗봇·플래너는 선호목록을 저장하지 않는다.
+모델 선호목록은 없다. 요약은 Gemini를 하루 예산(`SUMMARY_DAILY_BUDGET`)만큼 먼저 쓰고, 그다음과
+챗봇·플래너는 헬스체크가 정한 정상 모델 순서(24h 가용률·지연, 성공률 낮으면 뒤로)를 쓴다.
 
 ### 1.2 인덱스
 ```

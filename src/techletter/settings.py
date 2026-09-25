@@ -161,14 +161,11 @@ class RouterSettings(BaseSettings):
     min_attempts_for_demotion: int = 10
     quota_reset_utc_hour: int = Field(default=7, alias="LLM_QUOTA_RESET_UTC_HOUR")
     summary_daily_budget: int = Field(default=20, alias="SUMMARY_DAILY_BUDGET")
-    summary_preference: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, alias="SUMMARY_MODEL_PREFERENCE"
-    )
     static_fallback: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="LLM_STATIC_FALLBACK_MODELS"
     )
 
-    @field_validator("summary_preference", "static_fallback", mode="before")
+    @field_validator("static_fallback", mode="before")
     @classmethod
     def _split(cls, v: str | list[str] | None) -> list[str]:
         return _csv(v)

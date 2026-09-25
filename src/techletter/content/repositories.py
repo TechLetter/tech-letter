@@ -27,7 +27,13 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from techletter.core.pagination import Page
 
-__all__ = ["BlogRepository", "PostRepository", "TopicActivity"]
+__all__ = ["BlogPostStats", "BlogRepository", "PostRepository", "TopicActivity"]
+
+
+@dataclass(frozen=True, slots=True)
+class BlogPostStats:
+    count: int
+    last_added_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,17 +378,22 @@ class PostRepository:
         cursor = self._col.find({"blog_id": blog_id}, projection={"_id": 1})
         return [str(doc["_id"]) async for doc in cursor]
 
-    async def count_by_blog(self, blog_ids: list[ObjectId]) -> dict[str, int]:
+    async def stats_by_blog(self, blog_ids: list[ObjectId]) -> dict[str, BlogPostStats]:
+        """블로그별 글 수와 마지막으로 새 글이 들어온 시각(`created_at` 최댓값).
+
+        `blogs.last_fetched_at`은 RSS를 읽을 때마다 바뀐다 — 새 글이 없어도. 이쪽은 실제로
+        새 글을 가져온 때다.
+        """
         if not blog_ids:
             return {}
         pipeline = [
             {"$match": {"blog_id": {"$in": blog_ids}}},
-            {"$group": {"_id": "$blog_id", "n": {"$sum": 1}}},
+            {"$group": {"_id": "$blog_id", "n": {"$sum": 1}, "last": {"$max": "$created_at"}}},
         ]
-        counts = {str(b): 0 for b in blog_ids}
+        stats = {str(b): BlogPostStats(0, None) for b in blog_ids}
         async for row in await self._col.aggregate(pipeline):
-            counts[str(row["_id"])] = int(row["n"])
-        return counts
+            stats[str(row["_id"])] = BlogPostStats(int(row["n"]), row.get("last"))
+        return stats
 
     async def find_unsummarized(self, limit: int) -> list[Post]:
         """백필 대상. 오래된 것부터."""
