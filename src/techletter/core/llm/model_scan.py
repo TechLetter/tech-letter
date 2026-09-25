@@ -76,6 +76,8 @@ class ModelScanner:
         self._settings = settings
         self._api_key = api_key
         self._client = client
+        self.meta: dict[str, dict[str, Any]] = {}
+        """마지막 스캔에서 읽은 모델 정보(`model_meta`). `run_scan`이 카탈로그에 담는다."""
 
     async def scan(self) -> list[ModelCheck]:
         model_ids = await self._list_free_models()
@@ -86,22 +88,37 @@ class ModelScanner:
             async with semaphore:
                 if delay > 0:
                     await asyncio.sleep(delay * index)
-                return await self._check_model(model_id)
+                result = await self._check_model(model_id)
+                self.meta.setdefault(model_id, {}).update(await self._endpoint_meta(model_id))
+                return result
 
         return list(await asyncio.gather(*(check(i, m) for i, m in enumerate(model_ids))))
 
     async def _list_free_models(self) -> list[str]:
+        from techletter.core.llm.model_meta import model_meta  # noqa: PLC0415
+
         response = await self._request("GET", "/models")
         data = response.json().get("data")
         if not isinstance(data, list):
             msg = "unexpected OpenRouter /models payload"
             raise ValueError(msg)
-        ids = {
-            item["id"]
+        free = [
+            item
             for item in data
             if isinstance(item, dict) and str(item.get("id", "")).endswith(":free")
-        }
-        return sorted(ids)
+        ]
+        self.meta = {item["id"]: model_meta(item) for item in free}
+        return sorted(self.meta)
+
+    async def _endpoint_meta(self, model_id: str) -> dict[str, Any]:
+        """제공사·양자화. 부가 정보라 실패해도 스캔을 막지 않는다."""
+        from techletter.core.llm.model_meta import endpoint_meta  # noqa: PLC0415
+
+        try:
+            response = await self._request("GET", f"/models/{model_id}/endpoints")
+            return endpoint_meta(response.json()) if response.status_code < 400 else {}
+        except (httpx.HTTPError, ValueError):
+            return {}
 
     async def _check_model(self, model_id: str) -> ModelCheck:
         max_retries = self._settings.scouter_scan_max_retries
@@ -206,8 +223,10 @@ async def run_scan(
 ) -> int:
     """스캔을 돌리고 결과를 저장한다. 저장한 건수를 준다."""
     from techletter.core.llm.model_events import detect_and_record  # noqa: PLC0415
+    from techletter.core.llm.model_meta import save_meta  # noqa: PLC0415
 
-    checks = await ModelScanner(settings, api_key, client).scan()
+    scanner = ModelScanner(settings, api_key, client)
+    checks = await scanner.scan()
     if checks:
         await db[COLLECTION].insert_many(
             [
@@ -227,6 +246,7 @@ async def run_scan(
         await detect_and_record(
             db, checks, degrade_threshold=settings.model_event_degrade_threshold
         )
+        await save_meta(db, scanner.meta)
     logger.info(
         "model scan complete",
         extra={"total": len(checks), "ok": sum(1 for c in checks if c.ok)},

@@ -14,15 +14,58 @@ from pydantic import BaseModel
 from techletter.core.time import to_iso_z
 
 __all__ = [
+    "BenchmarksOut",
     "DailyUptimeOut",
     "ModelHealthOut",
     "ModelHealthSummaryOut",
+    "ModelInfoOut",
 ]
 
 
 class DailyUptimeOut(BaseModel):
     date: str
     uptime: float
+
+
+class BenchmarksOut(BaseModel):
+    """Artificial Analysis 지수(0–100). 모델마다 있는 지수가 다르다."""
+
+    intelligence: float | None = None
+    coding: float | None = None
+    agentic: float | None = None
+
+
+class ModelInfoOut(BaseModel):
+    """OpenRouter가 알려 주는 모델 정보(`model_meta`)."""
+
+    name: str | None
+    description: str | None
+    context_length: int | None
+    created_at: str | None
+    input_modalities: list[str]
+    tools: bool
+    reasoning: bool
+    hugging_face_id: str | None
+    benchmarks: BenchmarksOut | None
+    provider: str | None
+    quantization: str | None
+
+    @classmethod
+    def of(cls, meta: dict[str, Any]) -> ModelInfoOut:
+        benchmarks = meta.get("benchmarks")
+        return cls(
+            name=meta.get("name"),
+            description=meta.get("description"),
+            context_length=meta.get("context_length"),
+            created_at=to_iso_z(meta.get("created_at")),
+            input_modalities=list(meta.get("input_modalities") or []),
+            tools=bool(meta.get("tools")),
+            reasoning=bool(meta.get("reasoning")),
+            hugging_face_id=meta.get("hugging_face_id"),
+            benchmarks=BenchmarksOut(**benchmarks) if benchmarks else None,
+            provider=meta.get("provider"),
+            quantization=meta.get("quantization"),
+        )
 
 
 class ModelHealthOut(BaseModel):
@@ -36,9 +79,13 @@ class ModelHealthOut(BaseModel):
     latest_status: str
     daily: list[DailyUptimeOut]
     """최근 30일, 오래된 날부터. 기록이 없는 날은 빠진다."""
+    info: ModelInfoOut | None = None
+    """아직 한 번도 스캔되지 않은 모델은 없다."""
 
     @classmethod
-    def of(cls, row: dict[str, Any], daily: list[dict[str, Any]]) -> ModelHealthOut:
+    def of(
+        cls, row: dict[str, Any], daily: list[dict[str, Any]], meta: dict[str, Any] | None = None
+    ) -> ModelHealthOut:
         from techletter.core.llm.model_scan import classify_state  # noqa: PLC0415
 
         uptime_24h = round(float(row.get("uptime_24h") or 0.0), 1)
@@ -54,6 +101,7 @@ class ModelHealthOut(BaseModel):
             daily=[
                 DailyUptimeOut(date=d["date"], uptime=round(float(d["uptime"]), 1)) for d in daily
             ],
+            info=ModelInfoOut.of(meta) if meta else None,
         )
 
 

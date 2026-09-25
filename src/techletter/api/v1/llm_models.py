@@ -32,6 +32,7 @@ async def summary(ctx: Ctx) -> ModelHealthSummaryOut:
 async def list_models(ctx: Ctx) -> Listing[ModelHealthOut]:
     """모델별 현재 상태와 최근 30일 일별 가용률. 챗봇·어드민의 모델 목록도 이것을 쓴다."""
     from techletter.core.llm.model_history import history  # noqa: PLC0415
+    from techletter.core.llm.model_meta import load_meta  # noqa: PLC0415
     from techletter.core.llm.model_scan import compute_health  # noqa: PLC0415
 
     health = await compute_health(ctx.db)
@@ -39,6 +40,9 @@ async def list_models(ctx: Ctx) -> Listing[ModelHealthOut]:
     daily: dict[str, list[dict]] = {}
     for row in await history(ctx.db, days=DAILY_DAYS):
         daily.setdefault(row["model_id"], []).append(row)
-    return Listing.of(
-        [ModelHealthOut.of(row, daily.get(str(row.get("model_id")), [])) for row in health]
-    )
+    meta = await load_meta(ctx.db)
+    items = []
+    for row in health:
+        model_id = str(row.get("model_id"))
+        items.append(ModelHealthOut.of(row, daily.get(model_id, []), meta.get(model_id)))
+    return Listing.of(items)

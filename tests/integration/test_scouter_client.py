@@ -36,6 +36,24 @@ async def test_run_scan_persists_checks(mongo_db) -> None:
     assert all(d["ok"] for d in docs)
 
 
+async def test_run_scan_keeps_openrouter_info(mongo_db) -> None:
+    from techletter.core.llm.model_meta import load_meta
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "a/model:free", "name": "A (free)"}]})
+        if request.url.path.endswith("/endpoints"):
+            endpoint = {"provider_name": "Acme", "quantization": "fp8"}
+            return httpx.Response(200, json={"data": {"endpoints": [endpoint]}})
+        return httpx.Response(200, json={"choices": []})
+
+    settings = RouterSettings(scouter_scan_request_delay_seconds=0.0)
+    await run_scan(mongo_db, settings, "test-key", _client(handler))
+
+    meta = (await load_meta(mongo_db))["a/model:free"]
+    assert (meta["name"], meta["provider"], meta["quantization"]) == ("A", "Acme", "fp8")
+
+
 async def test_compute_health_ignores_checks_outside_window(mongo_db) -> None:
     now = utcnow()
     await mongo_db[COLLECTION].insert_many(
