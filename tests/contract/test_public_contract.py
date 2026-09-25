@@ -243,6 +243,7 @@ async def test_model_list_shape_has_no_internal_usage_fields(client, ctx) -> Non
         "avg_latency_ms",
         "latest_status",
         "daily",
+        "info",
     }
 
 
@@ -269,6 +270,20 @@ async def test_model_list_carries_state_and_daily_uptime(client, ctx) -> None:
     assert items["broken/free"]["state"] == "down"
     assert items["healthy/free"]["uptime_30d"] == 100.0
     assert set(items["healthy/free"]["daily"][0]) == {"date", "uptime"}
+
+
+async def test_model_list_carries_openrouter_info(client, ctx) -> None:
+    from techletter.core.llm.model_meta import model_meta, save_meta
+
+    await _seed_model_check(ctx, "a/free")
+    meta = model_meta({"id": "a/free", "name": "A: Alpha (free)", "context_length": 262144})
+    await save_meta(ctx.db, {"a/free": meta | {"provider": "Acme", "quantization": None}})
+
+    item = (await client.get("/api/v1/llm-models")).json()["items"][0]
+
+    assert item["info"]["name"] == "A: Alpha"
+    assert item["info"]["context_length"] == 262144
+    assert item["info"]["provider"] == "Acme"
 
 
 async def test_the_model_events_and_history_endpoints_are_gone(client) -> None:
