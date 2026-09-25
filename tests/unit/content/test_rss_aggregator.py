@@ -57,3 +57,15 @@ async def test_variants_of_one_link_are_inserted_once() -> None:
     assert len(posts.saved) == 1
     assert posts.saved[0].link_key == "https://example.com/article"
     assert len(queue.enqueued) == 1
+
+
+async def test_the_feed_body_is_stored_with_the_post() -> None:
+    posts = FakePosts()
+    aggregator = Aggregator(None, posts, None, FakeQueue())  # type: ignore[arg-type]
+    blog = Blog(name="Alpha")
+    blog.id = ObjectId()
+    item = FeedItem("a", "https://example.com/a", None, content_html="<p>본문</p>")
+
+    await aggregator._store(blog, [item])
+
+    assert posts.saved[0].feed_html == "<p>본문</p>"

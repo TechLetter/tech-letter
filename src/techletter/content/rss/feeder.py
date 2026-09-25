@@ -37,6 +37,8 @@ class FeedItem:
     title: str
     link: str
     published_at: datetime | None
+    content_html: str = ""
+    """피드가 본문 전체를 실어 줄 때만 채운다(`content:encoded`). 발췌(`summary`)는 넣지 않는다."""
 
 
 def _to_datetime(value: struct_time | None) -> datetime | None:
@@ -44,6 +46,16 @@ def _to_datetime(value: struct_time | None) -> datetime | None:
         return None
     # feedparser의 *_parsed는 항상 UTC 기준 struct_time이다.
     return datetime.fromtimestamp(calendar.timegm(value), tz=UTC)
+
+
+# 이보다 짧으면 본문이 아니라 발췌로 본다.
+FEED_CONTENT_MIN_CHARS = 2000
+
+
+def _full_content(entry: Any) -> str:
+    contents = getattr(entry, "content", None) or []
+    html = max((str(c.get("value") or "") for c in contents), key=len, default="")
+    return html if len(html) >= FEED_CONTENT_MIN_CHARS else ""
 
 
 def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]:
@@ -66,6 +78,7 @@ def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]
                     getattr(entry, "published_parsed", None)
                     or getattr(entry, "updated_parsed", None)
                 ),
+                content_html=_full_content(entry),
             )
         )
 

@@ -81,6 +81,10 @@ def _exact_ci(values: list[str]) -> list[re.Pattern[str]]:
     return [re.compile(f"^{re.escape(v.strip())}$", re.IGNORECASE) for v in values if v.strip()]
 
 
+# 목록·단건 조회에서 빼는 큰 필드. 본문이 필요한 곳은 전용 메서드로 따로 읽는다.
+_WITHOUT_BODIES: dict[str, int] = {"plain_text": 0, "feed_html": 0}
+
+
 def _missing_link_key_query() -> dict[str, Any]:
     """정규화 키가 아직 없는 구형 문서를 고른다."""
     return {"link_key": {"$not": {"$type": "string"}}}
@@ -153,7 +157,7 @@ class PostRepository:
     ) -> tuple[list[Post], int]:
         query = self.build_query(flt)
         total = await self._col.count_documents(query)
-        projection = None if with_body else {"plain_text": 0}
+        projection = {"feed_html": 0} if with_body else _WITHOUT_BODIES
         cursor = (
             self._col.find(query, projection=projection)
             .sort([("published_at", DESCENDING), ("_id", DESCENDING)])
@@ -166,7 +170,7 @@ class PostRepository:
         oid = to_object_id(post_id)
         if oid is None:
             return None
-        doc = await self._col.find_one({"_id": oid}, projection={"plain_text": 0})
+        doc = await self._col.find_one({"_id": oid}, projection=_WITHOUT_BODIES)
         return Post.model_validate(doc) if doc else None
 
     async def get_many(self, post_ids: list[str]) -> dict[str, Post]:
@@ -174,7 +178,7 @@ class PostRepository:
         oids = [oid for oid in (to_object_id(p) for p in post_ids) if oid is not None]
         if not oids:
             return {}
-        cursor = self._col.find({"_id": {"$in": oids}}, projection={"plain_text": 0})
+        cursor = self._col.find({"_id": {"$in": oids}}, projection=_WITHOUT_BODIES)
         return {str(doc["_id"]): Post.model_validate(doc) async for doc in cursor}
 
     async def get_plain_text(self, post_id: str) -> str | None:
@@ -183,6 +187,13 @@ class PostRepository:
             return None
         doc = await self._col.find_one({"_id": oid}, projection={"plain_text": 1})
         return (doc or {}).get("plain_text")
+
+    async def get_feed_html(self, post_id: str) -> str | None:
+        oid = to_object_id(post_id)
+        if oid is None:
+            return None
+        doc = await self._col.find_one({"_id": oid}, projection={"feed_html": 1})
+        return (doc or {}).get("feed_html")
 
     async def get_plain_texts(self, post_ids: list[str]) -> dict[str, str]:
         """본문 벌크 조회. 포스트마다 개별 조회하는 N+1을 없앤다."""
@@ -324,7 +335,7 @@ class PostRepository:
         cursor = (
             self._col.find(
                 _falsy("status.ai_summarized"),
-                projection={"plain_text": 0},
+                projection=_WITHOUT_BODIES,
             )
             .sort([("published_at", ASCENDING)])
             .limit(limit)
@@ -337,7 +348,7 @@ class PostRepository:
                 "status.ai_summarized": True,
                 **_falsy("status.embedded"),
             },
-            projection={"plain_text": 0},
+            projection=_WITHOUT_BODIES,
         ).limit(limit)
         return [Post.model_validate(doc) async for doc in cursor]
 

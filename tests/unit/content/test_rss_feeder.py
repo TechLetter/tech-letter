@@ -106,3 +106,28 @@ async def test_the_client_is_created_once_and_reused() -> None:
 
     assert clients.get() is clients.get()
     await clients.aclose()
+
+
+def _rss_with_content(body: str) -> str:
+    return (
+        '<?xml version="1.0"?><rss version="2.0" '
+        'xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>t</title>'
+        "<item><title>a</title><link>https://example.com/a</link>"
+        "<description>short excerpt</description>"
+        f"<content:encoded><![CDATA[{body}]]></content:encoded></item></channel></rss>"
+    )
+
+
+def test_a_full_feed_body_is_kept() -> None:
+    """Medium은 페이지를 막아도 피드에는 본문을 통째로 싣는다."""
+    body = "<p>" + "본문 문장입니다. " * 300 + "</p>"
+
+    [item] = parse_feed(_rss_with_content(body))
+
+    assert item.content_html == body
+
+
+def test_an_excerpt_is_not_mistaken_for_the_body() -> None:
+    [item] = parse_feed(_rss_with_content("<p>짧은 발췌</p>"))
+
+    assert item.content_html == ""
