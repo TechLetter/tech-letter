@@ -31,12 +31,6 @@ class HealthSource(Protocol):
     async def healthy_models(self) -> list[ModelHealth]: ...
 
 
-class PreferenceSource(Protocol):
-    """용도별 선호목록 공급자(`ModelPreferenceStore`)."""
-
-    async def preference(self, purpose: ModelPurpose) -> list[str]: ...
-
-
 class StatsSink(Protocol):
     """모델 성적 기록소."""
 
@@ -64,36 +58,21 @@ class ModelRouter:
         settings: RouterSettings,
         scouter: HealthSource,
         stats: StatsSink | None = None,
-        preferences: PreferenceSource | None = None,
     ) -> None:
         self._settings = settings
         self._scouter = scouter
         self._stats = stats
-        self._preferences = preferences
-
-    async def _preference(self, purpose: ModelPurpose) -> list[str]:
-        """저장소가 없을 때도 요약만 환경변수 기본값을 사용한다."""
-        if self._preferences is not None:
-            return await self._preferences.preference(purpose)
-        if purpose is ModelPurpose.SUMMARY:
-            return list(self._settings.summary_preference)
-        return []
 
     async def candidates(self, purpose: ModelPurpose) -> list[str]:
         """시도할 모델을 순서대로 준다.
 
-        1. 선호목록 ∩ 정상목록 (선호 순서 유지)
-        2. 비면 정상목록 전체 (uptime desc, latency asc)
-        3. scouter가 죽었으면 정적 폴백
-        성적이 나쁜 모델은 각 단계에서 뒤로 민다.
+        1. 정상 모델 전체 (24h 가용률 높은 순, 같으면 지연 짧은 순 — scouter가 정렬)
+        2. scouter가 죽었으면 정적 폴백
+        성적이 나쁜 모델은 뒤로 민다. 요약은 이 앞에 Gemini를 하루 예산만큼 먼저 쓴다
+        (`Summarizer`).
         """
         healthy = await self._scouter.healthy_models()
-        healthy_ids = [m.model_id for m in healthy]
-        preference = await self._preference(purpose)
-
-        ordered = [m for m in preference if m in healthy_ids]
-        if not ordered:
-            ordered = healthy_ids
+        ordered = [m.model_id for m in healthy]
         if not ordered:
             ordered = list(self._settings.static_fallback)
             if ordered:

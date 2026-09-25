@@ -40,72 +40,20 @@ class FakeStats:
         self.records.append((model_id, success))
 
 
-class FakePreferences:
-    """어드민이 DB에 저장해 둔 선호목록."""
-
-    def __init__(self, by_purpose: dict[ModelPurpose, list[str]]) -> None:
-        self._by_purpose = by_purpose
-
-    async def preference(self, purpose: ModelPurpose) -> list[str]:
-        return self._by_purpose.get(purpose, [])
-
-
-def make_router(scouter=None, stats=None, preferences=None, **overrides) -> ModelRouter:
+def make_router(scouter=None, stats=None, **overrides) -> ModelRouter:
     settings = RouterSettings(
-        SUMMARY_MODEL_PREFERENCE=overrides.pop(
-            "summary_preference",
-            "nvidia/nemotron-3-super-120b-a12b:free,minimax/minimax-m3:free",
-        ),
         LLM_STATIC_FALLBACK_MODELS=overrides.pop("static_fallback", "minimax/minimax-m3:free"),
         **overrides,
     )
-    return ModelRouter(settings, scouter or FakeScouter(), stats, preferences)
+    return ModelRouter(settings, scouter or FakeScouter(), stats)
 
 
-async def test_candidates_are_preference_intersect_healthy():
-    router = make_router()
-    candidates = await router.candidates(ModelPurpose.SUMMARY)
-    assert candidates[0] == "nvidia/nemotron-3-super-120b-a12b:free"
-    assert "inclusionai/ling-3.0-flash-fin:free" not in candidates, "선호목록에 없으면 제외"
-
-
-async def test_candidates_skip_unhealthy_preference():
-    """설정에 박힌 모델이 사라지는 것이 지금 겪는 장애다."""
-    scouter = FakeScouter([HEALTHY[1]])  # nemotron이 목록에서 사라짐
-    router = make_router(scouter)
-    assert await router.candidates(ModelPurpose.SUMMARY) == ["minimax/minimax-m3:free"]
-
-
-async def test_candidates_widen_when_preference_all_gone():
-    """선호목록이 전부 죽으면 정상 목록 전체로 넓힌다."""
-    scouter = FakeScouter([ModelHealth("some/other:free", 99.0, 900, 0, "OK")])
-    router = make_router(scouter)
-    assert await router.candidates(ModelPurpose.SUMMARY) == ["some/other:free"]
-
-
-async def test_stored_preference_wins_over_settings():
-    """어드민이 DB에서 고른 목록이 환경변수보다 우선한다."""
-    preferences = FakePreferences({ModelPurpose.SUMMARY: ["minimax/minimax-m3:free"]})
-    router = make_router(preferences=preferences)
-
-    assert await router.candidates(ModelPurpose.SUMMARY) == ["minimax/minimax-m3:free"]
-
-
-async def test_empty_stored_preference_widens_to_all_healthy():
-    """저장된 목록이 비면 설정으로 좁히지 않고 정상 목록 전체를 쓴다."""
-    preferences = FakePreferences({})
-    router = make_router(preferences=preferences)
-
-    candidates = await router.candidates(ModelPurpose.SUMMARY)
-
-    assert candidates == [m.model_id for m in HEALTHY][: len(candidates)]
-
-
-async def test_chat_and_planner_use_automatic_healthy_models_without_preferences():
+async def test_candidates_are_all_healthy_models_in_scouter_order():
+    """선호목록은 없다. 정상 모델 전체를 scouter가 정한 순서(가용률·지연)대로 쓴다."""
     router = make_router()
 
-    assert await router.candidates(ModelPurpose.CHAT) == [m.model_id for m in HEALTHY]
-    assert await router.candidates(ModelPurpose.PLANNER) == [m.model_id for m in HEALTHY]
+    for purpose in (ModelPurpose.SUMMARY, ModelPurpose.CHAT, ModelPurpose.PLANNER):
+        assert await router.candidates(purpose) == [m.model_id for m in HEALTHY]
 
 
 async def test_candidates_fall_back_to_static_when_scouter_empty():

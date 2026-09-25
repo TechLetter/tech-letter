@@ -11,8 +11,6 @@ from techletter.api.schemas.admin import (
     BlogIn,
     JobOut,
     JobStatsOut,
-    LlmModelPreferenceIn,
-    LlmModelPreferenceOut,
     PostIn,
     RetryBulkIn,
 )
@@ -70,8 +68,6 @@ __all__ = [
     "JobOut",
     "JobStatsOut",
     "Listing",
-    "LlmModelPreferenceIn",
-    "LlmModelPreferenceOut",
     "MeOut",
     "MessageIn",
     "ModelHealthOut",

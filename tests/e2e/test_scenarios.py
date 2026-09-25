@@ -173,47 +173,49 @@ async def test_admin_lists_posts_with_v2_fields(
     await sign_in(ADMIN_CODE, "admin")
     await page.goto(f"{ui_server}/admin", wait_until="networkidle")
 
-    await expect(page.get_by_text("테스트 포스트 00")).to_be_visible(timeout=TIMEOUT)
-    # `ai_summary.model_name` 을 읽는다. 이름이 틀리면 빈칸이 뜬다.
-    await expect(page.get_by_text("gemini-3-flash-preview").first).to_be_visible(timeout=TIMEOUT)
+    # `/admin`은 포스트 탭 주소로 넘어간다.
+    await expect(page).to_have_url(f"{ui_server}/admin/posts")
+    # 한 페이지 10개, 최신 글부터.
+    await expect(page.get_by_text("테스트 포스트 14")).to_be_visible(timeout=TIMEOUT)
+    # `ai_summary.model_name` 을 읽는다. 요약 점의 툴팁에 모델이 뜬다.
+    await page.get_by_label("요약 완료", exact=False).first.hover()
+    await expect(page.get_by_role("tooltip")).to_contain_text("gemini-3-flash-preview")
     assert console_errors == []
 
 
-async def test_admin_ops_tab_shows_the_job_queue(page, ui_server, seeded, sign_in) -> None:
-    """서버에 접속하지 않고도 잡 큐 상태를 볼 수 있어야 한다."""
+async def test_admin_ops_tab_shows_the_pipeline(page, ui_server, seeded, sign_in) -> None:
+    """서버에 접속하지 않고도 파이프라인 상태를 볼 수 있어야 한다."""
     await sign_in(ADMIN_CODE, "admin")
-    await page.goto(f"{ui_server}/admin", wait_until="networkidle")
+    await page.goto(f"{ui_server}/admin/posts", wait_until="networkidle")
 
     async with page.expect_response(
         lambda r: "/api/v1/admin/jobs/stats" in r.url, timeout=TIMEOUT
     ) as info:
-        await page.get_by_role("button", name="운영").click()
+        await (
+            page.get_by_role("navigation", name="관리")
+            .get_by_role("link", name="운영", exact=True)
+            .click()
+        )
 
     assert (await info.value).status == 200
-    # 상태 카드가 그려진다(같은 문구가 필터 select 에도 있어 카드로 좁힌다).
-    await expect(page.get_by_text("실패(dead)").first).to_be_visible(timeout=TIMEOUT)
-    await expect(
-        page.get_by_text("가장 오래된 대기 잡").or_(page.get_by_text("대기")).first
-    ).to_be_visible(timeout=TIMEOUT)
+    await expect(page).to_have_url(f"{ui_server}/admin/ops")
+    for stage in ("수집", "요약", "임베딩"):
+        await expect(page.get_by_role("heading", name=stage)).to_be_visible(timeout=TIMEOUT)
 
 
-async def test_admin_llm_tab_shows_model_preferences(page, ui_server, seeded, sign_in) -> None:
-    """모델 탭은 요약 폴백 체인 설정을 조회한다."""
+async def test_admin_settings_tab_lists_suggested_questions(
+    page, ui_server, seeded, sign_in
+) -> None:
+    """탭은 주소로 바로 열린다."""
     await sign_in(ADMIN_CODE, "admin")
-    await page.goto(f"{ui_server}/admin", wait_until="networkidle")
 
     async with page.expect_response(
-        lambda r: "/api/v1/admin/llm-models/preferences" in r.url, timeout=TIMEOUT
+        lambda r: "/api/v1/admin/suggested-questions" in r.url, timeout=TIMEOUT
     ) as info:
-        # 사이트 헤더에도 공개 모델 현황 페이지로 가는 "모델" 버튼이 있어 이름만으로는
-        # 두 개가 걸린다. 어드민 본문(main)으로 한정해서 탭 버튼만 집는다.
-        await page.get_by_role("main").get_by_role("button", name="모델").click()
+        await page.goto(f"{ui_server}/admin/settings", wait_until="networkidle")
 
-    response = await info.value
-    assert response.status == 200
-    body = await response.json()
-    assert body["total"] == 1
-    assert body["items"][0]["purpose"] == "summary"
+    assert (await info.value).status == 200
+    await expect(page.get_by_role("heading", name="추천 질문")).to_be_visible(timeout=TIMEOUT)
 
 
 async def test_a_plain_user_cannot_see_admin_data(page, ui_server, seeded, sign_in) -> None:

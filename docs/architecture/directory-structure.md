@@ -41,7 +41,6 @@ tech-letter/
 │   │   │   ├── model_scan.py     # OpenRouter :free 모델 헬스체크(주기 스캔) + 저장
 │   │   │   ├── model_history.py  # 위 기록의 일별 집계(장기 보관) + 추이 조회
 │   │   │   ├── model_events.py   # 모델 추가/삭제/저하/복구 감지 + 이벤트 피드
-│   │   │   ├── model_preferences.py # 요약 env+DB 모델 폴백 체인
 │   │   │   ├── stats.py          # llm_model_stats 기록, 자동 강등 판정
 │   │   │   ├── budget.py         # llm_daily_usage, 쿼터 리셋 계산
 │   │   │   └── errors.py         # provider 예외 → Quota/Retryable/Permanent 분류
@@ -158,7 +157,7 @@ addopts = "-m 'not integration and not e2e' --strict-markers"
 class Settings(BaseSettings):
     mongo:      MongoSettings         # MONGO_URI, MONGO_DB_NAME=techletter
     qdrant:     QdrantSettings        # QDRANT_HOST/PORT, QDRANT_COLLECTION_NAME=tech_letter_posts
-    router:     RouterSettings        # SCOUTER_SCAN_INTERVAL_HOURS=1, SUMMARY_MODEL_PREFERENCE, LLM_STATIC_FALLBACK_MODELS,
+    router:     RouterSettings        # SCOUTER_SCAN_INTERVAL_HOURS=1, LLM_STATIC_FALLBACK_MODELS,
                                       # LLM_MIN_SUCCESS_RATE, LLM_QUOTA_RESET_UTC_HOUR=7,
                                       # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20(Gemini 예산 소진 시 우선순위 조정)
     jobs:       JobSettings           # JOB_POLL_INTERVAL_SECONDS=2, JOB_LOCK_TIMEOUT_MINUTES=30,

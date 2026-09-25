@@ -42,7 +42,6 @@ def build_summarizer(container: Container) -> Summarizer:
             settings.router,
             ScouterClient(settings.router, container.db),
             container.model_stats,
-            container.model_preferences,
         ),
         RoutingChatClient(
             settings.summary_llm.model_name,

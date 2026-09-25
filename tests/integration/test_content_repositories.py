@@ -429,15 +429,21 @@ async def test_delete_by_blog_removes_only_that_blogs_posts(posts, blogs) -> Non
     assert total == 1
 
 
-async def test_count_by_blog_reports_zero_for_empty_blogs(posts, blogs) -> None:
+async def test_blog_stats_count_posts_and_the_last_new_one(posts, blogs, mongo_db) -> None:
+    """최근 수집은 RSS를 읽은 때가 아니라 새 글이 들어온 때다."""
     alpha = await make_blog(blogs, "Alpha")
     empty = await make_blog(blogs, "Empty")
-    await make_post(posts, alpha, "a")
+    old = await make_post(posts, alpha, "old")
+    new = await make_post(posts, alpha, "new")
+    await mongo_db["posts"].update_one({"_id": old.id}, {"$set": {"created_at": at(1)}})
+    await mongo_db["posts"].update_one({"_id": new.id}, {"$set": {"created_at": at(5)}})
     ids: list[ObjectId] = [b.id for b in (alpha, empty) if b.id is not None]
 
-    counts = await posts.count_by_blog(ids)
+    stats = await posts.stats_by_blog(ids)
 
-    assert counts == {str(alpha.id): 1, str(empty.id): 0}
+    assert stats[str(alpha.id)].count == 2
+    assert stats[str(alpha.id)].last_added_at == at(5)
+    assert (stats[str(empty.id)].count, stats[str(empty.id)].last_added_at) == (0, None)
 
 
 async def test_backfill_queries_find_the_right_posts(posts, blogs) -> None:

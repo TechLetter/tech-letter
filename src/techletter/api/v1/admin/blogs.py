@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, status
 
 from techletter.api.deps import AdminUser, Ctx
 from techletter.api.schemas import AdminBlogOut, BlogIn, Paged
 from techletter.api.schemas.query import StrQ, parse_page
 from techletter.core.pagination import lenient_bool
+
+if TYPE_CHECKING:  # pragma: no cover
+    from techletter.content.models import Blog
 
 router = APIRouter(prefix="/blogs", tags=["admin:blogs"])
 
@@ -44,11 +49,8 @@ async def create_blog(ctx: Ctx, _: AdminUser, body: BlogIn) -> AdminBlogOut:
 
 @router.put("/{blog_id}", response_model=AdminBlogOut)
 async def update_blog(ctx: Ctx, _: AdminUser, blog_id: str, body: BlogIn) -> AdminBlogOut:
-    from techletter.content.service import BlogWithCount  # noqa: PLC0415
-
     blog = await ctx.blog_service.update(blog_id, body.model_dump())
-    counts = await ctx.posts.count_by_blog([blog.id] if blog.id else [])
-    return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=counts.get(str(blog.id), 0)))
+    return await _with_stats(ctx, blog)
 
 
 @router.delete("/{blog_id}")
@@ -63,8 +65,18 @@ async def delete_blog(
 @router.post("/{blog_id}/activate", response_model=AdminBlogOut)
 async def activate_blog(ctx: Ctx, _: AdminUser, blog_id: str) -> AdminBlogOut:
     """자동 비활성화된 블로그를 다시 켠다. 실패 카운터도 지운다."""
+    blog = await ctx.blog_service.update(blog_id, {"is_active": True})
+    return await _with_stats(ctx, blog)
+
+
+async def _with_stats(ctx: Ctx, blog: Blog) -> AdminBlogOut:
     from techletter.content.service import BlogWithCount  # noqa: PLC0415
 
-    blog = await ctx.blog_service.update(blog_id, {"is_active": True})
-    counts = await ctx.posts.count_by_blog([blog.id] if blog.id else [])
-    return AdminBlogOut.of(BlogWithCount(blog=blog, post_count=counts.get(str(blog.id), 0)))
+    stats = (await ctx.posts.stats_by_blog([blog.id] if blog.id else [])).get(str(blog.id))
+    return AdminBlogOut.of(
+        BlogWithCount(
+            blog=blog,
+            post_count=stats.count if stats else 0,
+            last_post_at=stats.last_added_at if stats else None,
+        )
+    )

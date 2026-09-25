@@ -81,6 +81,9 @@ class AdminBlogOut(BaseModel):
     post_count: int
     consecutive_failures: int
     last_fetched_at: str | None
+    """RSS를 마지막으로 읽은 때. 새 글이 없어도 바뀐다."""
+    last_post_at: str | None
+    """마지막으로 새 글이 들어온 때."""
     last_fetch_error: str | None
     created_at: str | None
     updated_at: str | None
@@ -97,6 +100,7 @@ class AdminBlogOut(BaseModel):
             post_count=row.post_count,
             consecutive_failures=blog.consecutive_failures,
             last_fetched_at=to_iso_z(blog.last_fetched_at),
+            last_post_at=to_iso_z(row.last_post_at),
             last_fetch_error=blog.last_fetch_error,
             created_at=to_iso_z(blog.created_at),
             updated_at=to_iso_z(blog.updated_at),

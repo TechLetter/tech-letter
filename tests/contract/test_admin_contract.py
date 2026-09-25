@@ -32,8 +32,6 @@ ADMIN_PATHS = [
     ("POST", "/api/v1/admin/jobs/000000000000000000000000/retry"),
     ("POST", "/api/v1/admin/jobs/retry-bulk"),
     ("DELETE", "/api/v1/admin/jobs/000000000000000000000000"),
-    ("GET", "/api/v1/admin/llm-models/preferences"),
-    ("PUT", "/api/v1/admin/llm-models/preferences/summary"),
     ("GET", "/api/v1/admin/backfill/summary"),
     ("POST", "/api/v1/admin/backfill/summary"),
     ("POST", "/api/v1/admin/backfill/embeddings"),
@@ -450,77 +448,3 @@ async def test_backfill_enqueues_and_is_idempotent(client, admin_headers, seeded
     assert first.json() == {"enqueued": 1}
     # 이미 대기 중인 잡은 중복 억제로 건너뛴다.
     assert second.json() == {"enqueued": 0}
-
-
-# ── 모델 선호목록 ───────────────────────────────────────────────────
-async def test_preferences_default_to_settings(client, admin_headers) -> None:
-    body = (await client.get("/api/v1/admin/llm-models/preferences", headers=admin_headers)).json()
-
-    assert body["total"] == 1
-    row = body["items"][0]
-    assert row["purpose"] == "summary"
-    # 아무도 고르지 않았으면 환경변수 기본값이어야 한다.
-    assert row["models"] == row["default_models"]
-    assert row["source"] == "settings"
-
-
-async def test_setting_a_preference_takes_effect_without_redeploy(
-    client, admin_headers, ctx
-) -> None:
-    from techletter.core.llm.stats import ModelPurpose
-
-    response = await client.put(
-        "/api/v1/admin/llm-models/preferences/summary",
-        headers=admin_headers,
-        json={"models": ["picked/one:free", "picked/two:free"]},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["models"] == ["picked/one:free", "picked/two:free"]
-    assert response.json()["source"] == "database"
-    assert response.json()["default_models"] == []
-    # 라우터가 읽는 저장소에도 곧바로 보여야 한다.
-    assert await ctx.model_preferences.preference(ModelPurpose.SUMMARY) == [
-        "picked/one:free",
-        "picked/two:free",
-    ]
-
-
-async def test_clearing_a_preference_reverts_to_settings(client, admin_headers) -> None:
-    await client.put(
-        "/api/v1/admin/llm-models/preferences/summary",
-        headers=admin_headers,
-        json={"models": ["picked/one:free"]},
-    )
-
-    response = await client.put(
-        "/api/v1/admin/llm-models/preferences/summary",
-        headers=admin_headers,
-        json={"models": []},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["source"] == "settings"
-    assert response.json()["models"] == response.json()["default_models"]
-
-
-async def test_chat_preference_is_rejected(client, admin_headers) -> None:
-    response = await client.put(
-        "/api/v1/admin/llm-models/preferences/chat",
-        headers=admin_headers,
-        json={"models": ["x/y:free"]},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "request.invalid"
-
-
-async def test_unknown_purpose_is_rejected(client, admin_headers) -> None:
-    response = await client.put(
-        "/api/v1/admin/llm-models/preferences/nonsense",
-        headers=admin_headers,
-        json={"models": ["x/y:free"]},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "request.invalid"
