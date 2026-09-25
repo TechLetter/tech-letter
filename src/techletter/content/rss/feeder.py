@@ -48,14 +48,37 @@ def _to_datetime(value: struct_time | None) -> datetime | None:
     return datetime.fromtimestamp(calendar.timegm(value), tz=UTC)
 
 
-# 이보다 짧으면 본문이 아니라 발췌로 본다.
-FEED_CONTENT_MIN_CHARS = 2000
+# 추출한 본문이 이보다 짧으면 발췌로 본다.
+FEED_CONTENT_MIN_CHARS = 1000
+# 발췌 피드의 끝맺음. 본문 끝에 이게 있으면 잘린 글이다.
+_TRUNCATED_TAIL = re.compile(
+    r"(continue reading|read more|read the full|계속 읽기|더 보기|원문 보기)[^\n]{0,40}$"
+    r"|(…|\.\.\.)\s*$",
+    re.I,
+)
 
 
 def _full_content(entry: Any) -> str:
+    """피드가 글 본문 전체를 실었을 때만 HTML을 돌려준다.
+
+    HTML 길이만 보면 안 된다 — CMU 피드는 9천 자인데 내용 없는 태그 틀뿐이라
+    추출하면 3자다. 원문 대신 요약에 쓰이므로 실제로 추출해서 확인한다.
+    """
+    from techletter.summary.parser import extract_plain_text  # noqa: PLC0415
+    from techletter.summary.validator import validate_plain_text  # noqa: PLC0415
+
     contents = getattr(entry, "content", None) or []
     html = max((str(c.get("value") or "") for c in contents), key=len, default="")
-    return html if len(html) >= FEED_CONTENT_MIN_CHARS else ""
+    if not html:
+        return ""
+    text = extract_plain_text(f"<html><body><article>{html}</article></body></html>").strip()
+    if len(text) < FEED_CONTENT_MIN_CHARS or _TRUNCATED_TAIL.search(text[-200:]):
+        return ""
+    try:
+        validate_plain_text(text)
+    except Exception:
+        return ""
+    return html
 
 
 def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]:
