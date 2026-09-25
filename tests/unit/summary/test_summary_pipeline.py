@@ -16,8 +16,10 @@ FEED_HTML = (
 class FakeRenderer:
     def __init__(self, error: Exception) -> None:
         self._error = error
+        self.attempts: list[int | None] = []
 
-    async def render(self, url: str) -> str:
+    async def render(self, url: str, *, attempts: int | None = None) -> str:
+        self.attempts.append(attempts)
         raise self._error
 
     async def aclose(self) -> None:
@@ -35,7 +37,10 @@ class FakeSummarizer:
 
 def _pipeline(error: Exception) -> tuple[SummaryPipeline, FakeSummarizer]:
     summarizer = FakeSummarizer()
-    return SummaryPipeline(FakeRenderer(error), summarizer), summarizer  # type: ignore[arg-type]
+    renderer = FakeRenderer(error)
+    pipeline = SummaryPipeline(renderer, summarizer)  # type: ignore[arg-type]
+    pipeline.renderer_for_test = renderer  # type: ignore[attr-defined]
+    return pipeline, summarizer
 
 
 @pytest.mark.parametrize(
@@ -67,3 +72,12 @@ async def test_a_non_blocking_failure_is_not_papered_over() -> None:
 
     with pytest.raises(PermanentError):
         await pipeline.run("https://example.com/a", FEED_HTML)
+
+
+async def test_a_feed_body_means_one_browser_attempt() -> None:
+    """Medium은 서버에서 매번 막힌다. 대체 본문이 있으면 여러 번 열며 기다리지 않는다."""
+    pipeline, _ = _pipeline(RetryableError("blocked after 1 render attempts"))
+
+    await pipeline.run("https://example.com/a", FEED_HTML)
+
+    assert pipeline.renderer_for_test.attempts == [1]  # type: ignore[attr-defined]

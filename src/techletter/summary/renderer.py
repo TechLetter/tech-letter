@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-from techletter.core.errors import RetryableError
+from techletter.core.errors import PermanentError, RetryableError
 from techletter.core.http import BROWSER_USER_AGENT
 from techletter.core.logging import get_logger
 from techletter.summary.constants import RETRY_MARKERS
@@ -35,6 +35,19 @@ CHROME_PATH_ENV = "CHROME_PATH"
 # 차단 페이지는 대개 짧다. 긴 문서에서 마커를 찾으면 정상 글의 인용문일 확률이 높다.
 RETRY_MARKER_MAX_HTML = 50_000
 RETRY_WAIT_SECONDS = (5, 15, 30)
+# 없는 페이지. 다시 열어도 같다.
+GONE_STATUS = frozenset({404, 410})
+# 서버 IP 차단·요청 제한·원 서버 오류. 본문 문구와 상관없이 차단으로 본다
+# (삼성은 520 오류 페이지를, Medium은 403 챌린지 페이지를 준다).
+BLOCKED_STATUS = frozenset({401, 403, 429})
+# 본문을 자바스크립트로 늦게 그리는 페이지(카카오·NHN). 이보다 짧으면 네트워크가
+# 잠잠해질 때까지 기다렸다가 다시 읽는다 — 183자였던 카카오 글이 3만 자가 됐다.
+SETTLE_MIN_CHARS = 1000
+SETTLE_TIMEOUT_MS = 15_000
+
+
+def is_blocked_status(status: int) -> bool:
+    return status in BLOCKED_STATUS or status >= 500
 
 
 def needs_retry(html: str) -> bool:
@@ -45,7 +58,7 @@ def needs_retry(html: str) -> bool:
 
 
 class Renderer(Protocol):
-    async def render(self, url: str) -> str: ...
+    async def render(self, url: str, *, attempts: int | None = None) -> str: ...
 
     async def aclose(self) -> None: ...
 
@@ -130,9 +143,21 @@ class PlaywrightRenderer:
             return None
         return response.text
 
-    async def render(self, url: str) -> str:
+    @staticmethod
+    async def _settle(page: Any) -> None:
+        """본문이 짧으면 네트워크가 잠잠해질 때까지 기다린다. 제한 시간이 지나면 그냥 둔다."""
+        length = await page.evaluate("document.body ? document.body.innerText.length : 0")
+        if length >= SETTLE_MIN_CHARS:
+            return
+        try:
+            await page.wait_for_load_state("networkidle", timeout=SETTLE_TIMEOUT_MS)
+        except Exception:
+            logger.info("page did not settle", extra={"chars": length})
+
+    async def render(self, url: str, *, attempts: int | None = None) -> str:
+        """`attempts`로 브라우저 재시도 횟수를 줄일 수 있다 — 대체 본문이 있는 쪽이 쓴다."""
         browser = await self._get_browser()
-        attempts = max(1, self._settings.max_render_attempts)
+        attempts = max(1, attempts or self._settings.max_render_attempts)
         timeout_ms = self._settings.render_timeout_seconds * 1000
         last_html = ""
         tried_plain = False
@@ -146,19 +171,26 @@ class PlaywrightRenderer:
             )
             try:
                 page = await context.new_page()
-                await page.goto(
+                response = await page.goto(
                     self._retry_url(url, attempt),
                     wait_until="domcontentloaded",
                     timeout=timeout_ms,
                 )
+                status = response.status if response is not None else 200
+                if status in GONE_STATUS:
+                    raise PermanentError(f"page not found: HTTP {status}", reason="not_found")
                 await page.wait_for_selector("body", timeout=timeout_ms)
+                if not is_blocked_status(status):
+                    await self._settle(page)
                 last_html = await page.content()
+            except PermanentError:
+                raise
             except Exception as exc:
                 raise RetryableError(f"render failed: {type(exc).__name__}: {exc}") from exc
             finally:
                 await context.close()
 
-            if not needs_retry(last_html):
+            if not (is_blocked_status(status) or needs_retry(last_html)):
                 return last_html
 
             if not tried_plain:

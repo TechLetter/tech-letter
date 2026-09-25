@@ -131,3 +131,20 @@ def test_an_excerpt_is_not_mistaken_for_the_body() -> None:
     [item] = parse_feed(_rss_with_content("<p>짧은 발췌</p>"))
 
     assert item.content_html == ""
+
+
+def test_a_feed_body_that_extracts_to_nothing_is_ignored() -> None:
+    """CMU 피드는 HTML이 9천 자인데 내용 없는 태그 틀뿐이라 추출하면 3자였다."""
+    body = "<h4></h4><sup></sup><br /><p><em><em>&amp;</em></em></p>" * 150
+
+    [item] = parse_feed(_rss_with_content(body))
+
+    assert item.content_html == ""
+
+
+def test_a_truncated_feed_body_is_ignored() -> None:
+    body = "<p>" + "본문 문장입니다. " * 300 + "</p><p>Continue reading on Medium »</p>"
+
+    [item] = parse_feed(_rss_with_content(body))
+
+    assert item.content_html == ""

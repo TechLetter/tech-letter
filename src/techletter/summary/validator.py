@@ -25,12 +25,8 @@ def validate_plain_text(text: str) -> None:
     stripped = (text or "").strip()
     if not stripped:
         raise PermanentError("extracted text is empty", reason="content_empty")
-    if len(stripped) < MIN_TEXT_LENGTH:
-        raise PermanentError(
-            f"extracted text too short: {len(stripped)} < {MIN_TEXT_LENGTH}",
-            reason="content_too_short",
-        )
-
+    # 차단 문구를 길이보다 먼저 본다. Medium 챌린지는 41자라 길이 검사에 먼저
+    # 걸리면 "너무 짧음"으로 분류돼 차단인 줄 모른다.
     lowered = stripped.lower()
     for marker in BLOCK_MARKERS_STRONG:
         if marker in lowered:
@@ -38,6 +34,11 @@ def validate_plain_text(text: str) -> None:
     for marker in BLOCK_MARKERS_UNKNOWN:
         if marker in lowered:
             raise PermanentError(f"page not settled: {marker}", reason="unresolved_page")
+    if len(stripped) < MIN_TEXT_LENGTH:
+        raise PermanentError(
+            f"extracted text too short: {len(stripped)} < {MIN_TEXT_LENGTH}",
+            reason="content_too_short",
+        )
     if len(lowered) <= SOFT_MARKER_MAX_LENGTH:
         for marker in BLOCK_MARKERS_SOFT:
             if marker in lowered:

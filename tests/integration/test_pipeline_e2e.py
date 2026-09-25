@@ -47,7 +47,7 @@ class FakeRenderer:
         self.html = html
         self.urls: list[str] = []
 
-    async def render(self, url: str) -> str:
+    async def render(self, url: str, *, attempts: int | None = None) -> str:
         self.urls.append(url)
         return self.html
 

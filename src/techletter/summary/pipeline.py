@@ -48,8 +48,8 @@ class SummaryPipeline:
         self._summarizer = summarizer
         self._image_client = image_client
 
-    async def _page_text(self, url: str) -> tuple[str, str]:
-        html = await self._renderer.render(url)
+    async def _page_text(self, url: str, attempts: int | None) -> tuple[str, str]:
+        html = await self._renderer.render(url, attempts=attempts)
         # 추출·검증 실패는 PermanentError다. 같은 페이지를 다시 열어도 같다.
         plain_text = extract_plain_text(html)
         validate_plain_text(plain_text)
@@ -62,7 +62,9 @@ class SummaryPipeline:
         같은 글이 RSS에는 본문째 실려 있다.
         """
         try:
-            html, plain_text = await self._page_text(url)
+            # 대체 본문이 있으면 막힌 브라우저를 여러 번 열며 기다리지 않는다
+            # (Medium은 서버 IP에서 매번 막힌다 — 재시도마다 수십 초가 샌다).
+            html, plain_text = await self._page_text(url, attempts=1 if feed_html else None)
         except (RetryableError, PermanentError) as exc:
             blocked = isinstance(exc, RetryableError) or exc.reason in _BLOCKED_REASONS
             if not (feed_html and blocked):
