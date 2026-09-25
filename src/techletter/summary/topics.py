@@ -42,7 +42,12 @@ TOPICS = (
     Topic(
         "llm-serving",
         "LLM 서빙·추론",
-        "추론 엔진(vLLM 등), KV 캐시, 양자화, 모델 서빙 최적화",
+        "서버 추론 엔진(vLLM 등), KV 캐시, 양자화, 모델 서빙 최적화",
+    ),
+    Topic(
+        "on-device",
+        "온디바이스·엣지 AI",
+        "기기 내 추론, 모델 경량화·변환(TFLite·Core ML·MLX 등), NPU, 브라우저 추론",
     ),
     Topic(
         "model-training",
