@@ -38,6 +38,9 @@ class JobOut(BaseModel):
     created_at: str | None
     updated_at: str | None
     finished_at: str | None
+    title: str | None
+    """잡이 다루는 글의 제목·블로그. 실패 목록에서 행을 구분하려고 페이로드에서 이것만 꺼낸다."""
+    blog_name: str | None
 
     @classmethod
     def of(cls, job: Job) -> JobOut:
@@ -55,6 +58,8 @@ class JobOut(BaseModel):
             created_at=to_iso_z(job.created_at),
             updated_at=to_iso_z(job.updated_at),
             finished_at=to_iso_z(job.finished_at),
+            title=_text(job.payload.get("title")),
+            blog_name=_text(job.payload.get("blog_name")),
         )
         # payload 는 내보내지 않는다 — 요약 결과 본문이 수십 KB다.
 
@@ -119,3 +124,7 @@ class LlmModelPreferenceOut(BaseModel):
             source=str(row.get("source") or "settings"),
             default_models=[str(m) for m in (row.get("default_models") or [])],
         )
+
+
+def _text(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None

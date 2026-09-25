@@ -78,6 +78,22 @@ register_indexes(
 )
 
 
+def _status_conditions(flt: ListPostsFilter, query: dict[str, Any]) -> list[dict[str, Any]]:
+    """요약·임베딩·실패 필터. 참 조건은 `query`에 바로 넣고, 거짓 조건은 `$and`용으로 준다."""
+    conditions: list[dict[str, Any]] = []
+    for field_name, value in (
+        ("status.ai_summarized", flt.summarized),
+        ("status.embedded", flt.embedded),
+    ):
+        if value is True:
+            query[field_name] = True
+        elif value is False:
+            conditions.append(_falsy(field_name))
+    if flt.failed:
+        query["status.failed_reason"] = {"$nin": [None, ""]}
+    return conditions
+
+
 def _falsy(field: str) -> dict[str, Any]:
     """`False` 또는 필드 자체가 없는 문서를 고른다.
 
@@ -140,15 +156,7 @@ class PostRepository:
                 published["$lte"] = flt.published_to
             query["published_at"] = published
 
-        conditions: list[dict[str, Any]] = []
-        for field_name, value in (
-            ("status.ai_summarized", flt.summarized),
-            ("status.embedded", flt.embedded),
-        ):
-            if value is True:
-                query[field_name] = True
-            elif value is False:
-                conditions.append(_falsy(field_name))
+        conditions = _status_conditions(flt, query)
         if flt.search:
             escaped = re.escape(flt.search.strip())
             conditions.append(

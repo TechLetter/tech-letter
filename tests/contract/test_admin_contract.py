@@ -114,6 +114,17 @@ async def test_admin_posts_can_filter_by_status(client, admin_headers, seeded) -
     assert body["items"][0]["ai_summary"] is None
 
 
+async def test_admin_posts_can_list_only_failed_ones(client, admin_headers, seeded, ctx) -> None:
+    await ctx.db["posts"].update_one(
+        {"title": "제목 1"}, {"$set": {"status.failed_reason": "page not found: HTTP 404"}}
+    )
+
+    body = (await client.get("/api/v1/admin/posts?failed=true", headers=admin_headers)).json()
+
+    assert body["total"] == 1
+    assert body["items"][0]["status"]["failed_reason"] == "page not found: HTTP 404"
+
+
 async def test_admin_posts_can_search(client, admin_headers, seeded) -> None:
     body = (await client.get("/api/v1/admin/posts?q=제목 1", headers=admin_headers)).json()
 
@@ -329,7 +340,11 @@ async def test_deleting_a_question_returns_204(client, admin_headers) -> None:
 async def dead_job(ctx):
     from techletter.core.jobs.types import JobType
 
-    job = await ctx.queue.enqueue(JobType.SUMMARY_REQUESTED, "post-1", {"post_id": "p"})
+    job = await ctx.queue.enqueue(
+        JobType.SUMMARY_REQUESTED,
+        "post-1",
+        {"post_id": "p", "title": "글 제목", "blog_name": "Alpha", "plain_text": "본문"},
+    )
     assert job is not None
     await ctx.db["jobs"].update_one(
         {"_id": job.id},
@@ -339,7 +354,7 @@ async def dead_job(ctx):
 
 
 async def test_job_shape_hides_the_payload(client, admin_headers, dead_job) -> None:
-    """요약 결과 페이로드는 수십 KB다. 목록에 실을 이유가 없다."""
+    """요약 결과 페이로드는 수십 KB다. 목록에는 행을 구분할 제목·블로그만 싣는다."""
     item = (await client.get("/api/v1/admin/jobs", headers=admin_headers)).json()["items"][0]
 
     assert "payload" not in item
@@ -357,7 +372,10 @@ async def test_job_shape_hides_the_payload(client, admin_headers, dead_job) -> N
         "created_at",
         "updated_at",
         "finished_at",
+        "title",
+        "blog_name",
     }
+    assert (item["title"], item["blog_name"]) == ("글 제목", "Alpha")
 
 
 async def test_jobs_can_be_filtered_by_status(client, admin_headers, dead_job) -> None:
