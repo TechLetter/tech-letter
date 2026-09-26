@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Request, status
 
 from techletter.api.deps import AdminUser, Ctx
-from techletter.api.schemas import AdminBlogOut, BlogIn, Paged
+from techletter.api.schemas import AdminBlogOut, BlogIconRefreshIn, BlogIn, Paged
 from techletter.api.schemas.query import StrQ, parse_page
 from techletter.core.pagination import lenient_bool
 
@@ -88,13 +88,18 @@ async def upload_blog_icon(ctx: Ctx, _: AdminUser, blog_id: str, request: Reques
 
 
 @router.post("/{blog_id}/icon/refresh", status_code=status.HTTP_202_ACCEPTED)
-async def refresh_blog_icon(ctx: Ctx, _: AdminUser, blog_id: str) -> dict[str, bool]:
-    """사이트에서 아이콘을 다시 받는다. 직접 올린 아이콘도 자동 수집 결과로 바뀐다."""
+async def refresh_blog_icon(
+    ctx: Ctx, _: AdminUser, blog_id: str, body: BlogIconRefreshIn | None = None
+) -> dict[str, bool]:
+    """사이트에서 아이콘을 다시 받는다. 직접 올린 아이콘도 자동 수집 결과로 바뀐다.
+
+    `site_url`을 주면 그 사이트의 아이콘을 받는다(Medium 블로그의 회사 홈페이지).
+    """
     from techletter.content.icons import BlogIconRepository, enqueue_icon_fetch  # noqa: PLC0415
 
     await ctx.blog_service.get(blog_id)
     await BlogIconRepository(ctx.db).release_manual(blog_id)
-    job = await enqueue_icon_fetch(ctx.queue, blog_id)
+    job = await enqueue_icon_fetch(ctx.queue, blog_id, body.site_url if body else None)
     return {"queued": job is not None}
 
 

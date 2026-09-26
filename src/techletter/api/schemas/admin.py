@@ -100,5 +100,9 @@ class BlogIn(BaseModel):
     is_active: bool = True
 
 
+class BlogIconRefreshIn(BaseModel):
+    site_url: str | None = Field(default=None, max_length=2000, pattern=r"^https?://\S+$")
+
+
 def _text(value: object) -> str | None:
     return value if isinstance(value, str) and value else None

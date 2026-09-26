@@ -31,7 +31,7 @@ def client(routes: dict[str, httpx.Response]) -> httpx.AsyncClient:
 
 
 async def run(
-    mongo_db, routes: dict[str, httpx.Response], rasterize_svg=None
+    mongo_db, routes: dict[str, httpx.Response], rasterize_svg=None, site_url=None
 ) -> tuple[str, BlogIconRepository]:
     blogs = BlogRepository(mongo_db)
     blog = await blogs.insert(
@@ -39,9 +39,10 @@ async def run(
     )
     icons = BlogIconRepository(mongo_db)
     handler = BlogIconHandler(blogs, icons, client(routes), rasterize_svg)
-    await handler(
-        Job(type=JobType.BLOG_ICON_REQUESTED, key=str(blog.id), payload={"blog_id": str(blog.id)})
-    )
+    payload = {"blog_id": str(blog.id)}
+    if site_url:
+        payload["site_url"] = site_url
+    await handler(Job(type=JobType.BLOG_ICON_REQUESTED, key=str(blog.id), payload=payload))
     return str(blog.id), icons
 
 
@@ -97,6 +98,38 @@ async def test_an_svg_only_site_is_rasterized(mongo_db) -> None:
 
     assert seen == [svg]
     assert await icons.get(blog_id) is not None
+
+
+async def test_a_medium_logo_is_skipped(mongo_db) -> None:
+    medium_logo = "https://cdn-images-1.medium.com/proxy/1*TGH72Nnw24QL3iV9IOm4VA.png"
+    feed = f"<rss><channel><title>A</title><image><url>{medium_logo}</url></image></channel></rss>"
+    blog_id, icons = await run(
+        mongo_db,
+        {
+            "https://alpha.test/": httpx.Response(403),
+            "https://alpha.test/feed/": httpx.Response(200, text=feed),
+            medium_logo: httpx.Response(200, content=png(120)),
+        },
+    )
+
+    assert await icons.get(blog_id) is None
+
+
+async def test_another_site_gives_a_pinned_icon(mongo_db) -> None:
+    """Medium 블로그는 회사 홈페이지 아이콘을 쓴다. 자동 수집이 덮지 않는다."""
+    blog_id, icons = await run(
+        mongo_db,
+        {
+            "https://company.test": httpx.Response(
+                200, text='<link rel="apple-touch-icon" href="/apple.png">'
+            ),
+            "https://company.test/apple.png": httpx.Response(200, content=png(180)),
+        },
+        site_url="https://company.test",
+    )
+
+    assert await icons.get(blog_id) is not None
+    assert await icons.is_manual(blog_id)
 
 
 async def test_nothing_found_is_recorded_as_missing(mongo_db) -> None:
