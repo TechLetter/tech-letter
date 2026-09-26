@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 
 from techletter.api.deps import AdminUser, Ctx
 from techletter.api.schemas import AdminBlogOut, BlogIn, Paged
@@ -67,6 +67,35 @@ async def activate_blog(ctx: Ctx, _: AdminUser, blog_id: str) -> AdminBlogOut:
     """자동 비활성화된 블로그를 다시 켠다. 실패 카운터도 지운다."""
     blog = await ctx.blog_service.update(blog_id, {"is_active": True})
     return await _with_stats(ctx, blog)
+
+
+@router.put("/{blog_id}/icon", status_code=status.HTTP_204_NO_CONTENT)
+async def upload_blog_icon(ctx: Ctx, _: AdminUser, blog_id: str, request: Request) -> None:
+    """직접 고른 아이콘. 브라우저가 64px webp로 바꿔 본문 그대로 보낸다. 자동 수집이 덮지 않는다."""
+    from techletter.content.icons import (  # noqa: PLC0415
+        ICON_MAX_BYTES,
+        BlogIconRepository,
+        is_webp,
+    )
+    from techletter.core.errors import InvalidRequestError  # noqa: PLC0415
+
+    await ctx.blog_service.get(blog_id)
+    data = await request.body()
+    if not is_webp(data) or len(data) > ICON_MAX_BYTES:
+        msg = "아이콘은 100KB 이하 webp여야 합니다."
+        raise InvalidRequestError(msg, details={"field": "icon"})
+    await BlogIconRepository(ctx.db).save(blog_id, data, source="manual", manual=True)
+
+
+@router.post("/{blog_id}/icon/refresh", status_code=status.HTTP_202_ACCEPTED)
+async def refresh_blog_icon(ctx: Ctx, _: AdminUser, blog_id: str) -> dict[str, bool]:
+    """사이트에서 아이콘을 다시 받는다. 직접 올린 아이콘도 자동 수집 결과로 바뀐다."""
+    from techletter.content.icons import BlogIconRepository, enqueue_icon_fetch  # noqa: PLC0415
+
+    await ctx.blog_service.get(blog_id)
+    await BlogIconRepository(ctx.db).release_manual(blog_id)
+    job = await enqueue_icon_fetch(ctx.queue, blog_id)
+    return {"queued": job is not None}
 
 
 async def _with_stats(ctx: Ctx, blog: Blog) -> AdminBlogOut:

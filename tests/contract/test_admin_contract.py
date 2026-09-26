@@ -21,6 +21,8 @@ ADMIN_PATHS = [
     ("PUT", "/api/v1/admin/blogs/000000000000000000000000"),
     ("DELETE", "/api/v1/admin/blogs/000000000000000000000000"),
     ("POST", "/api/v1/admin/blogs/000000000000000000000000/activate"),
+    ("PUT", "/api/v1/admin/blogs/000000000000000000000000/icon"),
+    ("POST", "/api/v1/admin/blogs/000000000000000000000000/icon/refresh"),
     ("GET", "/api/v1/admin/users"),
     ("POST", "/api/v1/admin/users/google:ghost/credits"),
     ("GET", "/api/v1/admin/suggested-questions"),
@@ -203,6 +205,70 @@ async def test_creating_a_blog_returns_201(client, admin_headers) -> None:
     # 끝 슬래시를 지우지 않는다 — `/feed/`를 `/feed`로 바꾸면 301을 거치고, 그 요청에 429를 주는
     # 서버가 있었다.
     assert response.json()["url"] == "https://beta.test/"
+
+
+WEBP = b"RIFF\x10\x00\x00\x00WEBPVP8 " + b"\x00" * 8
+
+
+async def test_creating_a_blog_queues_an_icon_fetch(client, admin_headers, ctx) -> None:
+    body = (
+        await client.post(
+            "/api/v1/admin/blogs",
+            json={"name": "Beta", "url": "https://beta.test", "rss_url": "https://beta.test/rss"},
+            headers=admin_headers,
+        )
+    ).json()
+
+    job = await ctx.db["jobs"].find_one({"type": "blog.icon_requested"})
+    assert job is not None and job["payload"]["blog_id"] == body["id"]
+
+
+async def test_an_uploaded_icon_is_served_with_an_etag(client, admin_headers, seeded) -> None:
+    blog_id = str(seeded["blog"].id)
+    uploaded = await client.put(
+        f"/api/v1/admin/blogs/{blog_id}/icon",
+        content=WEBP,
+        headers={**admin_headers, "Content-Type": "image/webp"},
+    )
+    icon = await client.get(f"/api/v1/blogs/{blog_id}/icon")
+    again = await client.get(
+        f"/api/v1/blogs/{blog_id}/icon", headers={"If-None-Match": icon.headers["etag"]}
+    )
+
+    assert uploaded.status_code == 204
+    assert (icon.status_code, icon.headers["content-type"], icon.content) == (
+        200,
+        "image/webp",
+        WEBP,
+    )
+    assert again.status_code == 304
+
+
+async def test_an_icon_must_be_a_small_webp(client, admin_headers, seeded) -> None:
+    response = await client.put(
+        f"/api/v1/admin/blogs/{seeded['blog'].id}/icon",
+        content=b"\x89PNG not webp",
+        headers={**admin_headers, "Content-Type": "image/png"},
+    )
+
+    assert response.status_code == 400
+
+
+async def test_a_blog_without_an_icon_is_404(client, seeded) -> None:
+    response = await client.get(f"/api/v1/blogs/{seeded['blog'].id}/icon")
+
+    assert response.status_code == 404
+    assert "max-age" in response.headers["cache-control"]
+
+
+async def test_refreshing_an_icon_queues_a_fetch(client, admin_headers, seeded, ctx) -> None:
+    blog_id = str(seeded["blog"].id)
+    response = await client.post(
+        f"/api/v1/admin/blogs/{blog_id}/icon/refresh", headers=admin_headers
+    )
+
+    assert response.status_code == 202
+    assert await ctx.db["jobs"].find_one({"type": "blog.icon_requested", "key": blog_id})
 
 
 async def test_a_trailing_slash_does_not_hide_a_duplicate(client, admin_headers, seeded) -> None:
