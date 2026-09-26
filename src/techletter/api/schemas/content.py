@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.models import Post
     from techletter.content.service import BlogWithCount
     from techletter.content.trends import WeeklyTrends
+    from techletter.summary.topics import TopicGroup
 
 __all__ = [
     "AdminBlogOut",
@@ -29,6 +30,7 @@ __all__ = [
     "PostOut",
     "PostStatusOut",
     "SourceOut",
+    "TopicGroupOut",
     "TopicTrendOut",
     "WeeklyTrendsOut",
 ]
@@ -198,6 +200,20 @@ class FilterOut(BaseModel):
     @classmethod
     def of(cls, item: FilterItem) -> FilterOut:
         return cls(name=item.name, count=item.count)
+
+
+class TopicGroupOut(BaseModel):
+    id: str
+    name: str
+    topics: list[str]
+    """자식 주제의 한국어 이름. 포스트의 `categories`와 같은 값이다."""
+
+    @classmethod
+    def of(cls, group: TopicGroup) -> TopicGroupOut:
+        from techletter.summary.topics import TOPICS  # noqa: PLC0415
+
+        names = {topic.slug: topic.name for topic in TOPICS}
+        return cls(id=group.slug, name=group.name, topics=[names[s] for s in group.topics])
 
 
 class BlogFilterOut(BaseModel):

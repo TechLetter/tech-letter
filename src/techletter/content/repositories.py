@@ -14,7 +14,7 @@ from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from techletter.content.links import normalize_link
-from techletter.content.models import Blog, ListPostsFilter, Post
+from techletter.content.models import Blog, ListPostsFilter, Post, PostSort
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.ids import to_object_id
 from techletter.core.time import utcnow
@@ -76,6 +76,7 @@ register_indexes(
             "idx_posts_blog_published", [("blog_id", ASCENDING), ("published_at", DESCENDING)]
         ),
         IndexSpec("idx_posts_summarized", [("status.ai_summarized", ASCENDING)]),
+        IndexSpec("idx_posts_views", [("view_count", DESCENDING), ("published_at", DESCENDING)]),
     ],
 )
 register_indexes(
@@ -182,14 +183,23 @@ class PostRepository:
         return query
 
     async def list_posts(
-        self, flt: ListPostsFilter, page: Page, *, with_body: bool = False
+        self,
+        flt: ListPostsFilter,
+        page: Page,
+        *,
+        with_body: bool = False,
+        sort: PostSort = "latest",
     ) -> tuple[list[Post], int]:
         query = self.build_query(flt)
         total = await self._col.count_documents(query)
         projection = {"feed_html": 0} if with_body else _WITHOUT_BODIES
+        order = [("published_at", DESCENDING), ("_id", DESCENDING)]
+        if sort == "views":
+            # 조회수가 같으면(대부분 0) 최신순.
+            order = [("view_count", DESCENDING), *order]
         cursor = (
             self._col.find(query, projection=projection)
-            .sort([("published_at", DESCENDING), ("_id", DESCENDING)])
+            .sort(order)
             .skip(page.skip)
             .limit(page.page_size)
         )

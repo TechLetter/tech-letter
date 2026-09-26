@@ -103,6 +103,30 @@ async def test_the_removed_status_parameter_is_ignored(client, seeded) -> None:
     assert body["total"] == 3
 
 
+async def test_posts_can_be_sorted_by_views(client, ctx, seeded) -> None:
+    """조회수가 같으면 최신순. 모르는 정렬 값은 최신순으로 본다."""
+    await ctx.posts.increment_view(str(seeded["posts"][0].id))
+
+    def titles(body: dict) -> list[str]:
+        return [item["title"] for item in body["items"]]
+
+    by_views = (await client.get("/api/v1/posts?sort=views")).json()
+    unknown = (await client.get("/api/v1/posts?sort=nope")).json()
+
+    assert titles(by_views) == ["제목 0", "제목 2", "제목 1"]
+    assert titles(unknown) == ["제목 2", "제목 1", "제목 0"]
+
+
+async def test_topic_groups_list_every_topic_once(client) -> None:
+    from techletter.summary.topics import TOPIC_NAMES
+
+    body = (await client.get("/api/v1/filters/topic-groups")).json()
+    children = [name for group in body["items"] for name in group["topics"]]
+
+    assert set(body["items"][0]) == {"id", "name", "topics"}
+    assert sorted(children) == sorted(TOPIC_NAMES)
+
+
 async def test_an_unknown_post_is_a_typed_404(client) -> None:
     response = await client.get("/api/v1/posts/507f1f77bcf86cd799439011")
 

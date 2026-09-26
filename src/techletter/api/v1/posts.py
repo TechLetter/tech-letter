@@ -33,6 +33,7 @@ async def list_posts(
     blog_id: StrQ = None,
     published_from: StrQ = None,
     published_to: StrQ = None,
+    sort: StrQ = None,
 ) -> Paged[PostOut]:
     paging = parse_page(page, page_size)
     since, until = published_range(published_from, published_to)
@@ -46,6 +47,8 @@ async def list_posts(
             summarized=True,
         ),
         paging,
+        # 모르는 값은 기본(최신순)으로 본다. 다른 쿼리 파라미터도 관대하게 받는다.
+        sort="views" if sort == "views" else "latest",
     )
     marked = await _bookmarked_ids(ctx, user, [str(p.id) for p in found])
     return Paged.of_page(

@@ -15,8 +15,10 @@ from typing import Any
 __all__ = [
     "OTHER",
     "TOPICS",
+    "TOPIC_GROUPS",
     "TOPIC_NAMES",
     "Topic",
+    "TopicGroup",
     "normalize_topics",
     "topic_prompt_lines",
 ]
@@ -106,6 +108,45 @@ TOPICS = (
     ),
     Topic("quantum", "양자 컴퓨팅", "양자 알고리즘, 양자 하드웨어"),
     Topic("other", "기타", "위 어디에도 맞지 않는 글"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class TopicGroup:
+    """홈의 부모 주제 탭. 부모를 고르면 자식 주제 전체로 거른다."""
+
+    slug: str
+    name: str
+    topics: tuple[str, ...]
+    """자식 주제의 slug."""
+
+
+TOPIC_GROUPS = (
+    TopicGroup(
+        "ai",
+        "AI",
+        (
+            "llm-apps",
+            "ai-agents",
+            "rag-search",
+            "llm-serving",
+            "on-device",
+            "model-training",
+            "ai-research",
+            "ai-coding",
+            "multimodal",
+            "ai-ops",
+            "gpu-infra",
+        ),
+    ),
+    TopicGroup(
+        "infra", "인프라·운영", ("kubernetes", "cloud", "platform-eng", "observability", "security")
+    ),
+    TopicGroup("backend", "백엔드·데이터", ("backend", "streaming", "database", "data")),
+    TopicGroup("frontend", "프론트·모바일", ("frontend", "mobile", "design-ux")),
+    TopicGroup(
+        "general", "개발 일반", ("languages", "dev-productivity", "culture", "quantum", "other")
+    ),
 )
 
 TOPIC_NAMES = tuple(topic.name for topic in TOPICS)
