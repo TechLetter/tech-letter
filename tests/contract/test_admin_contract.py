@@ -254,10 +254,11 @@ async def test_an_icon_must_be_a_small_webp(client, admin_headers, seeded) -> No
     assert response.status_code == 400
 
 
-async def test_a_blog_without_an_icon_is_404(client, seeded) -> None:
+async def test_a_blog_without_an_icon_is_empty(client, seeded) -> None:
+    """404면 브라우저 콘솔에 블로그마다 오류가 찍힌다."""
     response = await client.get(f"/api/v1/blogs/{seeded['blog'].id}/icon")
 
-    assert response.status_code == 404
+    assert response.status_code == 204
     assert "max-age" in response.headers["cache-control"]
 
 
