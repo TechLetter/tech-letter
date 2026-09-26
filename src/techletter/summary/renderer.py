@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -210,6 +211,35 @@ class PlaywrightRenderer:
 
         # 모든 시도가 차단 페이지였다. 잡 큐가 더 긴 간격으로 다시 시도한다.
         raise RetryableError(f"blocked after {attempts} render attempts")
+
+    async def rasterize_svg(self, svg: bytes, size: int = 128) -> bytes | None:
+        """SVG를 투명 배경 PNG로 그린다. 아이콘이 SVG뿐인 사이트용(Pillow는 SVG를 못 연다).
+
+        `<img>`로 넣어 그리므로 SVG 안의 스크립트와 외부 리소스는 불러오지 않는다.
+        """
+        browser = await self._get_browser()
+        src = "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
+        html = (
+            "<style>html,body{margin:0;background:transparent}"
+            "img{width:100vw;height:100vh;object-fit:contain;display:block}</style>"
+            f'<img src="{src}">'
+        )
+        context = await browser.new_context(viewport={"width": size, "height": size})
+        try:
+            page = await context.new_page()
+            await page.set_content(html, timeout=10_000)
+            loaded = await page.evaluate(
+                "() => { const i = document.images[0];"
+                " return i.decode().then(() => i.naturalWidth > 0, () => false); }"
+            )
+            if not loaded:
+                return None
+            return await page.screenshot(type="png", omit_background=True)
+        except Exception as exc:
+            logger.info("svg rasterize failed", extra={"error": str(exc)[:200]})
+            return None
+        finally:
+            await context.close()
 
     async def aclose(self) -> None:
         if self._browser is not None:

@@ -1,8 +1,9 @@
 """블로그 아이콘 수집. 요약 워커가 `blog.icon_requested` 잡으로 돈다.
 
 사이트의 `apple-touch-icon`(보통 180px) → `<link rel="icon">`(큰 것부터) → `/favicon.ico`
-→ RSS 채널 이미지 순으로 시도하고, 처음 열리는 것을 64px webp로 바꿔 저장한다.
-Medium 계열처럼 서버 IP가 막힌 사이트는 피드 채널 이미지로 얻는다.
+→ SVG 아이콘 → RSS 채널 이미지 순으로 시도하고, 처음 열리는 것을 64px webp로 바꿔 저장한다.
+Medium 계열처럼 서버 IP가 막힌 사이트는 피드 채널 이미지로 얻는다. SVG는 Pillow가 못 열어
+브라우저로 그린다(하이퍼커넥트·Project Zero는 아이콘이 SVG뿐이다).
 """
 
 from __future__ import annotations
@@ -10,19 +11,21 @@ from __future__ import annotations
 import re
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from techletter.core.http import BROWSER_USER_AGENT
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Awaitable, Callable
+
     import httpx
 
     from techletter.content.icons import BlogIconRepository
     from techletter.content.repositories import BlogRepository
     from techletter.core.jobs.models import Job
 
-__all__ = ["BlogIconHandler", "icon_candidates", "to_icon_webp"]
+__all__ = ["BlogIconHandler", "icon_candidates", "is_svg", "to_icon_webp"]
 
 logger = get_logger(__name__)
 
@@ -34,15 +37,21 @@ _HEADERS = {"User-Agent": BROWSER_USER_AGENT}
 
 
 def icon_candidates(html: str, page_url: str) -> list[str]:
-    """페이지가 알려 주는 아이콘 주소. 큰 것부터, 마지막에 `/favicon.ico`."""
+    """페이지가 알려 주는 아이콘 주소. 큰 것부터, 그다음 `/favicon.ico`, 마지막에 SVG."""
     from bs4 import BeautifulSoup  # noqa: PLC0415
 
     soup = BeautifulSoup(html or "", "html.parser")
     ranked: list[tuple[int, int, str]] = []
+    svgs: list[str] = []
     for link in soup.find_all("link", href=True):
         rels = {r.lower() for r in (link.get("rel") or [])}
         href = str(link["href"]).strip()
-        if not href or href.lower().endswith(".svg") or "mask-icon" in rels:
+        # mask-icon은 단색 실루엣이라 아이콘으로 쓰지 않는다.
+        if not href or "mask-icon" in rels:
+            continue
+        if _is_svg_link(href, link.get("type")):
+            if "icon" in rels:
+                svgs.append(urljoin(page_url, href))
             continue
         if rels & {"apple-touch-icon", "apple-touch-icon-precomposed"}:
             kind = 0
@@ -54,7 +63,17 @@ def icon_candidates(html: str, page_url: str) -> list[str]:
     ranked.sort()
     urls = [url for _, _, url in ranked]
     urls.append(urljoin(page_url, "/favicon.ico"))
+    urls.extend(svgs)
     return list(dict.fromkeys(urls))
+
+
+def _is_svg_link(href: str, type_: Any) -> bool:
+    return urlparse(href).path.lower().endswith(".svg") or "svg" in str(type_ or "").lower()
+
+
+def is_svg(data: bytes) -> bool:
+    head = data[:512].lstrip().lower()
+    return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in data[:2048])
 
 
 def _largest_size(sizes: Any) -> int:
@@ -84,11 +103,16 @@ def to_icon_webp(data: bytes) -> bytes | None:
 
 class BlogIconHandler:
     def __init__(
-        self, blogs: BlogRepository, icons: BlogIconRepository, http: httpx.AsyncClient
+        self,
+        blogs: BlogRepository,
+        icons: BlogIconRepository,
+        http: httpx.AsyncClient,
+        rasterize_svg: Callable[[bytes], Awaitable[bytes | None]] | None = None,
     ) -> None:
         self._blogs = blogs
         self._icons = icons
         self._http = http
+        self._rasterize_svg = rasterize_svg
 
     async def __call__(self, job: Job) -> None:
         blog_id = str(job.payload.get("blog_id") or job.key)
@@ -97,6 +121,8 @@ class BlogIconHandler:
             return
         for url in await self._candidates(blog.url, blog.rss_url):
             data = await self._download(url)
+            if data and is_svg(data):
+                data = await self._rasterize_svg(data) if self._rasterize_svg else None
             icon = to_icon_webp(data) if data else None
             if icon:
                 await self._icons.save(blog_id, icon, source=url, manual=False)
