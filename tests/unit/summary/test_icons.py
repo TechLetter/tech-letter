@@ -7,7 +7,7 @@ from io import BytesIO
 from PIL import Image
 
 from techletter.content.icons import is_webp
-from techletter.summary.icons import icon_candidates, to_icon_webp
+from techletter.summary.icons import icon_candidates, is_svg, to_icon_webp
 
 
 def png(size: int) -> bytes:
@@ -16,7 +16,7 @@ def png(size: int) -> bytes:
     return out.getvalue()
 
 
-def test_candidates_prefer_apple_touch_then_the_largest_icon() -> None:
+def test_candidates_prefer_apple_touch_then_the_largest_icon_then_svg() -> None:
     html = """
     <link rel="icon" href="/fav-16.png" sizes="16x16">
     <link rel="icon" href="/fav-32.png" sizes="32x32">
@@ -30,7 +30,14 @@ def test_candidates_prefer_apple_touch_then_the_largest_icon() -> None:
         "https://blog.test/fav-32.png",
         "https://blog.test/fav-16.png",
         "https://blog.test/favicon.ico",
+        "https://blog.test/logo.svg",
     ]
+
+
+def test_svg_is_detected_by_content() -> None:
+    assert is_svg(b'<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>')
+    assert is_svg(b"  <svg viewBox='0 0 1 1'/>")
+    assert not is_svg(png(32))
 
 
 def test_an_icon_becomes_a_64px_webp() -> None:

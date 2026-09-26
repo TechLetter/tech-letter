@@ -77,9 +77,12 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
                 container.posts, pipeline, container.queue
             ),
-            # 이미지 변환(Pillow)이 이 워커 이미지에만 있다.
+            # 이미지 변환(Pillow)과 SVG를 그릴 브라우저가 이 워커 이미지에만 있다.
             JobType.BLOG_ICON_REQUESTED: BlogIconHandler(
-                container.blogs, BlogIconRepository(container.db), container.http.get()
+                container.blogs,
+                BlogIconRepository(container.db),
+                container.http.get(),
+                renderer.rasterize_svg,
             ),
         },
         worker_id=f"summary-{uuid.uuid4().hex[:8]}",

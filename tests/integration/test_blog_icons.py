@@ -30,13 +30,15 @@ def client(routes: dict[str, httpx.Response]) -> httpx.AsyncClient:
     )
 
 
-async def run(mongo_db, routes: dict[str, httpx.Response]) -> tuple[str, BlogIconRepository]:
+async def run(
+    mongo_db, routes: dict[str, httpx.Response], rasterize_svg=None
+) -> tuple[str, BlogIconRepository]:
     blogs = BlogRepository(mongo_db)
     blog = await blogs.insert(
         Blog(name="Alpha", url="https://alpha.test/", rss_url="https://alpha.test/feed/")
     )
     icons = BlogIconRepository(mongo_db)
-    handler = BlogIconHandler(blogs, icons, client(routes))
+    handler = BlogIconHandler(blogs, icons, client(routes), rasterize_svg)
     await handler(
         Job(type=JobType.BLOG_ICON_REQUESTED, key=str(blog.id), payload={"blog_id": str(blog.id)})
     )
@@ -71,6 +73,29 @@ async def test_a_blocked_site_falls_back_to_the_feed_image(mongo_db) -> None:
         },
     )
 
+    assert await icons.get(blog_id) is not None
+
+
+async def test_an_svg_only_site_is_rasterized(mongo_db) -> None:
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect/></svg>'
+    seen: list[bytes] = []
+
+    async def rasterize(data: bytes) -> bytes:
+        seen.append(data)
+        return png(128)
+
+    blog_id, icons = await run(
+        mongo_db,
+        {
+            "https://alpha.test/": httpx.Response(
+                200, text='<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">'
+            ),
+            "https://alpha.test/assets/favicon.svg": httpx.Response(200, content=svg),
+        },
+        rasterize,
+    )
+
+    assert seen == [svg]
     assert await icons.get(blog_id) is not None
 
 
