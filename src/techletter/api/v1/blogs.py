@@ -8,8 +8,8 @@ from techletter.api.deps import Ctx
 
 router = APIRouter(prefix="/blogs", tags=["blogs"])
 
-# 아이콘은 거의 안 바뀐다. 하루 캐시하고, 지나면 ETag로 확인만 한다.
-_CACHE = "public, max-age=86400"
+# 어드민이 바꾼 아이콘이 한 시간 안에 보이게 한다. 지나면 ETag로 확인만 한다(304).
+_CACHE = "public, max-age=3600"
 
 
 @router.get("/{blog_id}/icon")
