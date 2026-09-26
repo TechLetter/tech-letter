@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from techletter.content.icons import BlogIconRepository
 from techletter.core.jobs.runner import JobRunner
 from techletter.core.jobs.types import JobType
 from techletter.core.llm.budget import DailyBudget
@@ -17,6 +18,7 @@ from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
+from techletter.summary.icons import BlogIconHandler
 from techletter.summary.pipeline import SummaryPipeline
 from techletter.summary.renderer import PlaywrightRenderer, Renderer
 from techletter.summary.summarizer import Summarizer
@@ -74,6 +76,10 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             ),
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
                 container.posts, pipeline, container.queue
+            ),
+            # 이미지 변환(Pillow)이 이 워커 이미지에만 있다.
+            JobType.BLOG_ICON_REQUESTED: BlogIconHandler(
+                container.blogs, BlogIconRepository(container.db), container.http.get()
             ),
         },
         worker_id=f"summary-{uuid.uuid4().hex[:8]}",

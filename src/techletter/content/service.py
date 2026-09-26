@@ -186,7 +186,7 @@ class BlogService:
         url, rss_url = normalize_url(url), normalize_url(rss_url)
         if conflict := await self._blogs.find_conflict(url=url, rss_url=rss_url, exclude_id=None):
             raise ResourceConflictError(f"{conflict} already exists", field=conflict)
-        return await self._blogs.insert(
+        blog = await self._blogs.insert(
             Blog(
                 name=name.strip(),
                 url=url,
@@ -194,6 +194,11 @@ class BlogService:
                 is_active=is_active,
             )
         )
+        # 아이콘은 요약 워커가 받아 둔다(없으면 화면이 이름 첫 글자로 대신한다).
+        from techletter.content.icons import enqueue_icon_fetch  # noqa: PLC0415
+
+        await enqueue_icon_fetch(self._queue, str(blog.id))
+        return blog
 
     async def update(self, blog_id: str, changes: dict[str, object]) -> Blog:
         """부분 갱신 — 전달된 필드만 바뀐다."""

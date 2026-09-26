@@ -289,9 +289,9 @@ async def test_applying_a_summary_keeps_the_fetched_body(post_service, posts, qu
 
 
 async def test_a_new_post_starts_with_a_content_fetch(post_service, mongo_db, blog) -> None:
-    await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
+    post = await post_service.create(title="x", link="https://alpha.test/x", blog_id=str(blog.id))
 
-    types = [j["type"] async for j in mongo_db["jobs"].find({}, {"type": 1})]
+    types = [j["type"] async for j in mongo_db["jobs"].find({"key": str(post.id)}, {"type": 1})]
     assert types == [JobType.CONTENT_FETCH_REQUESTED.value]
 
 

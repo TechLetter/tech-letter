@@ -19,6 +19,7 @@ class JobType(StrEnum):
     EMBEDDING_COMPLETED = "embedding.completed"
     EMBEDDING_DELETE_REQUESTED = "embedding.delete_requested"
     CHAT_COMPRESSION_REQUESTED = "chat.compression_requested"
+    BLOG_ICON_REQUESTED = "blog.icon_requested"
 
 
 class JobStatus(StrEnum):

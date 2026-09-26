@@ -411,6 +411,31 @@ def backfill_embeddings(
     _with_container(body)
 
 
+@backfill_app.command("icons")
+def backfill_icons(
+    all_blogs: bool = typer.Option(False, "--all", help="이미 받아 둔 블로그도 다시 받는다."),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
+) -> None:
+    """블로그 아이콘 수집 잡을 건다. 기본은 아직 한 번도 시도하지 않은 블로그만."""
+
+    async def body(container: Container) -> None:
+        from techletter.content.icons import BlogIconRepository, enqueue_icon_fetch  # noqa: PLC0415
+        from techletter.core.pagination import Page  # noqa: PLC0415
+
+        blogs, _ = await container.blogs.list_blogs(Page(1, 1000), active=None)
+        tried = (
+            set() if all_blogs else await BlogIconRepository(container.db).blog_ids_with_record()
+        )
+        targets = [b for b in blogs if b.id is not None and str(b.id) not in tried]
+        if dry_run:
+            typer.echo(f"[dry-run] {len(targets)}개 블로그가 대상이다. --execute 로 실행한다.")
+            return
+        queued = [await enqueue_icon_fetch(container.queue, str(b.id)) for b in targets]
+        typer.echo(f"{sum(job is not None for job in queued)}건 enqueue")
+
+    _with_container(body)
+
+
 async def _collect_missing_link_key_posts(container: Container, batch_size: int) -> list[Post]:
     posts: list[Post] = []
     after_id = None
