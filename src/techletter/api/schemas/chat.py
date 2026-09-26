@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from techletter.core.ids import is_object_id
 from techletter.core.time import to_iso_z
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -91,10 +92,25 @@ class ChatSessionOut(BaseModel):
         )
 
 
+MAX_SELECTED_POSTS = 8
+
+
 class MessageIn(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     session_id: str | None = None
     model_id: str | None = Field(default=None, max_length=120)
+    post_ids: list[str] | None = Field(default=None, max_length=MAX_SELECTED_POSTS)
+    """주면 이 포스트들만 근거로 답한다(검색 결과의 "AI 요약")."""
+
+    @field_validator("post_ids")
+    @classmethod
+    def _post_ids(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned = list(dict.fromkeys(v.strip() for v in value if v.strip()))
+        if any(not is_object_id(v) for v in cleaned):
+            raise ValueError("post_ids must be post ids")
+        return cleaned or None
 
 
 class ChatAnswerOut(BaseModel):

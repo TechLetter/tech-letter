@@ -8,7 +8,18 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from techletter.api.v1 import auth, blogs, bookmarks, chat, filters, llm_models, me, posts, trends
+from techletter.api.v1 import (
+    auth,
+    blogs,
+    bookmarks,
+    chat,
+    filters,
+    llm_models,
+    me,
+    posts,
+    search,
+    trends,
+)
 from techletter.api.v1.admin import admin_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -19,6 +30,7 @@ for router in (
     # /filters, /trends, /llm-models 는 /posts 보다 먼저 와도 무방하지만 읽는
     # 순서를 맞춘다.
     posts.router,
+    search.router,
     bookmarks.router,
     filters.router,
     blogs.router,

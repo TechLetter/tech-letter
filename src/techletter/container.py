@@ -30,6 +30,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.trends import TrendsService
     from techletter.core.db.qdrant import VectorStore
     from techletter.core.llm.stats import ModelStatsStore
+    from techletter.search.service import SearchService
     from techletter.settings import Settings
     from techletter.users.auth_service import AuthService
     from techletter.users.credits import CreditService
@@ -56,6 +57,7 @@ class Container:
     _db: AsyncDatabase | None = None
     _vector_store: VectorStore | None = None
     _chat: ChatUseCase | None = None
+    _search: SearchService | None = None
 
     # ── 수명주기 ───────────────────────────────────────────────────
     @classmethod
@@ -216,6 +218,22 @@ class Container:
 
             self._vector_store = VectorStore(self.settings.qdrant)
         return self._vector_store
+
+    @property
+    def search(self) -> SearchService:
+        """질의 벡터 캐시를 요청 사이에 유지해야 해서 한 번만 만든다."""
+        if self._search is None:
+            from techletter.core.llm.embeddings import LangChainEmbedder  # noqa: PLC0415
+            from techletter.search.service import SearchService  # noqa: PLC0415
+
+            self._search = SearchService(
+                store=self.vector_store,
+                posts=self.posts,
+                embedder=LangChainEmbedder(self.settings.embedding_llm),
+                embedding_model=self.settings.embedding_llm.model_name,
+                settings=self.settings.search,
+            )
+        return self._search
 
     @property
     def chat(self) -> ChatUseCase:
