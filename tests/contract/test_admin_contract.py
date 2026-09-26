@@ -271,6 +271,21 @@ async def test_refreshing_an_icon_queues_a_fetch(client, admin_headers, seeded, 
     assert await ctx.db["jobs"].find_one({"type": "blog.icon_requested", "key": blog_id})
 
 
+async def test_an_icon_can_come_from_another_site(client, admin_headers, seeded, ctx) -> None:
+    blog_id = str(seeded["blog"].id)
+    url = f"/api/v1/admin/blogs/{blog_id}/icon/refresh"
+
+    bad = await client.post(url, headers=admin_headers, json={"site_url": "daangn.com"})
+    response = await client.post(
+        url, headers=admin_headers, json={"site_url": "https://daangn.com"}
+    )
+
+    assert bad.status_code == 400
+    assert response.status_code == 202
+    job = await ctx.db["jobs"].find_one({"type": "blog.icon_requested", "key": blog_id})
+    assert job is not None and job["payload"]["site_url"] == "https://daangn.com"
+
+
 async def test_a_trailing_slash_does_not_hide_a_duplicate(client, admin_headers, seeded) -> None:
     response = await client.post(
         "/api/v1/admin/blogs",

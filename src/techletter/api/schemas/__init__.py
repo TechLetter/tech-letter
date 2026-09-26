@@ -8,6 +8,7 @@
 from techletter.api.schemas.admin import (
     BackfillIn,
     BackfillStatusOut,
+    BlogIconRefreshIn,
     BlogIn,
     JobOut,
     JobStatsOut,
@@ -54,6 +55,7 @@ __all__ = [
     "BackfillIn",
     "BackfillStatusOut",
     "BlogFilterOut",
+    "BlogIconRefreshIn",
     "BlogIn",
     "BookmarkIn",
     "BookmarkOut",

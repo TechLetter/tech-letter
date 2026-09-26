@@ -4,6 +4,10 @@
 → SVG 아이콘 → RSS 채널 이미지 순으로 시도하고, 처음 열리는 것을 64px webp로 바꿔 저장한다.
 Medium 계열처럼 서버 IP가 막힌 사이트는 피드 채널 이미지로 얻는다. SVG는 Pillow가 못 열어
 브라우저로 그린다(하이퍼커넥트·Project Zero는 아이콘이 SVG뿐이다).
+
+Medium 블로그는 페이지 아이콘도 피드 채널 이미지도 Medium 로고라 13곳이 같은 아이콘이 된다.
+그 로고는 건너뛴다. 퍼블리케이션 로고는 Medium이 서버 요청을 모두 막아 받을 수 없어서,
+어드민이 회사 홈페이지 같은 다른 주소를 주면(`site_url`) 그 사이트 아이콘을 받는다.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import BlogRepository
     from techletter.core.jobs.models import Job
 
-__all__ = ["BlogIconHandler", "icon_candidates", "is_svg", "to_icon_webp"]
+__all__ = ["BlogIconHandler", "icon_candidates", "is_generic_icon", "is_svg", "to_icon_webp"]
 
 logger = get_logger(__name__)
 
@@ -33,7 +37,20 @@ ICON_SIZE = 64
 MAX_DOWNLOAD_BYTES = 1024 * 1024
 MIN_SOURCE_SIZE = 16
 TIMEOUT = 10.0
-_HEADERS = {"User-Agent": BROWSER_USER_AGENT}
+# zstd로 주는 사이트(Netflix)는 httpx가 풀다 실패한다(`DecodingError`). gzip만 받는다.
+_HEADERS = {"User-Agent": BROWSER_USER_AGENT, "Accept-Encoding": "gzip, deflate"}
+# Medium 기본 로고(페이지 apple-touch-icon, 피드 채널 이미지).
+_GENERIC_ICON_MARKERS = (
+    "10fd5c419ac61637245384e7099e131627900034828f4f386bdaa47a74eae156",
+    "1*TGH72Nnw24QL3iV9IOm4VA",
+)
+_GENERIC_ICON_HOSTS = frozenset({"medium.com"})
+
+
+def is_generic_icon(url: str) -> bool:
+    """블로그가 아니라 호스팅 플랫폼의 아이콘이다."""
+    host = (urlparse(url).hostname or "").lower()
+    return host in _GENERIC_ICON_HOSTS or any(m in url for m in _GENERIC_ICON_MARKERS)
 
 
 def icon_candidates(html: str, page_url: str) -> list[str]:
@@ -116,30 +133,41 @@ class BlogIconHandler:
 
     async def __call__(self, job: Job) -> None:
         blog_id = str(job.payload.get("blog_id") or job.key)
+        site_url = job.payload.get("site_url")
         blog = await self._blogs.get(blog_id)
         if blog is None or await self._icons.is_manual(blog_id):
             return
-        for url in await self._candidates(blog.url, blog.rss_url):
-            data = await self._download(url)
-            if data and is_svg(data):
-                data = await self._rasterize_svg(data) if self._rasterize_svg else None
-            icon = to_icon_webp(data) if data else None
+        if site_url:
+            # 어드민이 고른 주소. 직접 올린 아이콘처럼 자동 수집이 덮지 않고,
+            # 못 받으면 지금 아이콘을 그대로 둔다.
+            urls = await self._candidates(str(site_url), None)
+        else:
+            urls = await self._candidates(blog.url, blog.rss_url)
+        for url in urls:
+            icon = await self._fetch_icon(url)
             if icon:
-                await self._icons.save(blog_id, icon, source=url, manual=False)
+                await self._icons.save(blog_id, icon, source=url, manual=bool(site_url))
                 logger.info("blog icon saved", extra={"blog": blog.name, "source": url})
                 return
-        await self._icons.mark_missing(blog_id)
-        logger.info("blog icon not found", extra={"blog": blog.name})
+        if not site_url:
+            await self._icons.mark_missing(blog_id)
+        logger.info("blog icon not found", extra={"blog": blog.name, "site_url": site_url})
 
-    async def _candidates(self, site_url: str, rss_url: str) -> list[str]:
+    async def _fetch_icon(self, url: str) -> bytes | None:
+        data = await self._download(url)
+        if data and is_svg(data):
+            data = await self._rasterize_svg(data) if self._rasterize_svg else None
+        return to_icon_webp(data) if data else None
+
+    async def _candidates(self, site_url: str, rss_url: str | None) -> list[str]:
         urls: list[str] = []
         html = await self._text(site_url)
         if html is not None:
             urls.extend(icon_candidates(html, site_url))
-        feed_image = await self._feed_image(rss_url)
+        feed_image = await self._feed_image(rss_url) if rss_url else None
         if feed_image:
             urls.append(feed_image)
-        return list(dict.fromkeys(urls))
+        return [url for url in dict.fromkeys(urls) if not is_generic_icon(url)]
 
     async def _feed_image(self, rss_url: str) -> str | None:
         import feedparser  # noqa: PLC0415

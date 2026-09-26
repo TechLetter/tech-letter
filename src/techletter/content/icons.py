@@ -98,7 +98,13 @@ class BlogIconRepository:
         return {str(doc["_id"]) async for doc in self._col.find({}, {"_id": 1})}
 
 
-async def enqueue_icon_fetch(queue: JobQueue, blog_id: str) -> Job | None:
+async def enqueue_icon_fetch(
+    queue: JobQueue, blog_id: str, site_url: str | None = None
+) -> Job | None:
+    """`site_url`을 주면 블로그 주소 대신 그 사이트의 아이콘을 받는다(Medium 블로그)."""
     from techletter.core.jobs.types import JobType  # noqa: PLC0415
 
-    return await queue.enqueue(JobType.BLOG_ICON_REQUESTED, blog_id, {"blog_id": blog_id})
+    payload: dict[str, str] = {"blog_id": blog_id}
+    if site_url:
+        payload["site_url"] = site_url
+    return await queue.enqueue(JobType.BLOG_ICON_REQUESTED, blog_id, payload)

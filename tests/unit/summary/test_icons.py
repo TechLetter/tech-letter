@@ -7,7 +7,7 @@ from io import BytesIO
 from PIL import Image
 
 from techletter.content.icons import is_webp
-from techletter.summary.icons import icon_candidates, is_svg, to_icon_webp
+from techletter.summary.icons import icon_candidates, is_generic_icon, is_svg, to_icon_webp
 
 
 def png(size: int) -> bytes:
@@ -32,6 +32,15 @@ def test_candidates_prefer_apple_touch_then_the_largest_icon_then_svg() -> None:
         "https://blog.test/favicon.ico",
         "https://blog.test/logo.svg",
     ]
+
+
+def test_medium_logos_are_not_blog_icons() -> None:
+    assert is_generic_icon(
+        "https://miro.medium.com/v2/resize:fill:304:304/10fd5c419ac61637245384e7099e131627900034828f4f386bdaa47a74eae156"
+    )
+    assert is_generic_icon("https://cdn-images-1.medium.com/proxy/1*TGH72Nnw24QL3iV9IOm4VA.png")
+    assert is_generic_icon("https://medium.com/favicon.ico")
+    assert not is_generic_icon("https://miro.medium.com/v2/resize:fill:304:304/1*own-logo.png")
 
 
 def test_svg_is_detected_by_content() -> None:
