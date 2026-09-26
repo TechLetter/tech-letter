@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.models import Post
     from techletter.content.service import BlogWithCount
     from techletter.content.trends import WeeklyTrends
+    from techletter.search.service import Suggestion
     from techletter.summary.topics import TopicGroup
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "FilterOut",
     "PostOut",
     "PostStatusOut",
+    "SearchSuggestionOut",
     "SourceOut",
     "TopicGroupOut",
     "TopicTrendOut",
@@ -71,6 +73,28 @@ class PostOut(BaseModel):
             tags=summary.tags if summary else [],
             # 익명 요청이면 false. 키가 없는 3상태를 없앤다.
             is_bookmarked=bookmarked,
+        )
+
+
+class SearchSuggestionOut(BaseModel):
+    """검색창 자동완성 항목. 목록 카드가 아니라 제목 한 줄만 그린다."""
+
+    id: str
+    title: str
+    blog_id: str | None
+    blog_name: str
+    published_at: str | None
+    link: str
+
+    @classmethod
+    def of(cls, item: Suggestion) -> SearchSuggestionOut:
+        return cls(
+            id=item.post_id,
+            title=item.title,
+            blog_id=item.blog_id,
+            blog_name=item.blog_name,
+            published_at=item.published_at,
+            link=item.link,
         )
 
 
@@ -282,6 +306,8 @@ class SourceOut(BaseModel):
     blog_name: str
     link: str
     score: float | None = None
+    blog_id: str | None = None
+    published_at: str | None = None
 
     @classmethod
     def of(cls, source: Source) -> SourceOut:
@@ -291,4 +317,6 @@ class SourceOut(BaseModel):
             blog_name=source.blog_name,
             link=source.link,
             score=source.score,
+            blog_id=source.blog_id,
+            published_at=source.published_at,
         )

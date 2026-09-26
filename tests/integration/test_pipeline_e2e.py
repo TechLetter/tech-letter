@@ -27,6 +27,7 @@ from techletter.core.pagination import Page
 from techletter.embedding.chunker import Chunker
 from techletter.embedding.handlers import EmbeddingDeleteHandler, EmbeddingRequestedHandler
 from techletter.embedding.pipeline import EmbeddingPipeline
+from techletter.search.handlers import LexicalIndexHandler
 from techletter.settings import EmbeddingSettings, SummarySettings
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.pipeline import SummaryPipeline
@@ -129,6 +130,7 @@ async def pipeline_env(mongo_db, queue, vector_store, http_clients):
                 queue,
             ),
             JobType.EMBEDDING_DELETE_REQUESTED: EmbeddingDeleteHandler(vector_store),
+            JobType.LEXICAL_INDEX_REQUESTED: LexicalIndexHandler(posts, vector_store),
         },
         worker_id="embedding-test",
     )
@@ -206,6 +208,16 @@ async def test_the_vectors_are_searchable(pipeline_env) -> None:
     assert hits[0].payload["link"].startswith("https://example.com/blog/")
 
 
+async def test_embedded_posts_get_a_lexical_point(pipeline_env) -> None:
+    await pipeline_env["aggregator"].run()
+    await pipeline_env["drain"]()
+
+    store = pipeline_env["store"]
+    count = await store._client.count(store.lexical_collection)
+
+    assert count.count == 2
+
+
 async def test_every_job_finishes(pipeline_env) -> None:
     await pipeline_env["aggregator"].run()
     await pipeline_env["drain"]()
@@ -215,8 +227,8 @@ async def test_every_job_finishes(pipeline_env) -> None:
     assert stats["by_status"].get("dead", 0) == 0
     assert stats["by_status"].get("pending", 0) == 0
     assert (
-        stats["by_status"]["done"] == 10
-    )  # 포스트 2건 × 잡 5종(가져오기·요약·요약 반영·임베딩·임베딩 반영)
+        stats["by_status"]["done"] == 12
+    )  # 포스트 2건 × 잡 6종(가져오기·요약·요약 반영·임베딩·임베딩 반영·어휘 색인)
 
 
 async def test_the_renderer_is_called_with_the_feed_link(pipeline_env) -> None:

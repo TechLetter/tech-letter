@@ -83,6 +83,7 @@ def build_context(hits: list[SearchHit], guard: RetrievedContentGuard) -> BuiltC
                 blog_name=blog_name,
                 link=link,
                 score=round(hit.score, 4),
+                published_at=str(payload.get("published_at") or "") or None,
             )
         )
 

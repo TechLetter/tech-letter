@@ -2,6 +2,9 @@
 
 컬렉션 이름 규칙은 **운영 데이터에 이미 박혀 있어** 바꿀 수 없다:
 `{base}__{model_key}__{dim}` (예: `tech_letter_posts__gemini-embedding-001__3072`).
+
+어휘(BM25) 색인은 `{base}__lexical`에 포스트당 포인트 하나로 둔다. 같은 prefix라
+`delete_posts`가 청크와 함께 지운다.
 """
 
 from __future__ import annotations
@@ -18,8 +21,11 @@ from qdrant_client.http.models import (
     Filter,
     MatchAny,
     MatchValue,
+    Modifier,
     PayloadSchemaType,
     PointStruct,
+    SparseVector,
+    SparseVectorParams,
     VectorParams,
 )
 
@@ -29,7 +35,15 @@ from techletter.core.logging import get_logger
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.settings import QdrantSettings
 
-__all__ = ["Chunk", "SearchHit", "VectorStore", "collection_name_for", "normalize_model_name"]
+__all__ = [
+    "LEXICAL_VECTOR",
+    "Chunk",
+    "LexicalPoint",
+    "SearchHit",
+    "VectorStore",
+    "collection_name_for",
+    "normalize_model_name",
+]
 
 logger = get_logger(__name__)
 
@@ -38,6 +52,10 @@ _REPEATED_UNDERSCORE = re.compile(r"_+")
 # 포인트 id를 만드는 네임스페이스. 같은 (post, model, dim, index)면 항상 같은 id가
 # 나와야 재임베딩이 중복 포인트를 쌓지 않고 덮어쓴다.
 _POINT_NAMESPACE = uuid.NAMESPACE_URL
+LEXICAL_VECTOR = "bm25"
+_LEXICAL_SUFFIX = "lexical"
+# 어휘 검색 필터(블로그·주제)와 삭제(post_id)에 쓰는 payload 인덱스.
+_LEXICAL_INDEXED_FIELDS = ("post_id", "blog_id", "categories")
 
 
 def normalize_model_name(model_name: str) -> str:
@@ -72,6 +90,16 @@ class Chunk:
 @dataclass(frozen=True, slots=True)
 class SearchHit:
     score: float
+    payload: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class LexicalPoint:
+    """포스트 하나의 BM25 희소 벡터. 값 계산은 `techletter.search.lexical`이 한다."""
+
+    post_id: str
+    indices: list[int]
+    values: list[float]
     payload: dict[str, Any]
 
 
@@ -114,10 +142,14 @@ class VectorStore:
         else:
             logger.info("qdrant collection created", extra={"collection": name})
 
+        await self._ensure_keyword_index(name, "post_id")
+        self._known.add(name)
+
+    async def _ensure_keyword_index(self, name: str, field_name: str) -> None:
         try:
             await self._client.create_payload_index(
                 collection_name=name,
-                field_name="post_id",
+                field_name=field_name,
                 field_schema=PayloadSchemaType.KEYWORD,
             )
         except Exception as exc:
@@ -127,9 +159,8 @@ class VectorStore:
                 raise RuntimeError(f"failed to ensure qdrant payload index: {name}") from exc
             logger.debug(
                 "qdrant payload index already existed",
-                extra={"collection": name, "field": "post_id"},
+                extra={"collection": name, "field": field_name},
             )
-        self._known.add(name)
 
     async def upsert_chunks(
         self, *, post_id: str, model_name: str, chunks: list[Chunk], payload: dict[str, Any]
@@ -216,8 +247,100 @@ class VectorStore:
             for point in response.points
         ]
 
+    # ── 어휘(BM25) 색인 ────────────────────────────────────────────
+    @property
+    def lexical_collection(self) -> str:
+        return f"{self._base}__{_LEXICAL_SUFFIX}"
+
+    async def _ensure_lexical_collection(self) -> None:
+        name = self.lexical_collection
+        if name in self._known:
+            return
+        try:
+            await self._client.create_collection(
+                collection_name=name,
+                vectors_config={},
+                # IDF는 Qdrant가 컬렉션 통계로 질의 때 곱한다. 문서 수가 늘어도
+                # 이미 넣은 포인트를 다시 계산할 필요가 없다.
+                sparse_vectors_config={LEXICAL_VECTOR: SparseVectorParams(modifier=Modifier.IDF)},
+            )
+        except Exception:
+            try:
+                await self._client.get_collection(collection_name=name)
+            except Exception as verify_error:
+                raise RuntimeError(f"failed to ensure qdrant collection: {name}") from verify_error
+        else:
+            logger.info("qdrant collection created", extra={"collection": name})
+        for field_name in _LEXICAL_INDEXED_FIELDS:
+            await self._ensure_keyword_index(name, field_name)
+        self._known.add(name)
+
+    async def upsert_lexical(self, points: list[LexicalPoint]) -> int:
+        """포스트당 포인트 하나. id가 post_id로 정해져 다시 넣으면 덮어쓴다."""
+        if not points:
+            return 0
+        await self._ensure_lexical_collection()
+        await self._client.upsert(
+            collection_name=self.lexical_collection,
+            points=[
+                PointStruct(
+                    id=lexical_point_id(point.post_id),
+                    vector={
+                        LEXICAL_VECTOR: SparseVector(indices=point.indices, values=point.values)
+                    },
+                    payload={**point.payload, "post_id": point.post_id},
+                )
+                for point in points
+            ],
+        )
+        return len(points)
+
+    async def search_lexical(
+        self,
+        indices: list[int],
+        *,
+        limit: int,
+        blog_id: str | None = None,
+        categories: list[str] | None = None,
+    ) -> list[SearchHit]:
+        """질의 토큰마다 가중치 1로 찾는다. 점수는 Σ IDF × 문서 쪽 BM25 tf 항이다.
+
+        색인이 아직 없는 환경은 빈 결과로 낮춘다. 그 밖의 장애는 예외로 올린다.
+        """
+        if not indices:
+            return []
+        conditions: list[Any] = []
+        if blog_id:
+            conditions.append(FieldCondition(key="blog_id", match=MatchValue(value=blog_id)))
+        if categories:
+            conditions.append(FieldCondition(key="categories", match=MatchAny(any=categories)))
+        collection = self.lexical_collection
+        try:
+            response = await self._client.query_points(
+                collection_name=collection,
+                query=SparseVector(indices=indices, values=[1.0] * len(indices)),
+                using=LEXICAL_VECTOR,
+                query_filter=Filter(must=conditions) if conditions else None,
+                limit=limit,
+                with_payload=True,
+            )
+        except Exception as exc:
+            if _is_collection_not_found_error(exc):
+                logger.warning(
+                    "qdrant collection not found; degrading to empty",
+                    extra={"collection": collection},
+                )
+                return []
+            raise VectorStoreUnavailableError(
+                f"qdrant search failed for collection: {collection}"
+            ) from exc
+        return [
+            SearchHit(score=point.score, payload=dict(point.payload or {}))
+            for point in response.points
+        ]
+
     async def delete_posts(self, post_ids: list[str]) -> int:
-        """포스트들의 청크를 모든 모델 컬렉션에서 지운다.
+        """포스트들의 청크와 어휘 색인을 모든 컬렉션에서 지운다.
 
         모델을 바꾸면 컬렉션이 늘어나므로 prefix로 전부 훑는다. 일부가
         실패하면 예외를 던져 잡이 재시도하게 한다 — 벡터가 남으면 지워진
@@ -245,6 +368,10 @@ class VectorStore:
         if failed:
             raise RuntimeError("failed to delete vectors from: " + ", ".join(failed))
         return len(collections)
+
+
+def lexical_point_id(post_id: str) -> str:
+    return str(uuid.uuid5(_POINT_NAMESPACE, f"{post_id}:{_LEXICAL_SUFFIX}"))
 
 
 def _is_collection_not_found_error(exc: Exception) -> bool:

@@ -18,6 +18,7 @@ class JobType(StrEnum):
     EMBEDDING_REQUESTED = "embedding.requested"
     EMBEDDING_COMPLETED = "embedding.completed"
     EMBEDDING_DELETE_REQUESTED = "embedding.delete_requested"
+    LEXICAL_INDEX_REQUESTED = "search.lexical_index_requested"
     CHAT_COMPRESSION_REQUESTED = "chat.compression_requested"
     BLOG_ICON_REQUESTED = "blog.icon_requested"
 

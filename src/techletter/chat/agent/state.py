@@ -65,6 +65,7 @@ class PostRecord:
     blog_name: str
     published_at: str
     summary: str = ""
+    blog_id: str | None = None
     categories: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     plain_text: str | None = None
@@ -77,6 +78,9 @@ class Source:
     blog_name: str
     link: str
     score: float = 1.0
+    blog_id: str | None = None
+    published_at: str | None = None
+    """출처 카드의 블로그 아이콘·날짜용. 벡터 청크에는 blog_id가 없어 에이전트가 채운다."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +89,8 @@ class Source:
             "blog_name": self.blog_name,
             "link": self.link,
             "score": self.score,
+            "blog_id": self.blog_id,
+            "published_at": self.published_at,
         }
 
 

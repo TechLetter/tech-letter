@@ -3,6 +3,8 @@
 단계는 전부 async다 — 동기 코드가 섞이면 요청 하나가 이벤트 루프를 통째로 막는다.
 
 흐름: 계획 → (도구 하나) → 답변 → 출력 가드.
+사용자가 포스트를 골라 왔으면(`post_ids`) 계획을 건너뛰고 그 글만 읽는다 —
+무엇을 근거로 할지 이미 정해져 있어 검색할 이유가 없다.
 입력 가드와 메모리 구성은 여기 밖에 있다 — 크레딧을 깎기 전에 끝나야 한다.
 
 에이전트 인스턴스는 프로세스마다 하나이고 요청 여러 개가 동시에 쓴다.
@@ -83,6 +85,7 @@ class AgentState:
 
     query: str = ""
     search_query: str = ""
+    post_ids: list[str] = field(default_factory=list)
     memory_metadata: dict[str, Any] = field(default_factory=dict)
     recorder: ActivityRecorder = field(default_factory=ActivityRecorder)
     plan: ChatPlan = field(default_factory=ChatPlan)
@@ -152,6 +155,15 @@ class ChatAgent:
         await state.recorder.emit("read_posts", "completed")
         return {"tool_result": result}
 
+    async def _read_selected(self, state: AgentState) -> dict[str, Any]:
+        await state.recorder.emit("read_posts", "running")
+        result = await self._posts.get_posts(state.post_ids)
+        if result.status == "ok":
+            result.posts = await self._posts.hydrate(result.posts)
+            result.context = build_post_context(result.posts)
+        await state.recorder.emit("read_posts", "completed")
+        return {"tool_result": result}
+
     async def _semantic_search(self, state: AgentState) -> dict[str, Any]:
         # 범위를 못 박은 질문은 메타데이터 조회가 정확하다. 벡터 검색은
         # 날짜·블로그 조건을 지키지 못한다.
@@ -176,6 +188,16 @@ class ChatAgent:
                 status="no_result", message="요청 조건에 맞는 포스트를 찾지 못했습니다."
             )
         }
+
+    async def _complete_sources(self, state: AgentState) -> None:
+        """출처 카드용 필드를 채운다. 실패해도 답변은 막지 않는다."""
+        sources = state.tool_result.sources
+        if not any(s.blog_id is None or s.published_at is None for s in sources):
+            return
+        try:
+            state.tool_result.sources = await self._posts.complete_sources(sources)
+        except Exception:
+            logger.warning("source completion failed", exc_info=True)
 
     async def _answer(self, state: AgentState) -> dict[str, Any]:
         await state.recorder.emit("answer", "running")
@@ -209,19 +231,32 @@ class ChatAgent:
         memory: MemoryContext,
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
         model_id: str | None = None,
+        post_ids: list[str] | None = None,
     ) -> AgentResult:
         recorder = ActivityRecorder(on_activity)
         state = AgentState(
             query=query,
             search_query=memory.rewritten_query or query,
+            post_ids=list(post_ids or []),
             memory_metadata=memory.to_metadata(),
             recorder=recorder,
             model_id=model_id,
         )
 
-        # 계획 → 도구 하나 → 답변. 분기는 계획이 고른 task 하나뿐이고 되돌아오지 않는다.
-        _apply(state, await self._plan(state))
-        _apply(state, await self._tools[state.plan.task](state))
+        if state.post_ids:
+            # 고른 글만 근거로 삼는다. 범위가 못 박혀 있으니 다른 글로 대체하지 않는다.
+            state.plan = ChatPlan(
+                task="answer_from_posts",
+                strict_scope=True,
+                needs_content=True,
+                reason="selected_posts",
+            )
+            _apply(state, await self._read_selected(state))
+        else:
+            # 계획 → 도구 하나 → 답변. 분기는 계획이 고른 task 하나뿐이고 되돌아오지 않는다.
+            _apply(state, await self._plan(state))
+            _apply(state, await self._tools[state.plan.task](state))
+        await self._complete_sources(state)
         _apply(state, await self._answer(state))
 
         checked = self._output_guard.inspect(state.answer)

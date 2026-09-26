@@ -246,6 +246,29 @@ class ChatSettings(BaseSettings):
     daily_credit_grant: int = 10
 
 
+class SearchSettings(BaseSettings):
+    """포스트 검색(어휘 + 벡터 하이브리드). 환경변수는 `SEARCH_` + 필드명이다."""
+
+    model_config = _llm_config("SEARCH_")  # 이름과 달리 prefix만 붙이는 공용 설정이다
+    lexical_candidates: int = 100
+    dense_candidates: int = 100
+    """벡터 검색으로 가져올 **청크** 수. 포스트로 묶으면 이보다 적어진다."""
+    dense_min_score: float = 0.7
+    """어휘로는 안 걸리고 벡터로만 걸린 글을 남기는 최소 코사인 점수. 챗봇의
+    `CHATBOT_RAG_SCORE_THRESHOLD`(0.5)는 답변 문맥용이라 목록에 쓰기엔 느슨하다."""
+    rrf_k: int = 60
+    recency_half_life_days: float = 1100.0
+    """융합 점수에 곱하는 최신성 감쇠의 반감기. 1년이면 약 0.8, 2년이면 약 0.65배."""
+    recency_min_factor: float = 0.5
+    """감쇠 하한. 오래됐어도 훨씬 관련 깊은 글은 위에 남는다."""
+    max_results: int = 100
+    suggest_limit: int = 5
+    query_cache_size: int = 256
+    query_cache_ttl_seconds: int = 3600
+    embeds_per_minute_per_client: int = 30
+    """IP당 분당 질의 임베딩 수. 넘치면 벡터 검색을 건너뛰고 어휘 결과만 준다. 0이면 끈다."""
+
+
 class Settings(BaseSettings):
     model_config = _BASE
 
@@ -264,6 +287,7 @@ class Settings(BaseSettings):
     summary: SummarySettings
     embedding: EmbeddingSettings
     chat: ChatSettings
+    search: SearchSettings = Field(default_factory=SearchSettings)
 
     auth_settings: AuthSettings | None = Field(default=None, exclude=True)
     """지연 로딩. 아래 `auth` 프로퍼티로 접근한다."""
@@ -305,6 +329,7 @@ class Settings(BaseSettings):
             summary=SummarySettings(),
             embedding=EmbeddingSettings(),
             chat=ChatSettings(),
+            search=SearchSettings(),
             summary_llm=SummaryLlmSettings(),
             embedding_llm=EmbeddingLlmSettings(),
             chat_llm=ChatLlmSettings(),

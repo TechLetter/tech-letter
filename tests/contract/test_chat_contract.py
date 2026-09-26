@@ -21,9 +21,11 @@ class FakeAgent:
         self.model_id = model_id
         self.emit_activity = emit_activity
         self.seen_model_ids: list[str | None] = []
+        self.seen_post_ids: list[list[str] | None] = []
 
-    async def run(self, query, memory, on_activity=None, model_id=None):
+    async def run(self, query, memory, on_activity=None, model_id=None, post_ids=None):
         self.seen_model_ids.append(model_id)
+        self.seen_post_ids.append(post_ids)
         from techletter.chat.agent.graph import AgentResult
 
         if on_activity is not None and self.emit_activity:
@@ -253,6 +255,139 @@ async def test_a_catalog_model_is_passed_to_the_answer_agent(
     assert agent.seen_model_ids == ["qwen/free"]
 
 
+# ── 고른 포스트로 답하기 ────────────────────────────────────────────
+async def test_post_ids_reach_the_agent_deduplicated(
+    client, ctx, user_headers, stub_chat, funded
+) -> None:
+    agent = FakeAgent()
+    stub_chat(agent)
+    first, second = "6a91edbec1f22e3fced90b13", "6a91edbec1f22e3fced90b14"
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"query": "요약해줘", "post_ids": [first, second, first]},
+        headers=user_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["credits"]["consumed"] == 1
+    assert agent.seen_post_ids == [[first, second]]
+
+
+async def test_post_ids_reach_the_streaming_agent(client, user_headers, stub_chat, funded) -> None:
+    agent = FakeAgent()
+    stub_chat(agent)
+
+    async with client.stream(
+        "POST",
+        "/api/v1/chat/messages/stream",
+        json={"query": "요약해줘", "post_ids": ["6a91edbec1f22e3fced90b13"]},
+        headers=user_headers,
+    ) as response:
+        body = "".join([chunk async for chunk in response.aiter_text()])
+
+    assert "event: done" in body
+    assert agent.seen_post_ids == [["6a91edbec1f22e3fced90b13"]]
+
+
+async def test_no_post_ids_keeps_the_planner_path(client, user_headers, stub_chat, funded) -> None:
+    agent = FakeAgent()
+    stub_chat(agent)
+
+    await client.post("/api/v1/chat/messages", json={"query": "질문"}, headers=user_headers)
+
+    assert agent.seen_post_ids == [None]
+
+
+@pytest.mark.parametrize(
+    "post_ids",
+    [["not-an-id"], [f"{index:024x}" for index in range(9)]],
+    ids=["bad-id", "too-many"],
+)
+@pytest.mark.usefixtures("stub_chat", "funded")
+async def test_bad_post_ids_are_a_typed_400(client, ctx, user_headers, post_ids) -> None:
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"query": "요약해줘", "post_ids": post_ids},
+        headers=user_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request.invalid"
+    assert await ctx.credits.remaining("google:alice") == 5
+
+
+async def test_selected_posts_are_the_only_sources(
+    client, ctx, user_headers, funded, seeded
+) -> None:
+    """실제 에이전트: 계획·검색 없이 고른 글을 읽고, 그 글들을 출처로 남긴다."""
+    from techletter.chat.agent import ChatAgent, PostLookupTool
+    from techletter.chat.memory import MemoryBuilder
+    from techletter.chat.use_case import ChatUseCase
+
+    class Unused:
+        async def plan(self, *args, **kwargs):
+            raise AssertionError("계획을 세우면 안 된다")
+
+        async def search(self, *args, **kwargs):
+            raise AssertionError("검색하면 안 된다")
+
+    class Answers:
+        def __init__(self) -> None:
+            self.contexts: list[str] = []
+
+        async def generate(self, query, plan, result, memory_metadata, model_id=None):
+            self.contexts.append(result.context)
+            return "고른 글 요약", "test-model"
+
+    answers = Answers()
+    ctx._chat = ChatUseCase(
+        sessions=ctx.sessions,
+        credits=ctx.credits,
+        memory=MemoryBuilder(FakeLlm(), ctx.settings.chat),  # type: ignore[arg-type]
+        agent=ChatAgent(
+            planner=Unused(),  # type: ignore[arg-type]
+            posts=PostLookupTool(ctx.posts),
+            search=Unused(),  # type: ignore[arg-type]
+            answers=answers,  # type: ignore[arg-type]
+        ),
+        queue=ctx.queue,
+        settings=ctx.settings.chat,
+    )
+    chosen = [seeded["posts"][2], seeded["posts"][0]]
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={
+            "query": "이 글들 요약해줘",
+            # 요약 안 된 글은 근거로 쓰지 않는다.
+            "post_ids": [str(p.id) for p in chosen] + [str(seeded["unsummarized"].id)],
+        },
+        headers=user_headers,
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert [s["post_id"] for s in body["sources"]] == [str(p.id) for p in chosen]
+    assert body["sources"][0] == {
+        "post_id": str(chosen[0].id),
+        "title": "제목 2",
+        "blog_name": "Alpha",
+        "link": "https://alpha.test/2",
+        "score": 1.0,
+        "blog_id": str(seeded["blog"].id),
+        "published_at": "2025-03-03T00:00:00.000Z",
+    }
+    assert body["agent"]["intent"] == "answer_from_posts"
+    assert body["credits"]["consumed"] == 1
+    assert "본문 2" in answers.contexts[0]
+    session = (
+        await client.get(f"/api/v1/chat/sessions/{body['session_id']}", headers=user_headers)
+    ).json()
+    assert [m["role"] for m in session["messages"]] == ["user", "assistant"]
+    assert len(session["messages"][1]["sources"]) == 2
+
+
 async def test_running_out_of_credits_is_402(client, user_headers, stub_chat) -> None:
     response = await client.post(
         "/api/v1/chat/messages", json={"query": "질문"}, headers=user_headers
@@ -458,7 +593,7 @@ async def test_a_mid_stream_failure_uses_the_error_envelope(
     from techletter.core.errors import LlmUnavailableError
 
     class FailsAfterActivity(FakeAgent):
-        async def run(self, query, memory, on_activity=None, model_id=None):
+        async def run(self, query, memory, on_activity=None, model_id=None, post_ids=None):
             from techletter.chat.agent.state import Activity
 
             if on_activity is not None:

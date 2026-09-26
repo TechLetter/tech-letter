@@ -56,9 +56,32 @@ class FakePosts:
             message="조회했습니다.",
         )
         self.hydrated = False
+        self.selected: list[list[str]] = []
+        self.listed = 0
 
     async def list_posts(self, constraints: PostConstraints) -> ToolResult:
+        self.listed += 1
         return self.result
+
+    async def get_posts(self, post_ids: list[str]) -> ToolResult:
+        self.selected.append(post_ids)
+        records = [record(int(pid[2:])) for pid in post_ids if pid.startswith("id")]
+        if not records:
+            return ToolResult(status="no_result", message="선택한 포스트를 찾지 못했습니다.")
+        return ToolResult(
+            status="ok",
+            posts=records,
+            sources=[
+                Source(post_id=r.id, title=r.title, blog_name=r.blog_name, link=r.link)
+                for r in records
+            ],
+            total=len(records),
+        )
+
+    async def complete_sources(self, sources: list[Source]) -> list[Source]:
+        from dataclasses import replace
+
+        return [replace(s, blog_id="b1", published_at="2025-03-01T00:00:00.000Z") for s in sources]
 
     async def hydrate(self, records: list[PostRecord]) -> list[PostRecord]:
         self.hydrated = True
@@ -194,6 +217,52 @@ async def test_the_rewritten_query_drives_the_search() -> None:
     await agent.run("그건 왜 그래?", memory(rewritten="Kafka 리밸런싱 원인"))
 
     assert search.calls[0][0] == "Kafka 리밸런싱 원인"
+
+
+# ── 고른 포스트로 답하기 ────────────────────────────────────────────
+async def test_selected_posts_skip_the_planner_and_search() -> None:
+    agent, posts, search, answers = build(ChatPlan(task="general_rag"))
+    planner = agent._planner
+
+    result = await agent.run("요약해줘", memory(), post_ids=["id2", "id1"])
+
+    assert planner.queries == []  # type: ignore[attr-defined]
+    assert search.calls == []
+    assert posts.listed == 0
+    assert posts.selected == [["id2", "id1"]]
+    assert posts.hydrated is True
+    assert "본문 id2" in answers.seen[0].context
+    assert result.intent == "answer_from_posts"
+    assert [source["post_id"] for source in result.sources] == ["id2", "id1"]
+    assert [a["type"] for a in result.activities] == ["read_posts", "answer"]
+
+
+async def test_selected_posts_that_are_gone_answer_no_result() -> None:
+    agent, posts, _, answers = build(ChatPlan(task="general_rag"))
+
+    result = await agent.run("요약해줘", memory(), post_ids=["missing"])
+
+    assert posts.hydrated is False
+    assert answers.seen[0].status == "no_result"
+    assert result.sources == []
+
+
+async def test_sources_are_completed_for_source_cards() -> None:
+    """벡터 청크에는 blog_id가 없다. 출처 카드가 아이콘·날짜를 그리게 채운다."""
+    search = FakeSearch(
+        ToolResult(
+            status="ok",
+            context="문맥",
+            sources=[Source(post_id="id1", title="제목1", blog_name="Alpha", link="l")],
+        )
+    )
+    agent, _, _, _ = build(ChatPlan(task="general_rag"), search=search)
+
+    result = await agent.run("Kafka가 뭐야", memory())
+
+    assert result.sources[0]["blog_id"] == "b1"
+    assert result.sources[0]["published_at"] == "2025-03-01T00:00:00.000Z"
+    assert result.sources[0]["link"] == "l"
 
 
 # ── 진행 상황 ───────────────────────────────────────────────────────

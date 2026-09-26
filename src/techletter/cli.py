@@ -411,6 +411,53 @@ def backfill_embeddings(
     _with_container(body)
 
 
+@backfill_app.command("lexical")
+def backfill_lexical(
+    batch_size: int = typer.Option(200, "--batch-size", min=1, max=1000),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute"),
+) -> None:
+    """요약된 글 전부를 어휘(BM25) 색인에 넣는다. 잡을 거치지 않고 바로 넣는다.
+
+    Gemini를 부르지 않아 몇 초면 끝난다. 포인트 id가 글마다 정해져 있어 다시
+    돌려도 덮어쓸 뿐이다. dry-run은 대상 수와 실측 평균 문서 길이를 보여 준다.
+    """
+
+    async def body(container: Container) -> None:
+        from techletter.search.lexical import (  # noqa: PLC0415
+            AVG_DOC_LENGTH,
+            document_length,
+            lexical_point,
+            post_fields,
+        )
+
+        store = container.vector_store
+        total = 0
+        length_sum = 0.0
+        after_id = None
+        while True:
+            posts = await container.posts.find_summarized_batch(batch_size, after_id=after_id)
+            if not posts:
+                break
+            after_id = posts[-1].id
+            total += len(posts)
+            length_sum += sum(document_length(post_fields(post)) for post in posts)
+            if not dry_run:
+                await store.upsert_lexical([lexical_point(post) for post in posts])
+                typer.echo(f"{total}건 색인")
+            if len(posts) < batch_size:
+                break
+        measured = length_sum / total if total else 0.0
+        typer.echo(
+            f"평균 문서 길이 실측 {measured:.1f} (가중치 계산에 쓰는 값 {AVG_DOC_LENGTH:.0f})"
+        )
+        if dry_run:
+            typer.echo(f"[dry-run] {total}건이 대상이다. --execute 로 실행한다.")
+            return
+        typer.echo(f"완료: {total}건 → {store.lexical_collection}")
+
+    _with_container(body)
+
+
 @backfill_app.command("icons")
 def backfill_icons(
     all_blogs: bool = typer.Option(False, "--all", help="이미 받아 둔 블로그도 다시 받는다."),
@@ -542,6 +589,7 @@ _NESTED_SETTINGS_FIELDS = frozenset(
         "summary",
         "embedding",
         "chat",
+        "search",
         "auth_settings",
         "summary_llm",
         "embedding_llm",
@@ -575,6 +623,7 @@ def settings_example() -> None:
         QdrantSettings,
         RouterSettings,
         RssSettings,
+        SearchSettings,
         Settings,
         SummaryLlmSettings,
         SummarySettings,
@@ -594,6 +643,7 @@ def settings_example() -> None:
         ("요약 파이프라인", SummarySettings),
         ("임베딩 파이프라인", EmbeddingSettings),
         ("챗봇", ChatSettings),
+        ("포스트 검색", SearchSettings),
     ]
     lines: list[str] = []
     for title, cls in sections:

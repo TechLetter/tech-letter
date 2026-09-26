@@ -2,7 +2,8 @@
 
 `embedding.requested` → 벡터 생성 + Qdrant 저장 → `embedding.completed` 발행.
 메타데이터를 posts에 쓰는 것은 content 도메인의 몫이다(잡 하나가 두 저장소를
-동시에 책임지지 않게).
+동시에 책임지지 않게). 어휘 색인도 별도 잡으로 건다 — 그쪽 실패가 이 잡을
+재시도시켜 임베딩을 다시 부르지 않게.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from techletter.core.errors import PermanentError
 from techletter.core.jobs.types import JobType
 from techletter.core.logging import get_logger
 from techletter.core.time import to_iso_z
+from techletter.search.handlers import enqueue_lexical_index
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import PostRepository
@@ -82,6 +84,7 @@ class EmbeddingRequestedHandler:
                 "chunk_count": len(result.chunks),
             },
         )
+        await enqueue_lexical_index(self._queue, payload.post_id, priority=job.priority)
         logger.info(
             "post embedded",
             extra={"post_id": payload.post_id, "chunks": len(result.chunks)},
@@ -92,7 +95,8 @@ class EmbeddingDeleteHandler:
     """포스트가 지워졌을 때 벡터를 정리한다.
 
     문서와 벡터가 다른 저장소에 있어 같이 지워지지 않는다. 남으면 지워진
-    포스트가 검색 결과에 계속 나온다.
+    포스트가 검색 결과에 계속 나온다. 어휘 색인도 같은 prefix 컬렉션이라 여기서
+    함께 지워진다.
     """
 
     def __init__(self, store: VectorStore) -> None:

@@ -220,6 +220,32 @@ class PostRepository:
         cursor = self._col.find({"_id": {"$in": oids}}, projection=_WITHOUT_BODIES)
         return {str(doc["_id"]): Post.model_validate(doc) async for doc in cursor}
 
+    async def matching_ids(
+        self, flt: ListPostsFilter, post_ids: list[str]
+    ) -> dict[str, datetime | None]:
+        """후보 중 필터를 통과한 글의 id → 발행일. 검색 결과를 거르고 최신성을 매길 때 쓴다."""
+        oids = [oid for oid in (to_object_id(p) for p in post_ids) if oid is not None]
+        if not oids:
+            return {}
+        query = self.build_query(flt)
+        query["_id"] = {"$in": oids}
+        cursor = self._col.find(query, projection={"published_at": 1})
+        return {str(doc["_id"]): doc.get("published_at") async for doc in cursor}
+
+    async def find_summarized_batch(
+        self, limit: int, *, after_id: ObjectId | None = None
+    ) -> list[Post]:
+        """요약된 글을 `_id` 순으로 배치 조회한다(어휘 색인 백필용)."""
+        query: dict[str, Any] = {"status.ai_summarized": True}
+        if after_id is not None:
+            query["_id"] = {"$gt": after_id}
+        cursor = (
+            self._col.find(query, projection=_WITHOUT_BODIES)
+            .sort([("_id", ASCENDING)])
+            .limit(limit)
+        )
+        return [Post.model_validate(doc) async for doc in cursor]
+
     async def get_plain_text(self, post_id: str) -> str | None:
         oid = to_object_id(post_id)
         if oid is None:

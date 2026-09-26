@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from techletter.chat.agent.state import PostRecord, Source, ToolResult
@@ -44,10 +45,22 @@ def _record(post: Post) -> PostRecord:
         title=post.title,
         link=post.link,
         blog_name=post.blog_name,
+        blog_id=str(post.blog_id) if post.blog_id else None,
         published_at=to_iso_z(post.published_at) or "",
         summary=summary or "",
         categories=post.aisummary.categories if post.aisummary else [],
         tags=post.aisummary.tags if post.aisummary else [],
+    )
+
+
+def _source(record: PostRecord) -> Source:
+    return Source(
+        post_id=record.id,
+        title=record.title,
+        blog_name=record.blog_name,
+        link=record.link,
+        blog_id=record.blog_id,
+        published_at=record.published_at or None,
     )
 
 
@@ -79,18 +92,47 @@ class PostLookupTool:
         return ToolResult(
             status="ok",
             posts=records,
-            sources=[
-                Source(
-                    post_id=record.id,
-                    title=record.title,
-                    blog_name=record.blog_name,
-                    link=record.link,
-                )
-                for record in records
-            ],
+            sources=[_source(record) for record in records],
             total=total,
             message=f"{described} 조건으로 포스트를 조회했습니다.",
         )
+
+    async def get_posts(self, post_ids: list[str]) -> ToolResult:
+        """사용자가 고른 포스트를 고른 순서대로. 요약이 없는 글은 뺀다."""
+        found = await self._posts.get_many(post_ids)
+        records = [
+            _record(post)
+            for post_id in post_ids
+            if (post := found.get(post_id)) is not None and post.status.ai_summarized
+        ]
+        if not records:
+            return ToolResult(status="no_result", message="선택한 포스트를 찾지 못했습니다.")
+        return ToolResult(
+            status="ok",
+            posts=records,
+            sources=[_source(record) for record in records],
+            total=len(records),
+            message="선택한 포스트를 읽었습니다.",
+        )
+
+    async def complete_sources(self, sources: list[Source]) -> list[Source]:
+        """비어 있는 blog_id·발행일·링크를 한 번의 질의로 채운다."""
+        found = await self._posts.get_many([source.post_id for source in sources])
+        completed: list[Source] = []
+        for source in sources:
+            post = found.get(source.post_id)
+            if post is None:
+                completed.append(source)
+                continue
+            completed.append(
+                replace(
+                    source,
+                    blog_id=source.blog_id or (str(post.blog_id) if post.blog_id else None),
+                    published_at=source.published_at or to_iso_z(post.published_at),
+                    link=source.link or post.link,
+                )
+            )
+        return completed
 
     async def hydrate(self, records: list[PostRecord]) -> list[PostRecord]:
         """본문을 한 번의 질의로 채운다."""
