@@ -31,6 +31,7 @@ from techletter.api.schemas.content import (
     FilterOut,
     PostOut,
     SourceOut,
+    TopicGroupOut,
     WeeklyTrendsOut,
 )
 from techletter.api.schemas.llm import (
@@ -83,5 +84,6 @@ __all__ = [
     "SuggestedQuestionOut",
     "TokenIn",
     "TokenOut",
+    "TopicGroupOut",
     "WeeklyTrendsOut",
 ]

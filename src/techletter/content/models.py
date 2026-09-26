@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic import Field
 
@@ -18,6 +19,7 @@ __all__ = [
     "EmbeddingMeta",
     "ListPostsFilter",
     "Post",
+    "PostSort",
     "StatusFlags",
 ]
 
@@ -74,6 +76,10 @@ class Blog(BaseDocument):
     last_fetch_error: str | None = None
     consecutive_failures: int = 0
     """연속 실패 횟수. 임계치를 넘으면 자동 비활성화한다."""
+
+
+PostSort = Literal["latest", "views"]
+"""포스트 목록 정렬. 최신순 또는 조회순(같으면 최신순)."""
 
 
 @dataclass(slots=True)

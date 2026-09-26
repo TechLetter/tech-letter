@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from techletter.api.deps import Ctx
-from techletter.api.schemas import BlogFilterOut, FilterOut, Listing
+from techletter.api.schemas import BlogFilterOut, FilterOut, Listing, TopicGroupOut
 from techletter.api.schemas.query import ListQ, StrQ, clean_list
 
 router = APIRouter(prefix="/filters", tags=["filters"])
@@ -33,6 +33,14 @@ async def tag_filters(
 ) -> Listing[FilterOut]:
     items = await ctx.filters.tags((blog_id or "").strip() or None, clean_list(categories))
     return Listing.of([FilterOut.of(item) for item in items])
+
+
+@router.get("/topic-groups", response_model=Listing[TopicGroupOut])
+async def topic_groups() -> Listing[TopicGroupOut]:
+    """홈의 부모 주제 탭과 자식 주제. 목록이 코드에 있어 개수는 주지 않는다."""
+    from techletter.summary.topics import TOPIC_GROUPS  # noqa: PLC0415
+
+    return Listing.of([TopicGroupOut.of(group) for group in TOPIC_GROUPS])
 
 
 @router.get("/blogs", response_model=Listing[BlogFilterOut])
