@@ -38,6 +38,8 @@ __all__ = ["ActivityRecorder", "AgentResult", "ChatAgent"]
 
 logger = get_logger(__name__)
 
+BRIEF_MAX_POSTS = 5
+
 
 def _apply(state: AgentState, changes: dict[str, Any]) -> None:
     for key, value in changes.items():
@@ -157,10 +159,10 @@ class ChatAgent:
 
     async def _read_selected(self, state: AgentState) -> dict[str, Any]:
         await state.recorder.emit("read_posts", "running")
-        result = await self._posts.get_posts(state.post_ids)
+        # 짧은 요약은 상위 몇 편이면 충분하다. 출처 번호도 이 순서를 따른다.
+        result = await self._posts.get_posts(state.post_ids[:BRIEF_MAX_POSTS])
         if result.status == "ok":
-            result.posts = await self._posts.hydrate(result.posts)
-            result.context = build_post_context(result.posts)
+            result.context = build_post_context(result.posts, summaries_only=True)
         await state.recorder.emit("read_posts", "completed")
         return {"tool_result": result}
 
@@ -245,11 +247,13 @@ class ChatAgent:
 
         if state.post_ids:
             # 고른 글만 근거로 삼는다. 범위가 못 박혀 있으니 다른 글로 대체하지 않는다.
+            # 고른 글로 묻는 건 지금은 검색 결과 AI 요약뿐이다 — 짧은 답변 모드.
             state.plan = ChatPlan(
                 task="answer_from_posts",
                 strict_scope=True,
                 needs_content=True,
-                reason="selected_posts",
+                reason="search_summary",
+                brief=True,
             )
             _apply(state, await self._read_selected(state))
         else:

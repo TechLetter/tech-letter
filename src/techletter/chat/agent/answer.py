@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT
+from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT, BRIEF_ANSWER_SYSTEM_PROMPT
 from techletter.chat.agent.state import ChatPlan, PostRecord, ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -29,8 +29,12 @@ MAX_LABELS = 5
 AnswerGeneration = tuple[str, str | None]
 
 
-def build_post_context(posts: list[PostRecord]) -> str:
-    """선택된 포스트를 프롬프트용 텍스트로 만든다."""
+def build_post_context(posts: list[PostRecord], *, summaries_only: bool = False) -> str:
+    """선택된 포스트를 프롬프트용 텍스트로 만든다.
+
+    `summaries_only`면 본문 대신 요약본만 넣는다 — 검색 AI 요약은 짧게 답하니
+    본문 여러 편이 컨텍스트 상한에 걸려 뒤쪽 글이 잘리는 것보다 요약 전부가 낫다.
+    """
     blocks: list[str] = []
     for index, post in enumerate(posts, 1):
         blocks.append(
@@ -42,7 +46,8 @@ def build_post_context(posts: list[PostRecord]) -> str:
                     f"Published At: {post.published_at}",
                     f"Link: {post.link}",
                     'Content: """',
-                    post.plain_text or post.summary or "본문/요약 없음",
+                    (post.summary if summaries_only else post.plain_text or post.summary)
+                    or "본문/요약 없음",
                     '"""',
                 ]
             )
@@ -116,6 +121,7 @@ class AnswerGenerator:
                 ],
             },
         }
+        system_prompt = BRIEF_ANSWER_SYSTEM_PROMPT if plan.brief else ANSWER_SYSTEM_PROMPT
         candidates: list[str] | None = None
         if model_id is not None:
             automatic = await self._llm.candidates("chat")
@@ -133,12 +139,12 @@ class AnswerGenerator:
 
         if candidates is None:
             answer, used_model_id = await self._llm.complete(
-                "chat", ANSWER_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
+                "chat", system_prompt, json.dumps(payload, ensure_ascii=False)
             )
         else:
             answer, used_model_id = await self._llm.complete(
                 "chat",
-                ANSWER_SYSTEM_PROMPT,
+                system_prompt,
                 json.dumps(payload, ensure_ascii=False),
                 candidates=candidates,
             )
