@@ -18,6 +18,7 @@ from techletter.core.jobs.policy import dead_retryable_alert
 from techletter.core.jobs.runner import JobRunner
 from techletter.core.jobs.types import ErrorKind, JobType
 from techletter.core.logging import get_logger
+from techletter.core.time import ensure_utc, utcnow
 from techletter.workers.runtime import Heartbeat
 from techletter.workers.scheduler import PeriodicTask, Scheduler
 
@@ -64,6 +65,18 @@ def build_core_worker(container: Container) -> CoreWorker:
 
     async def collect_feeds() -> None:
         await aggregator.run()
+
+    async def rss_first_delay() -> float:
+        """마지막 수집에서 한 주기가 지났으면 바로, 아니면 남은 시간만 기다린다."""
+        doc = await container.db["blogs"].find_one(
+            {"last_fetched_at": {"$ne": None}},
+            projection={"last_fetched_at": 1},
+            sort=[("last_fetched_at", -1)],
+        )
+        last = ensure_utc(doc["last_fetched_at"]) if doc else None
+        if last is None:
+            return 0.0
+        return settings.rss.interval_seconds - (utcnow() - last).total_seconds()
 
     async def scan_models() -> None:
         """OpenRouter 무료 모델 헬스체크. 라우터가 이 기록으로 후보를 고른다."""
@@ -132,7 +145,9 @@ def build_core_worker(container: Container) -> CoreWorker:
     )
     scheduler = Scheduler(
         [
-            PeriodicTask("rss", settings.rss.interval_seconds, collect_feeds),
+            PeriodicTask(
+                "rss", settings.rss.interval_seconds, collect_feeds, first_delay=rss_first_delay
+            ),
             PeriodicTask("maintenance", MAINTENANCE_INTERVAL_SECONDS, maintenance),
             PeriodicTask(
                 "model_scan",

@@ -24,6 +24,12 @@ class PeriodicTask:
     run: Callable[[], Awaitable[None]]
     run_at_start: bool = False
     """부팅 직후에도 한 번 돌릴지. RSS는 그러지 않는다(배포마다 수집이 돈다)."""
+    first_delay: Callable[[], Awaitable[float]] | None = None
+    """부팅 뒤 첫 실행까지 기다릴 초. 없으면 한 주기(`run_at_start`면 0).
+
+    RSS는 마지막 수집 시각을 DB에서 읽어 남은 시간만 기다린다. 한 주기를 통째로
+    기다리면 30분 안에 재배포가 이어질 때 수집이 계속 밀린다(2026-09-27, 1시간 40분).
+    """
 
 
 class Scheduler:
@@ -50,11 +56,19 @@ class Scheduler:
                 with contextlib.suppress(asyncio.CancelledError):
                     await runner
 
+    async def _first_delay(self, task: PeriodicTask) -> float:
+        if task.first_delay is not None:
+            try:
+                return min(max(await task.first_delay(), 0.0), task.interval_seconds)
+            except Exception:
+                logger.exception("first delay lookup failed", extra={"task": task.name})
+        return 0.0 if task.run_at_start else task.interval_seconds
+
     async def _loop(self, task: PeriodicTask) -> None:
-        if not task.run_at_start:
-            # 첫 실행을 한 주기 미룬다. 안 그러면 재배포할 때마다 수집이 돈다.
+        # 첫 실행을 미룬다. 안 그러면 재배포할 때마다 수집이 돈다.
+        if (delay := await self._first_delay(task)) > 0:
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=task.interval_seconds)
+                await asyncio.wait_for(self._stop.wait(), timeout=delay)
 
         while not self._stop.is_set():
             started = asyncio.get_running_loop().time()
