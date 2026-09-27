@@ -96,12 +96,7 @@ class ChatUseCase:
         session_id: str | None = None,
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
         model_id: str | None = None,
-        post_ids: list[str] | None = None,
     ) -> ChatAnswer:
-        """`post_ids`를 주면 에이전트가 계획 없이 그 포스트만 읽고 답한다.
-
-        세션·크레딧·기록은 일반 질문과 같다. 챗봇 화면에서 이어서 물을 수 있다.
-        """
         guard = self._guard.inspect(query)
         if guard.blocked:
             raise PolicyBlockedError(guard.message, details={"findings": guard.to_metadata()})
@@ -119,8 +114,6 @@ class ChatUseCase:
                 options: dict[str, Any] = {}
                 if selected_model_id is not None:
                     options["model_id"] = selected_model_id
-                if post_ids:
-                    options["post_ids"] = post_ids
                 result = await self._agent.run(safe_query, context, on_activity, **options)
         except BaseException as exc:
             # 취소(브라우저 종료)도 여기로 온다. 환불은 반드시 끝까지 돌린다.

@@ -85,7 +85,6 @@ async def send_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> ChatAnsw
         query=body.query,
         session_id=body.session_id,
         model_id=body.model_id,
-        post_ids=body.post_ids,
     )
     return ChatAnswerOut.of(answer)
 
@@ -110,7 +109,6 @@ async def stream_message(ctx: Ctx, user: CurrentUser, body: MessageIn) -> Stream
             query=body.query,
             session_id=body.session_id,
             model_id=body.model_id,
-            post_ids=body.post_ids,
             on_activity=on_activity,
         )
     )

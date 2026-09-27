@@ -39,6 +39,11 @@ from techletter.api.schemas.llm import (
     ModelHealthOut,
     ModelHealthSummaryOut,
 )
+from techletter.api.schemas.search import (
+    SearchSummaryContinueIn,
+    SearchSummaryIn,
+    SearchSummaryOut,
+)
 from techletter.api.schemas.user import (
     AdminUserOut,
     BookmarkIn,
@@ -81,6 +86,9 @@ __all__ = [
     "PostOut",
     "RetryBulkIn",
     "SearchSuggestionOut",
+    "SearchSummaryContinueIn",
+    "SearchSummaryIn",
+    "SearchSummaryOut",
     "SourceOut",
     "SuggestedQuestionIn",
     "SuggestedQuestionOut",

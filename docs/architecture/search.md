@@ -60,11 +60,19 @@ Mongo: 필터(주제·태그·블로그·기간)와 요약 여부를 최종 판�
 
 어휘 검색만 쓴다(글자를 칠 때마다 임베딩을 부르면 분당 한도를 금방 넘는다). 상위 5개(`SEARCH_SUGGEST_LIMIT`), 표시값은 색인 payload에서 바로 쓰고 **지금도 요약된 글인지만** Mongo에 확인한다(삭제 잡이 밀렸거나 요약이 되돌려진 글이 남지 않게). 실패하면 빈 목록.
 
-## 5. 검색 결과 AI 요약 (채팅 `post_ids`)
+## 5. 검색 결과 AI 요약 (`POST /search/summary`)
 
-검색 결과 위의 "AI 요약"은 별도 API가 아니라 채팅 메시지에 `post_ids`(최대 8개, ObjectId만, 중복 제거)를 실어 보낸 것이다. 가드·세션·크레딧 1 차감·기록은 일반 질문과 같다 → 챗봇 화면에서 이어서 물을 수 있다.
+검색 결과 위의 "AI 요약"은 전용 API다(`search/summary.py::SearchSummaryService`). 로그인 사용자에게 **크레딧 없이** 준다. 프론트는 결과가 뜨면 바로 부른다(버튼·재시도 없음).
 
-| | 검색 AI 요약 (`post_ids` 있음) | 챗봇 (없음) |
+- 입력: `{query, post_ids}`. `post_ids`는 검색 결과 순서 그대로 최대 8개(ObjectId만, 중복 제거).
+- **캐시 7일**: 키는 `sha256(소문자·공백 정리한 검색어 + 앞 5개 post_id)`이다. `search_summaries` 컬렉션에 저장하고 `created_at` TTL로 지운다. 사용자 식별자는 저장하지 않는다. 근거 글이 없거나 출력 가드에 막힌 답은 저장하지 않는다.
+- **호출 제한**: 캐시에 없는 요청만 사용자별 분당 6회(`MISSES_PER_MINUTE`, API 프로세스 메모리). 넘으면 429 `llm.rate_limited`. 무료 모델의 하루 한도를 요약 워커의 폴백·모델 헬스체크와 함께 쓰기 때문이다.
+- 같은 키를 동시에 요청하면 하나만 만든다(진행 중 태스크 공유). 요청이 끊겨도 끝까지 만들어 저장한다.
+- 입력 가드(`PromptGuard`)는 검색어에 그대로 적용한다. 챗봇 세션은 만들지 않는다.
+- **"이어서 묻기"**: `POST /search/summary/continue {key}` → 그 질문(user)과 답(assistant, 출처 포함)을 담은 챗봇 세션을 만들고 `{session_id}`를 준다. 캐시가 만료됐으면 404.
+- 에이전트는 챗봇과 같은 `ChatAgent`(`Container.chat_agent`)의 `post_ids` 경로다. 채팅 API는 더 이상 `post_ids`를 받지 않는다.
+
+| | 검색 AI 요약 | 챗봇 |
 |---|---|---|
 | 계획 | 플래너 없이 `answer_from_posts`, `strict_scope`, `brief=True`, `reason=search_summary` | 플래너가 정함 |
 | 근거 | 앞 **5개** 글(`BRIEF_MAX_POSTS`)의 **요약본만**(요약 없는 글은 뺀다) | 플래너가 고른 도구의 결과(포스트 본문·벡터 청크) |
