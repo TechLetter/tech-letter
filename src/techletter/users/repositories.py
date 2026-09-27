@@ -82,6 +82,8 @@ register_indexes(
         ),
     ],
 )
+IDENTITY_POLICY_TTL_SECONDS = 3 * 24 * 3600
+
 register_indexes(
     "identity_policies",
     [
@@ -89,7 +91,14 @@ register_indexes(
             "idx_identity_policy_unique",
             [("identity_hash", ASCENDING), ("policy_key", ASCENDING)],
             unique=True,
-        )
+        ),
+        # "오늘 이미 받았나"만 보면 되는 기록이라 오래 둘 이유가 없다. 탈퇴 뒤에도 남는
+        # 기록이므로 짧게 둔다 — 개인정보처리방침에 "최대 3일"로 적었다(2026-09-27).
+        IndexSpec(
+            "ttl_identity_policy_last_acted",
+            [("last_acted_at", ASCENDING)],
+            expire_after_seconds=IDENTITY_POLICY_TTL_SECONDS,
+        ),
     ],
 )
 # ── 신규 인덱스 ──────────────────────────────────────────────────────
