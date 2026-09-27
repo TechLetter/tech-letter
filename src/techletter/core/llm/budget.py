@@ -72,3 +72,16 @@ class DailyBudget:
             return_document=True,
         )
         return int((doc or {}).get("count") or amount)
+
+    async def fill(self, provider: str, limit: int) -> None:
+        """오늘 장부를 `limit` 이상으로 올린다. 이미 넘었으면 그대로 둔다."""
+        now = utcnow()
+        await self._col.update_one(
+            {"_id": self._key(provider, now)},
+            {
+                "$max": {"count": limit},
+                "$set": {"provider": provider, "updated_at": now},
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )

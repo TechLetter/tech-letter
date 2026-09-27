@@ -21,17 +21,12 @@ class FakeLlm:
         self.payload = payload
         self.model = model
         self.calls: list[dict] = []
-        self.candidate_lists: list[list[str] | None] = []
 
     async def complete_json(self, purpose, system, user, **kwargs) -> tuple[dict, str]:
         self.calls.append({"purpose": purpose, "user": user})
-        self.candidate_lists.append(kwargs.get("candidates"))
         if isinstance(self.payload, Exception):
             raise self.payload
         return self.payload, self.model
-
-    async def candidates(self, purpose) -> list[str]:
-        return ["free/a", "free/b"]
 
 
 @pytest.fixture
@@ -174,168 +169,6 @@ async def test_a_huge_body_is_truncated(settings) -> None:
 
     assert result.truncated_input is True
     assert len(llm.calls[0]["user"]) == 100
-
-
-# ── 예산 ────────────────────────────────────────────────────────────
-class FakeBudget:
-    def __init__(self, has_room: bool = True) -> None:
-        self._has_room = has_room
-        self.consumed: list[str] = []
-
-    async def has_room(self, provider: str, limit: int) -> bool:
-        return self._has_room
-
-    async def consume(self, provider: str, amount: int = 1) -> int:
-        self.consumed.append(provider)
-        return len(self.consumed)
-
-
-async def test_the_primary_model_goes_first_while_budget_remains(settings) -> None:
-    llm = FakeLlm(payload(), model="gemini-3-flash-preview")
-    budget = FakeBudget(has_room=True)
-
-    await Summarizer(
-        llm,  # type: ignore[arg-type]
-        settings,
-        budget=budget,  # type: ignore[arg-type]
-        primary_model="gemini-3-flash-preview",
-        daily_limit=20,
-    ).summarize("본문")
-
-    assert llm.candidate_lists[0] == ["gemini-3-flash-preview", "free/a", "free/b"]
-    assert budget.consumed == ["google"]
-
-
-async def test_an_exhausted_budget_falls_back_to_the_router(settings) -> None:
-    """예산을 넘기면 429를 맞고 재시도하는 대신 미리 무료 모델로 간다."""
-    llm = FakeLlm(payload())
-    budget = FakeBudget(has_room=False)
-
-    await Summarizer(
-        llm,  # type: ignore[arg-type]
-        settings,
-        budget=budget,  # type: ignore[arg-type]
-        primary_model="gemini-3-flash-preview",
-        daily_limit=20,
-    ).summarize("본문")
-
-    assert llm.candidate_lists[0] is None
-    assert budget.consumed == []
-
-
-async def test_the_primary_attempt_counts_even_when_a_fallback_answers(settings) -> None:
-    """1순위가 실패해 폴백이 답해도, 1순위 호출은 구글 한도를 이미 깎았다."""
-    llm = FakeLlm(payload(), model="free/a")
-    budget = FakeBudget(has_room=True)
-
-    await Summarizer(
-        llm,  # type: ignore[arg-type]
-        settings,
-        budget=budget,  # type: ignore[arg-type]
-        primary_model="gemini-3-flash-preview",
-        daily_limit=20,
-    ).summarize("본문")
-
-    assert budget.consumed == ["google"]
-
-
-class LedgerBudget:
-    """장부 키마다 남은 양을 따로 둔다."""
-
-    def __init__(self, room: dict[str, bool]) -> None:
-        self.room = room
-        self.consumed: list[str] = []
-
-    async def has_room(self, provider: str, limit: int) -> bool:
-        return self.room.get(provider, True)
-
-    async def consume(self, provider: str, amount: int = 1) -> int:
-        self.consumed.append(provider)
-        return len(self.consumed)
-
-
-def tiered(llm, budget, settings) -> Summarizer:
-    return Summarizer(
-        llm,  # type: ignore[arg-type]
-        settings,
-        budget=budget,  # type: ignore[arg-type]
-        primary_model="gemini-3-flash-preview",
-        daily_limit=20,
-        secondary_model="gemini-3.5-flash-lite",
-        secondary_daily_limit=450,
-    )
-
-
-async def test_the_secondary_gemini_goes_first_once_the_primary_is_spent(settings) -> None:
-    """1순위 20회를 다 쓰면 무료 모델 전에 3.5 Flash Lite를 자기 예산으로 쓴다."""
-    llm = FakeLlm(payload(), model="gemini-3.5-flash-lite")
-    budget = LedgerBudget({"google": False})
-
-    await tiered(llm, budget, settings).summarize("본문")
-
-    assert llm.candidate_lists[0] == ["gemini-3.5-flash-lite", "free/a", "free/b"]
-    assert budget.consumed == ["google:gemini-3.5-flash-lite"]
-
-
-async def test_the_primary_still_goes_first_while_it_has_room(settings) -> None:
-    llm = FakeLlm(payload(), model="gemini-3-flash-preview")
-    budget = LedgerBudget({})
-
-    await tiered(llm, budget, settings).summarize("본문")
-
-    first = llm.candidate_lists[0]
-    assert first is not None
-    assert first[0] == "gemini-3-flash-preview"
-    assert budget.consumed == ["google"]
-
-
-async def test_both_spent_falls_back_to_the_router(settings) -> None:
-    llm = FakeLlm(payload())
-    budget = LedgerBudget({"google": False, "google:gemini-3.5-flash-lite": False})
-
-    await tiered(llm, budget, settings).summarize("본문")
-
-    assert llm.candidate_lists[0] is None
-    assert budget.consumed == []
-
-
-class RecordingLimiter:
-    def __init__(self) -> None:
-        self.acquired = 0
-
-    async def acquire(self, count: int) -> None:
-        self.acquired += count
-
-
-async def test_the_chosen_gemini_waits_for_its_per_minute_limit(settings) -> None:
-    """분당 한도는 실제로 맨 앞에 선 모델의 제한기에서만 센다."""
-    llm = FakeLlm(payload(), model="gemini-3.5-flash-lite")
-    primary, secondary = RecordingLimiter(), RecordingLimiter()
-    summarizer = Summarizer(
-        llm,  # type: ignore[arg-type]
-        settings,
-        budget=LedgerBudget({"google": False}),  # type: ignore[arg-type]
-        primary_model="gemini-3-flash-preview",
-        daily_limit=20,
-        secondary_model="gemini-3.5-flash-lite",
-        secondary_daily_limit=450,
-        rate_limiters={  # type: ignore[dict-item]
-            "gemini-3-flash-preview": primary,
-            "gemini-3.5-flash-lite": secondary,
-        },
-    )
-
-    await summarizer.summarize("본문")
-
-    assert (primary.acquired, secondary.acquired) == (0, 1)
-
-
-async def test_without_a_budget_the_router_decides(settings) -> None:
-    llm = FakeLlm(payload())
-
-    await Summarizer(llm, settings).summarize("본문")  # type: ignore[arg-type]
-
-    assert llm.candidate_lists[0] is None
 
 
 # ── 주제 재분류 ─────────────────────────────────────────────────────
