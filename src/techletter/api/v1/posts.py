@@ -1,7 +1,7 @@
 """포스트.
 
 공개 API는 **요약이 끝난 포스트만** 준다. `q`가 있으면 하이브리드 검색의
-관련도 순으로 준다(`sort`는 무시한다).
+관련도 순으로 준다. 그 밖에는 최신순이다.
 """
 
 from __future__ import annotations
@@ -47,7 +47,6 @@ async def list_posts(
     blog_id: StrQ = None,
     published_from: StrQ = None,
     published_to: StrQ = None,
-    sort: StrQ = None,
     q: StrQ = None,
 ) -> Paged[PostOut]:
     paging = parse_page(page, page_size)
@@ -64,12 +63,7 @@ async def list_posts(
     if (query := normalize_query(q)) is not None:
         found, total = await ctx.search.search(query, flt, paging, client=_client_ip(request))
     else:
-        found, total = await ctx.posts.list_posts(
-            flt,
-            paging,
-            # 모르는 값은 기본(최신순)으로 본다. 다른 쿼리 파라미터도 관대하게 받는다.
-            sort="views" if sort == "views" else "latest",
-        )
+        found, total = await ctx.posts.list_posts(flt, paging)
     marked = await _bookmarked_ids(ctx, user, [str(p.id) for p in found])
     return Paged.of_page(
         [PostOut.of(post, bookmarked=str(post.id) in marked) for post in found], total, paging

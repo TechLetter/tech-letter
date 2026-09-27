@@ -333,6 +333,7 @@ def backfill_topics(
     """
 
     async def body(container: Container) -> None:
+        from techletter.search.handlers import enqueue_lexical_index  # noqa: PLC0415
         from techletter.summary.topics import TOPIC_NAMES  # noqa: PLC0415
         from techletter.workers.summary_worker import build_summarizer  # noqa: PLC0415
 
@@ -365,6 +366,8 @@ def backfill_topics(
                 topics = results.get(str(post.id))
                 if topics and await container.posts.set_categories(str(post.id), topics):
                     done += 1
+                    # 어휘 색인의 주제 필터도 새 주제로 맞춘다.
+                    await enqueue_lexical_index(container.queue, str(post.id))
             if not results:
                 failed_batches += 1
             typer.echo(f"{done}건 분류")

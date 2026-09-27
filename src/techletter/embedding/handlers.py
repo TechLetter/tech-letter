@@ -15,7 +15,6 @@ from techletter.core.errors import PermanentError
 from techletter.core.jobs.types import JobType
 from techletter.core.logging import get_logger
 from techletter.core.time import to_iso_z
-from techletter.search.handlers import enqueue_lexical_index
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import PostRepository
@@ -84,7 +83,6 @@ class EmbeddingRequestedHandler:
                 "chunk_count": len(result.chunks),
             },
         )
-        await enqueue_lexical_index(self._queue, payload.post_id, priority=job.priority)
         logger.info(
             "post embedded",
             extra={"post_id": payload.post_id, "chunks": len(result.chunks)},

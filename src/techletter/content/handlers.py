@@ -15,6 +15,7 @@ from techletter.content.jobs import (
 from techletter.core.errors import PermanentError
 from techletter.core.logging import get_logger
 from techletter.core.time import utcnow
+from techletter.search.handlers import enqueue_lexical_index
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import PostRepository
@@ -62,6 +63,9 @@ class SummaryCompletedHandler:
             extra={"post_id": payload.post_id, "model": payload.model_name},
         )
         await enqueue_embedding_requested(self._queue, payload.post_id)
+        # 어휘 색인은 요약만 있으면 된다. 임베딩 뒤에 걸면 임베딩 쿼터가 밀린
+        # 며칠 동안 새 글이 검색에 안 나온다(2026-09-27, 190건).
+        await enqueue_lexical_index(self._queue, payload.post_id)
 
 
 class EmbeddingCompletedHandler:
