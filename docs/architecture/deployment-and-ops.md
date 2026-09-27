@@ -40,7 +40,8 @@ main push (docs/**·*.md 제외)
 `api`만 추가로: `SERVICE_NAME`, `API_PORT`, `GOOGLE_OAUTH_*`, `AUTH_LOGIN_SUCCESS_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`.
 `worker`만 추가로: `SERVICE_NAME`, `CONTENT_BLOG_FETCH_BATCH_SIZE`. `JOB_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
 `summary_worker`만 추가로: `SERVICE_NAME`, `SUMMARY_DAILY_BUDGET`.
-`embedding_worker`만 추가로: `SERVICE_NAME`. `EMBEDDING_WORKER_CHUNK_*`는 compose가 주입하지 않으며 코드 기본값을 쓴다.
+`embedding_worker`만 추가로: `SERVICE_NAME`. `EMBEDDING_WORKER_CHUNK_*`(2000/200)·`EMBEDDING_DAILY_CHUNK_BUDGET`(800)는 compose가 주입하지 않으며 코드 기본값을 쓴다.
+`SUMMARY_SECONDARY_MODEL`·`SUMMARY_SECONDARY_DAILY_BUDGET`·`SUMMARY_PRIMARY_RPM`·`SUMMARY_SECONDARY_RPM`, `SEARCH_*`도 compose가 주입하지 않는다(코드 기본값). 운영에서 바꾸려면 `docker/compose.prod.yml`의 해당 서비스 `environment`에 먼저 추가해야 한다.
 
 ## 2. 관측 기준선
 
@@ -51,6 +52,8 @@ main push (docs/**·*.md 제외)
 | dead 사유 | `/admin/jobs?status=dead` | `permanent`(봇 차단·404)만 정상. `retryable` 누적은 조사 |
 | RSS 사이클 | worker 로그 `rss cycle finished` 30분마다 | 일부 피드 상시 실패는 정상(깨진 외부 피드) |
 | 요약률 | `/admin/backfill/summary` | 신규는 24시간 내 처리 |
+| 임베딩 적체 | `/admin/backfill/summary`의 `unembedded`, embedding-worker 로그 `embedding daily budget exhausted` | 하루 800청크를 넘는 적체는 며칠에 걸쳐 풀린다. 정상(잡은 attempt를 안 쓰고 다음 07:00 UTC로 미뤄진다) |
+| 검색 | `GET /api/v1/posts?q=카프카&page_size=1`, api 로그 `dense search failed`·`query embedding rate limited` | 200, `total>0`. 경고가 계속 나면 Gemini 한도 또는 Qdrant 확인 |
 | 모델 헬스 스캔 | worker 로그 `model scan finished` 1시간마다 | `ok` 건수가 0 근처면 OpenRouter 자체 장애 의심 |
 | heartbeat | compose healthcheck | healthy 4/4 |
 | 메모리 | `docker stats` | §1.1의 reservation 근처에서 안정 |
@@ -63,13 +66,27 @@ main push (docs/**·*.md 제외)
 - **실패 잡 처리**: 어드민 운영 대시보드 또는 `techletter jobs list --status dead`. 사유가 `permanent`(봇 차단·404)면 재시도가 무의미하다 → 블로그 설정 수정 또는 비활성화. 일시 장애면 `jobs retry`.
 - **요약 백필**: `techletter backfill summaries --limit N --priority 10 --dry-run` → 실행. 신규 포스트(priority 0)가 항상 먼저 처리된다.
 - **무료 모델 소멸**: 모델 라우터가 헬스 상위 모델로 자동 폴백하므로 조치가 필요 없다.
-- **LLM 일일 예산 소진**: 정상 동작이다. 초과분은 OpenRouter로 흐르고, 다음 리셋(`LLM_QUOTA_RESET_UTC_HOUR`)에 다시 1순위 모델을 쓴다.
+- **LLM 일일 예산 소진**: 정상 동작이다. 요약은 3 Flash(20) → 3.5 Flash Lite(450) → OpenRouter 순으로 흐르고, 다음 리셋(`LLM_QUOTA_RESET_UTC_HOUR`=07:00 UTC)에 다시 1순위 모델을 쓴다. 오늘 쓴 양(키 `google`·`google:gemini-3.5-flash-lite`·`gemini-embedding-chunks`):
+  ```bash
+  ssh oracle-ampere-a1-instance-free 'docker exec techletter_mongo mongosh -u root -p "$(docker exec techletter_mongo printenv MONGO_INITDB_ROOT_PASSWORD)" --authenticationDatabase admin techletter --quiet --eval "db.llm_daily_usage.find().sort({updated_at:-1}).limit(5).toArray()"'
+  ```
+- **임베딩 쿼터로 dead가 된 잡** (`error_kind=quota`, 쿼터 대기 누적 120시간 초과): 블로그를 한꺼번에 추가한 뒤에 생긴다. 쿼터가 풀린 뒤 다시 건다 — 재시도하면 누적 대기가 0으로 돌아간다.
+  ```bash
+  ssh oracle-ampere-a1-instance-free 'docker exec techletter_worker techletter jobs list --status dead'   # 사유 확인
+  ssh oracle-ampere-a1-instance-free 'docker exec techletter_worker techletter jobs retry --type embedding.requested --kind quota --limit 500'
+  ```
+  어드민 API로는 `POST /admin/jobs/retry-bulk {"type":"embedding.requested","error_kind":"quota","limit":500}`. 한꺼번에 살려도 하루 800청크씩만 처리되고 나머지는 다시 쿼터 대기로 돈다. 2026-09-26에 한도가 30시간이던 때 블로그 11곳 추가 후 170건이 이렇게 죽었다(그래서 120시간으로 늘렸다).
+- **새 글이 검색에 안 나옴**: 어휘 색인 잡(`search.lexical_index_requested`, embedding-worker)이 밀렸는지 본다. 급하면 `techletter backfill lexical --execute`(Gemini 호출 없음, 수 초). `--dry-run`은 대상 수와 실측 평균 문서 길이를 보여 준다 — `AVG_DOC_LENGTH`(170)와 크게 벌어지면 상수를 고치고 재백필([search.md](search.md) §2).
+- **블로그 아이콘**: 새 블로그는 등록 시 자동으로 수집 잡이 걸린다. 한 번도 시도 안 한 블로그 일괄: `techletter backfill icons --dry-run` → `--execute`(`--all`이면 전부 다시). 못 받은 블로그(Medium 등)는 어드민 블로그 탭에서 직접 올리거나 "주소에서 받기"로 회사 홈페이지 주소를 준다. 브라우저는 1시간 캐시하므로 바꾼 아이콘은 최대 1시간 뒤 보인다.
 - **모델 헬스 기록 없음/오래됨**: 라우터가 정적 폴백 목록으로 계속 동작한다. `docker logs techletter_worker | grep "model scan"`으로 스캔이 도는지 확인한다.
 - **블로그 피드 장애**: 어드민에서 `last_fetch_error` 확인 → RSS URL 수정 또는 `is_active=false`. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 자동으로 비활성화된다. 5xx나 타임아웃만으로는 꺼지지 않는다.
 - **LLM 키 교체**: GitHub Environment secret 갱신 → `deploy.yml`을 `workflow_dispatch`로 재실행.
 - **Mongo 백업**: `mongodump --archive --gzip` 정기 백업을 권장한다.
 - **Mongo가 SPOF**: 잡 큐까지 Mongo에 있으므로 Mongo 장애는 전면 정지로 이어진다. 볼륨 백업과 `restart: unless-stopped`에 의존하는 트레이드오프를 이 규모에서는 수용한다.
 - **알려진 제약**: IaC의 Mongo/mongo-express 비밀번호가 평문으로 관리되고 있다. 교체 시 `MONGO_URI` secret도 함께 갱신해야 한다.
+
+### 3.1 수동 데이터 작업 기록
+- **2026-09-27 중복 포스트 정리**: 블로그가 도메인·URL을 옮기면서 같은 글이 새 링크로 다시 들어온 것이 46건(같은 블로그·같은 제목). 2026-09-25 옮긴 글 감지(`79664e5` — 같은 블로그에 제목과 마지막 경로 조각이 같은 글이 있으면 새로 넣지 않고 링크만 바꾼다) 이전에 쌓인 것들이다. **오래된 쪽 포스트를 남기고** 새 쪽을 합친 뒤, 남긴 포스트의 링크를 가장 최신 URL로 바꿨다. 작업 전 백업: 서버 `/home/ubuntu/backups/mongo-20260927-064602-before-dedupe`. 이후 재발은 수집기 감지가 막는다 — 다시 보이면 감지 규칙(`content/rss/aggregator.py`, `content/links.py`)이 못 잡는 URL 변경 패턴이다.
 
 ## 4. 롤백
 
