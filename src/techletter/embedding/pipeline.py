@@ -13,12 +13,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from techletter.core.db.qdrant import Chunk
-from techletter.core.errors import PermanentError
+from techletter.core.errors import PermanentError, QuotaExceededError
+from techletter.core.jobs.policy import next_quota_reset
 from techletter.core.logging import get_logger
+from techletter.core.time import utcnow
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Awaitable, Callable
 
+    from techletter.core.llm.budget import DailyBudget
     from techletter.core.llm.embeddings import LangChainEmbedder
     from techletter.embedding.chunker import Chunker
     from techletter.settings import EmbeddingSettings
@@ -26,6 +29,8 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = ["ChunkRateLimiter", "EmbeddingPipeline", "EmbeddingResult"]
 
 logger = get_logger(__name__)
+
+BUDGET_KEY = "gemini-embedding-chunks"
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,12 +97,15 @@ class EmbeddingPipeline:
         settings: EmbeddingSettings,
         model_name: str,
         limiter: ChunkRateLimiter | None = None,
+        *,
+        budget: DailyBudget | None = None,
     ) -> None:
         self._chunker = chunker
         self._embedder = embedder
         self._settings = settings
         self._model_name = model_name
         self._limiter = limiter or ChunkRateLimiter(settings.embed_chunks_per_minute)
+        self._budget = budget
 
     async def run(self, text: str) -> EmbeddingResult:
         """본문을 벡터로 만든다.
@@ -109,7 +117,10 @@ class EmbeddingPipeline:
         if not chunks:
             raise PermanentError("no text to embed", reason="empty_body")
 
+        await self._check_budget(len(chunks))
         vectors = await self._embed_in_batches(chunks)
+        if self._budget is not None:
+            await self._budget.consume(BUDGET_KEY, len(chunks))
         if len(vectors) != len(chunks):
             # 개수가 어긋나면 청크와 벡터의 짝이 깨진다. 잘못된 벡터를
             # 저장하느니 실패시킨다.
@@ -129,6 +140,23 @@ class EmbeddingPipeline:
             model_name=self._model_name,
             vector_dimension=dimension,
         )
+
+    async def _check_budget(self, needed: int) -> None:
+        """오늘 몫이 모자라면 API를 부르지 않고 다음 쿼터 리셋까지 미룬다.
+
+        429를 맞고 미루는 것과 결과는 같지만, 검색·챗봇 질의에 쓸 몫을 남긴다.
+        """
+        limit = self._settings.daily_chunk_budget
+        if self._budget is None or limit <= 0:
+            return
+        if await self._budget.remaining(BUDGET_KEY, limit) >= needed:
+            return
+        reset = next_quota_reset(utcnow(), 7)
+        logger.info(
+            "embedding daily budget exhausted",
+            extra={"needed": needed, "reset_at": reset.isoformat()},
+        )
+        raise QuotaExceededError("embedding daily chunk budget exhausted", reset_at=reset)
 
     async def _embed_in_batches(self, chunks: list[str]) -> list[list[float]]:
         """배치로 나눠 호출한다. 긴 글 하나가 요청 하나로 몰리지 않게.

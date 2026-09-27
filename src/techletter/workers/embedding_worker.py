@@ -25,11 +25,15 @@ def build_embedding_worker(container: Container) -> JobRunner:
     heartbeat = Heartbeat()
     store = container.vector_store
 
+    from techletter.core.llm.budget import DailyBudget  # noqa: PLC0415
+
     pipeline = EmbeddingPipeline(
         Chunker(settings.embedding),
         LangChainEmbedder(settings.embedding_llm),
         settings.embedding,
         settings.embedding_llm.model_name,
+        # 워커 프로세스가 여럿이어도 같은 장부를 쓰도록 Mongo 카운터로 센다.
+        budget=DailyBudget(container.db),
     )
     return JobRunner(
         container.queue,

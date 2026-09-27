@@ -132,7 +132,7 @@ def test_quota_gives_up_after_max_total_wait(policy):
         QuotaExceededError("한도"),
         attempt=1,
         max_attempt=5,
-        quota_waited_seconds=30 * 3600,  # 이미 30시간 대기
+        quota_waited_seconds=120 * 3600,  # 이미 120시간(5일) 대기
         now=NOW,
     )
     assert d.dead is True

@@ -187,7 +187,9 @@ class JobSettings(BaseSettings):
     backoff_minutes: Annotated[list[int], NoDecode] = Field(
         default=[5, 30, 120, 480, 1440], alias="JOB_BACKOFF_MINUTES"
     )
-    quota_max_wait_hours: int = 30
+    quota_max_wait_hours: int = 120
+    """쿼터만 기다린 누적 시간이 이보다 길면 dead. 블로그를 여러 곳 추가하면 임베딩
+    밀린 분량이 며칠 치라 30시간으로는 dead로 떨어졌다(2026-09-26, 170건)."""
     dead_retryable_alert_threshold: int = Field(
         default=5, alias="JOB_DEAD_RETRYABLE_ALERT_THRESHOLD"
     )
@@ -222,13 +224,20 @@ class EmbeddingSettings(BaseSettings):
     """청킹·임베딩."""
 
     model_config = _BASE
-    chunk_size: int = Field(default=1000, alias="EMBEDDING_WORKER_CHUNK_SIZE")
+    chunk_size: int = Field(default=2000, alias="EMBEDDING_WORKER_CHUNK_SIZE")
+    """글자 수. 1000이던 때는 글 하나가 평균 12청크였다. 무료 등급은 청크 하나를 요청
+    한 번으로 세고 하루 1,000회라, 크기를 두 배로 해 글당 요청을 절반 아래로 줄인다.
+    gemini-embedding-001 입력 한도(2,048토큰) 안이다 — 한국어 2,000자도 넘지 않는다.
+    기존 벡터는 1000자 청크 그대로 두고 새 글부터 적용한다(같은 컬렉션에 섞여도 된다)."""
     chunk_overlap: int = Field(default=200, alias="EMBEDDING_WORKER_CHUNK_OVERLAP")
     embed_batch_size: int = 64
     """한 번에 임베딩 API로 보내는 청크 수. 긴 글이 요청 하나로 몰리지 않게 한다."""
     embed_chunks_per_minute: int = 80
     """워커가 1분에 보내는 청크 상한(0이면 무제한). 구글 무료 등급은 청크 하나를
     요청 한 번으로 세어 RPM 100에 걸린다. 20은 API 서버의 채팅 질의 임베딩 몫이다."""
+    daily_chunk_budget: int = Field(default=800, alias="EMBEDDING_DAILY_CHUNK_BUDGET")
+    """워커가 하루(07:00 UTC 기준)에 임베딩하는 청크 상한. 무료 등급 1,000회 중 나머지는
+    검색·챗봇 질의 임베딩 몫이다. 넘으면 API를 부르지 않고 다음 리셋까지 미룬다. 0이면 끈다."""
     max_chunks_per_post: int = 200
     """포스트 하나의 상한. 91K자짜리 글이 벡터를 수백 개 만드는 것을 막는다."""
 
