@@ -239,6 +239,64 @@ async def test_the_primary_attempt_counts_even_when_a_fallback_answers(settings)
     assert budget.consumed == ["google"]
 
 
+class LedgerBudget:
+    """장부 키마다 남은 양을 따로 둔다."""
+
+    def __init__(self, room: dict[str, bool]) -> None:
+        self.room = room
+        self.consumed: list[str] = []
+
+    async def has_room(self, provider: str, limit: int) -> bool:
+        return self.room.get(provider, True)
+
+    async def consume(self, provider: str, amount: int = 1) -> int:
+        self.consumed.append(provider)
+        return len(self.consumed)
+
+
+def tiered(llm, budget, settings) -> Summarizer:
+    return Summarizer(
+        llm,  # type: ignore[arg-type]
+        settings,
+        budget=budget,  # type: ignore[arg-type]
+        primary_model="gemini-3-flash-preview",
+        daily_limit=20,
+        secondary_model="gemini-3.5-flash-lite",
+        secondary_daily_limit=450,
+    )
+
+
+async def test_the_secondary_gemini_goes_first_once_the_primary_is_spent(settings) -> None:
+    """1순위 20회를 다 쓰면 무료 모델 전에 3.5 Flash Lite를 자기 예산으로 쓴다."""
+    llm = FakeLlm(payload(), model="gemini-3.5-flash-lite")
+    budget = LedgerBudget({"google": False})
+
+    await tiered(llm, budget, settings).summarize("본문")
+
+    assert llm.candidate_lists[0] == ["gemini-3.5-flash-lite", "free/a", "free/b"]
+    assert budget.consumed == ["google:gemini-3.5-flash-lite"]
+
+
+async def test_the_primary_still_goes_first_while_it_has_room(settings) -> None:
+    llm = FakeLlm(payload(), model="gemini-3-flash-preview")
+    budget = LedgerBudget({})
+
+    await tiered(llm, budget, settings).summarize("본문")
+
+    assert llm.candidate_lists[0][0] == "gemini-3-flash-preview"
+    assert budget.consumed == ["google"]
+
+
+async def test_both_spent_falls_back_to_the_router(settings) -> None:
+    llm = FakeLlm(payload())
+    budget = LedgerBudget({"google": False, "google:gemini-3.5-flash-lite": False})
+
+    await tiered(llm, budget, settings).summarize("본문")
+
+    assert llm.candidate_lists[0] is None
+    assert budget.consumed == []
+
+
 async def test_without_a_budget_the_router_decides(settings) -> None:
     llm = FakeLlm(payload())
 

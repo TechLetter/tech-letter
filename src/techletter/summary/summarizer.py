@@ -48,10 +48,11 @@ Respond with a valid JSON object containing exactly these four keys:
    details or extra optimizations. Keep a polite tone and aim for about 200 characters.
    End by briefly suggesting what a reader can observe from the post, without
    asserting it as a guaranteed benefit.
-2. "categories": 1-3 topic slugs chosen ONLY from the list below, most central
+2. "categories": usually 1-2 topic slugs chosen ONLY from the list below, most central
    first. Choose by what the post is mainly about, not by technologies mentioned
-   in passing. Add a second or third topic only when a substantial part of the post
-   is about it (e.g. an AI-based fraud detector -> the AI topic and "security";
+   in passing. Add a second topic only when a substantial part of the post is about
+   it, and a third only in the rare case where three areas are each central
+   (e.g. an AI-based fraud detector -> the AI topic and "security";
    a team onboarding retrospective -> "culture" and the team's field).
    Topics (slug | name | definition):
 {_TOPICS}
@@ -139,7 +140,8 @@ class Summarizer:
 
     `budget`과 `primary_model`을 주면 **1순위 모델을 예산 안에서만** 쓴다.
     Gemini 무료 티어는 하루 20회라, 다 쓰고 나서 429를 맞고 재시도하는
-    대신 미리 무료 모델로 흘린다.
+    대신 미리 다음 모델로 흘린다. `secondary_model`이 있으면 무료 모델 전에
+    그것을 자기 예산 안에서 쓴다(3.5 Flash Lite, 하루 500회).
     """
 
     def __init__(
@@ -151,6 +153,8 @@ class Summarizer:
         primary_model: str = "",
         primary_provider: str = "google",
         daily_limit: int = 0,
+        secondary_model: str = "",
+        secondary_daily_limit: int = 0,
     ) -> None:
         self._llm = llm
         self._settings = settings
@@ -158,6 +162,8 @@ class Summarizer:
         self._primary_model = primary_model
         self._primary_provider = primary_provider
         self._daily_limit = daily_limit
+        self._secondary_model = secondary_model
+        self._secondary_daily_limit = secondary_daily_limit
 
     async def _candidates(self) -> list[str] | None:
         """예산이 남았으면 1순위 모델을 맨 앞에 세우고, 그 자리에서 예산을 센다.
@@ -167,15 +173,18 @@ class Summarizer:
         """
         if not (self._budget and self._primary_model):
             return None
-        if not await self._budget.has_room(self._primary_provider, self._daily_limit):
-            logger.info(
-                "primary model budget exhausted; falling back",
-                extra={"provider": self._primary_provider},
-            )
-            return None
-        await self._budget.consume(self._primary_provider)
-        fallback = await self._llm.candidates("summary")
-        return [self._primary_model, *(m for m in fallback if m != self._primary_model)]
+        # 1순위 장부 키는 예전 그대로(provider 이름) 둔다 — 오늘 쓴 양을 이어서 센다.
+        tiers = [(self._primary_model, self._primary_provider, self._daily_limit)]
+        if self._secondary_model:
+            key = f"{self._primary_provider}:{self._secondary_model}"
+            tiers.append((self._secondary_model, key, self._secondary_daily_limit))
+        for model, key, limit in tiers:
+            if await self._budget.has_room(key, limit):
+                await self._budget.consume(key)
+                fallback = await self._llm.candidates("summary")
+                return [model, *(m for m in fallback if m != model)]
+            logger.info("summary model budget exhausted", extra={"model": model})
+        return None
 
     async def summarize(self, plain_text: str) -> SummaryResult:
         # 본문 최대가 91K자다. 그대로 넣으면 무료 모델의 컨텍스트를 넘고

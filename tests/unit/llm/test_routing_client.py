@@ -75,3 +75,18 @@ async def test_closing_closes_both_underlying_clients() -> None:
 
     assert primary.closed is True
     assert fallback.closed is True
+
+
+async def test_every_listed_gemini_model_goes_to_the_primary_client() -> None:
+    """요약 1·2순위(3 Flash, 3.5 Flash Lite) 둘 다 Google 클라이언트로 간다."""
+    primary = RecordingClient("primary")
+    fallback = RecordingClient("fallback")
+    client = RoutingChatClient(  # type: ignore[arg-type]
+        [PRIMARY_MODEL, "gemini-3.5-flash-lite"], primary, fallback
+    )
+
+    await client.complete("gemini-3.5-flash-lite", "s", "u")
+    await client.complete("nvidia/x:free", "s", "u")
+
+    assert primary.calls == ["gemini-3.5-flash-lite"]
+    assert fallback.calls == ["nvidia/x:free"]

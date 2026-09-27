@@ -46,7 +46,7 @@ def build_summarizer(container: Container) -> Summarizer:
             container.model_stats,
         ),
         RoutingChatClient(
-            settings.summary_llm.model_name,
+            [settings.summary_llm.model_name, settings.router.summary_secondary_model],
             LangChainChatClient(settings.summary_llm),
             LangChainChatClient(settings.chat_llm),
         ),
@@ -58,6 +58,8 @@ def build_summarizer(container: Container) -> Summarizer:
         primary_model=settings.summary_llm.model_name,
         primary_provider=settings.summary_llm.provider,
         daily_limit=settings.router.summary_daily_budget,
+        secondary_model=settings.router.summary_secondary_model,
+        secondary_daily_limit=settings.router.summary_secondary_daily_budget,
     )
 
 
