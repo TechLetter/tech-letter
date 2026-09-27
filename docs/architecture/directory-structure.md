@@ -11,7 +11,8 @@ tech-letter/
 │
 ├── src/techletter/
 │   ├── __main__.py  cli.py       # typer: api | worker | summary-worker | embedding-worker | all
-│   │                             #        | jobs {list,stats,retry,purge} | backfill {summaries,embeddings,link-keys}
+│   │                             #        | jobs {list,stats,retry,purge}
+│   │                             #        | backfill {summaries,topics,embeddings,lexical,icons,link-keys}
 │   │                             #        | ensure-indexes | settings {check,example}
 │   ├── settings.py               # pydantic-settings 단일 트리
 │   ├── app.py                    # create_app(): lifespan, 미들웨어, 라우터, 예외 핸들러
@@ -22,6 +23,7 @@ tech-letter/
 │   │   ├── logging.py            # JSON 로거
 │   │   ├── time.py  ids.py  pagination.py     # utcnow / ObjectId 변환 / 관용 파서 + Page
 │   │   ├── http.py               # 공유 httpx.AsyncClient
+│   │   ├── ratelimit.py          # MinuteRateLimiter: 분당 호출량 상한(요약 모델 RPM·임베딩 청크)
 │   │   ├── db/
 │   │   │   ├── mongo.py          # AsyncMongoClient 라이프사이클
 │   │   │   ├── documents.py      # BaseDocument(_id alias), SubDocument
@@ -43,6 +45,7 @@ tech-letter/
 │   │   │   ├── model_events.py   # 모델 추가/삭제/저하/복구 감지 + 이벤트 피드
 │   │   │   ├── stats.py          # llm_model_stats 기록, 자동 강등 판정
 │   │   │   ├── budget.py         # llm_daily_usage, 쿼터 리셋 계산
+│   │   │   ├── usage.py          # 요청 범위 토큰 계량기(챗봇 답변의 agent.usage)
 │   │   │   └── errors.py         # provider 예외 → Quota/Retryable/Permanent 분류
 │   │   └── security/  tokens.py  bearer.py     # JWT 발급/검증, Authorization 헤더 추출
 │   │
@@ -55,12 +58,13 @@ tech-letter/
 │   │   │   ├── content.py user.py chat.py admin.py llm.py query.py
 │   │   └── v1/
 │   │       ├── router.py         # /api/v1 조립
-│   │       ├── health.py  metrics.py  auth.py  me.py  posts.py  bookmarks.py  blogs.py  filters.py  trends.py  llm_models.py
+│   │       ├── health.py  metrics.py  auth.py  me.py  posts.py  bookmarks.py  blogs.py(아이콘)  filters.py  trends.py  llm_models.py  search.py(자동완성)
 │   │       ├── chat.py           # /chat/messages, /chat/messages/stream(SSE), /chat/sessions*, suggested-questions
 │   │       └── admin/  posts.py blogs.py users.py suggested_questions.py jobs.py llm_models.py backfill.py
 │   │
 │   ├── content/                  # posts·blogs·RSS·필터·트렌드
 │   │   ├── models.py repositories.py service.py filters.py trends.py links.py  # link_key 정규화
+│   │   ├── icons.py              # blog_icons 저장소 + 아이콘 수집 잡 enqueue
 │   │   ├── rss/  feeder.py  aggregator.py
 │   │   ├── jobs.py               # payload 스키마 + enqueue 헬퍼
 │   │   └── handlers.py           # on_summary_completed 등
@@ -75,8 +79,13 @@ tech-letter/
 │   │               tools/  content_posts.py  vector_search.py
 │   ├── summary/                  # summary-worker 전용 의존(playwright, trafilatura, bs4, Pillow)
 │   │   ├── renderer.py parser.py validator.py summarizer.py constants.py pipeline.py handlers.py
+│   │   ├── topics.py published.py icons.py   # 주제·부모 주제 목록 / 발행일 보정 / 블로그 아이콘 수집
 │   ├── embedding/
 │   │   ├── chunker.py pipeline.py handlers.py
+│   ├── search/                   # 하이브리드 검색 — search.md
+│   │   ├── lexical.py            # 토큰화(한글 2-gram)·필드 가중치·BM25 문서 벡터
+│   │   ├── service.py            # SearchService: 어휘+벡터 RRF·최신성, 자동완성, 질의 벡터 캐시, IP 한도
+│   │   └── handlers.py           # search.lexical_index_requested 잡
 │   └── workers/
 │       ├── runtime.py            # heartbeat 파일, graceful shutdown(SIGTERM→drain)
 │       ├── scheduler.py          # 주기 작업(RSS 30분, 유지보수 1분)
@@ -159,14 +168,17 @@ class Settings(BaseSettings):
     qdrant:     QdrantSettings        # QDRANT_HOST/PORT, QDRANT_COLLECTION_NAME=tech_letter_posts
     router:     RouterSettings        # SCOUTER_SCAN_INTERVAL_HOURS=1, LLM_STATIC_FALLBACK_MODELS,
                                       # LLM_MIN_SUCCESS_RATE, LLM_QUOTA_RESET_UTC_HOUR=7,
-                                      # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20(Gemini 예산 소진 시 우선순위 조정)
+                                      # MAX_MODEL_ATTEMPTS=3, SUMMARY_DAILY_BUDGET=20(1순위 하루 예산),
+                                      # SUMMARY_SECONDARY_MODEL=gemini-3.5-flash-lite, SUMMARY_SECONDARY_DAILY_BUDGET=450,
+                                      # SUMMARY_PRIMARY_RPM=4, SUMMARY_SECONDARY_RPM=12
     jobs:       JobSettings           # JOB_POLL_INTERVAL_SECONDS=2, JOB_LOCK_TIMEOUT_MINUTES=30,
                                       # JOB_BACKOFF_MINUTES=[5,30,120,480,1440], JOB_MAX_ATTEMPT=5,
-                                      # JOB_DEAD_RETRYABLE_ALERT_THRESHOLD=5
+                                      # JOB_DEAD_RETRYABLE_ALERT_THRESHOLD=5, quota_max_wait_hours=120
     rss:        RssSettings           # interval=30m, CONTENT_BLOG_FETCH_BATCH_SIZE=10
     summary:    SummarySettings       # SUMMARY_MAX_INPUT_CHARS
-    embedding:  EmbeddingSettings     # EMBEDDING_WORKER_CHUNK_SIZE/OVERLAP
+    embedding:  EmbeddingSettings     # EMBEDDING_WORKER_CHUNK_SIZE=2000/OVERLAP=200, EMBEDDING_DAILY_CHUNK_BUDGET=800
     chat:       ChatSettings          # CHATBOT_RAG_TOP_K/_SCORE_THRESHOLD, CHAT_CONTEXT_COMPRESSION_*
+    search:     SearchSettings        # SEARCH_* (후보 수·DENSE_MIN_SCORE·RRF_K·최신성·캐시·IP 한도) — search.md
 
     # 지연 로딩 — 워커는 OAuth 자격증명 없이도 부팅한다
     auth:       AuthSettings          # (property) JWT_SECRET, GOOGLE_OAUTH_*, AUTH_LOGIN_SUCCESS_REDIRECT_URL

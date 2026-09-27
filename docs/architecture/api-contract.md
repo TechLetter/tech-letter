@@ -91,7 +91,7 @@
 `is_bookmarked`는 항상 boolean(익명 요청이면 `false`). `categories`/`tags`는 항상 배열(요약 전이면 `[]`). `summary`/`thumbnail_url`은 없으면 `null`.
 
 ### 2.2 `AdminBlog`
-`{id, name, url, rss_url, is_active, post_count, consecutive_failures, last_fetched_at, last_fetch_error, created_at, updated_at}`. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
+`{id, name, url, rss_url, is_active, post_count, consecutive_failures, last_fetched_at, last_post_at, last_fetch_error, created_at, updated_at}`. `last_fetched_at`은 RSS를 읽은 때(새 글이 없어도 바뀐다), `last_post_at`은 새 글이 마지막으로 들어온 때다. `last_fetch_error`는 최대 200자로 절단해서 저장한다. 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 블로그가 자동으로 `is_active=false`가 된다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
 ### 2.3 `AdminPost`
 ```json
@@ -131,7 +131,7 @@
     { "role": "user", "content": "…", "created_at": "…" },
     { "role": "assistant", "content": "…", "created_at": "…",
       "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…"} ],
-      "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[…]},
+      "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[…],"usage":{…}},
       "guard":  {"action":"pass","message":null},
       "memory": {"used":true,"status":"ready","compressed":false} }
   ]
@@ -145,14 +145,18 @@
   "session_id": "…",
   "message_id": "…",
   "answer": "마크다운 …",
-  "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…","score":0.83} ],
-  "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[{"type":"search","label":"…","status":"done"}]},
+  "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…","score":0.83,
+                 "blog_id":"…","published_at":"…"} ],
+  "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[{"type":"search","label":"…","status":"done"}],
+             "usage":{"input_tokens":1234,"output_tokens":456,"llm_calls":3,"latency_ms":5120}},
   "guard":  {"action":"pass","risk_level":"low","message":null,"findings":[]},
   "memory": {"used":true,"status":"ready","compressed":false,"compression_failed":false,"recent_message_count":6},
   "credits": {"consumed":1,"remaining":6}
 }
 ```
 `agent.model_id`는 실제 사용 모델 ID(`string|null`)이며, 알 수 없으면 `null`이다.
+`agent.usage`는 이 질문 하나의 LLM 호출(질의 재작성·계획·답변, 폴백 시도 포함) 토큰 합계와, 메모리 구성부터 답변까지 걸린 시간이다. 메시지 메타데이터에도 저장된다(이 필드가 생기기 전 메시지는 없다).
+`sources[].blog_id`·`published_at`은 출처 카드의 아이콘·날짜용이며 `null`일 수 있다.
 `guard.action ∈ {pass, sanitize, block}`, `memory.status ∈ {ready, pending, failed}`.
 
 ### 2.7 Trends
@@ -161,6 +165,8 @@
 
 ### 2.8 Filters
 `{"items": [{"name": "백엔드", "count": 12}], "total": 8}` / 블로그는 `{"id","name","count"}`.
+
+`GET /filters/topic-groups` → `{"items": [{"id": "ai", "name": "AI", "topics": ["…"]}], "total": 5}` — 홈의 부모 주제 탭. `topics`는 자식 주제의 한국어 이름(= `Post.categories` 값). 목록이 코드(`summary/topics.py::TOPIC_GROUPS`)에 있어 개수는 주지 않는다.
 
 ### 2.9 `Job` (어드민 운영 대시보드)
 ```json
@@ -173,6 +179,9 @@
   "created_at": "…", "updated_at": "…", "finished_at": "…"
 }
 ```
+
+### 2.10 `SearchSuggestion`
+`GET /search/suggest` → `{"items": [{"id","title","blog_id","blog_name","published_at","link"}], "total": n}` — 제목 한 줄용. 최대 5개, 어휘 검색만([search.md](search.md) §4).
 
 ### 2.11 모델 상태(공개)
 어드민용과 달리 테크레터 내부 실사용 성적(`json_failures`·`rate_limited`·성공률)은 없다 — OpenRouter 쪽 헬스만 보여준다.
@@ -193,7 +202,7 @@
 | 메서드 | 경로 | 인증 | 쿼리/바디 | 응답 |
 |---|---|---|---|---|
 | GET | `/health` | - | | `200 {"status":"ok"}` / `503 {"status":"degraded","checks":{...}}` (Traefik은 `/api`만 라우팅하므로 compose healthcheck 전용) |
-| GET | `/posts` | 선택 | `page, page_size, categories[], tags[], blog_id, published_from, published_to` | 목록 봉투 + `Post[]` |
+| GET | `/posts` | 선택 | `page, page_size, categories[], tags[], blog_id, published_from, published_to, q` | 목록 봉투 + `Post[]`. `q`(2글자 이상)가 있으면 하이브리드 검색 관련도순, 최대 100건. 없으면 최신순 |
 | GET | `/posts/{id}` | 선택 | | `Post` / 404 `resource.not_found` |
 | POST | `/posts/{id}/views` | - | | `204` |
 | GET | `/bookmarks` | 필수 | `page, page_size` | 목록 + `Post[]`(`is_bookmarked: true`) |
@@ -202,11 +211,16 @@
 | GET | `/filters/categories` | - | `blog_id, tags[]` | `{items,total}` |
 | GET | `/filters/tags` | - | `blog_id, categories[]` | `{items,total}` |
 | GET | `/filters/blogs` | - | `categories[], tags[]` | `{items,total}` |
+| GET | `/filters/topic-groups` | - | | `{items,total}`(2.8) |
+| GET | `/search/suggest` | - | `q` | `{items,total}`(2.10). 2글자 미만이면 빈 목록 |
+| GET | `/blogs/{id}/icon` | - | | `200 image/webp`(+`ETag`, `If-None-Match` 일치 시 `304`) / 아이콘 없으면 **`204`** 본문 없음. 둘 다 `Cache-Control: public, max-age=3600` |
 | GET | `/trends/weekly` | - | `limit`(기본 8, 최대 30) | 2.7 |
 | GET | `/llm-models/summary` | - | | 2.11 |
 | GET | `/llm-models` | - | | 목록 + `ModelHealth[]`(2.11) |
 
-공개 `/posts`는 요약이 완료된 포스트만 반환한다.
+공개 `/posts`는 요약이 완료된 포스트만 반환한다. 정렬 파라미터는 없다(`sort=views`는 프론트가 쓰지 않아 2026-09-27 제거, 모르는 파라미터는 무시된다).
+
+블로그 아이콘이 없을 때 404가 아니라 204인 이유: `<img>`는 둘 다 `onerror`로 첫 글자 배지를 띄우지만, 404는 블로그마다 브라우저 콘솔에 오류로 찍혔다. 없는 것도 1시간 캐시해 매번 다시 묻지 않는다. 캐시가 1시간(처음엔 하루)인 것은 어드민이 바꾼 아이콘이 금방 보이게 하려는 것이다.
 
 ### 3.2 인증 / 나
 | 메서드 | 경로 | 요청 | 응답 |
@@ -225,12 +239,13 @@
 | POST | `/chat/sessions` | | `201 ChatSession` |
 | GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 400 `chat.session_not_found` |
 | DELETE | `/chat/sessions/{id}` | | `204` / 400 `chat.session_not_found` |
-| POST | `/chat/messages` | `{query, session_id?, model_id?}` | `200 ChatAnswer` |
-| POST | `/chat/messages/stream` | `{query, session_id?, model_id?}` | SSE |
+| POST | `/chat/messages` | `{query, session_id?, model_id?, post_ids?}` | `200 ChatAnswer` |
+| POST | `/chat/messages/stream` | `{query, session_id?, model_id?, post_ids?}` | SSE |
 
 처리 순서: 프롬프트 가드 → 세션 검증 → 크레딧 1 차감 → 에이전트 → 성공 시 메시지 저장 / 실패 시 환불.
 `model_id`는 선택 필드이며 무료 모델 카탈로그에 있는 id만 허용한다. 생략하면 자동으로
 모델을 고른다. 유효하지 않은 id는 400 `request.invalid`(`details.field="model_id"`)다.
+`post_ids`(최대 8개, ObjectId 문자열, 중복은 제거)를 주면 플래너 없이 그 글들만 근거로 짧게 답한다 — 검색 결과의 "AI 요약"([search.md](search.md) §5). 형식이 틀리거나 9개 이상이면 400 `request.invalid`(크레딧 미차감).
 에러: `policy.blocked`(403) · `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).
 
 ### 3.4 어드민 (`role=admin`)
@@ -246,6 +261,8 @@
 | PUT | `/admin/blogs/{id}` | 동일 | `200 AdminBlog` |
 | DELETE | `/admin/blogs/{id}` | `delete_posts=bool` | `200 {deleted_posts: n}` |
 | POST | `/admin/blogs/{id}/activate` | | `200 AdminBlog`(자동 비활성화 해제, `post_count` 실제 카운트) |
+| PUT | `/admin/blogs/{id}/icon` | 본문 = webp 바이트(브라우저가 64px로 변환) | `204` / 400 `request.invalid`(`details.field="icon"`, webp 아님·100KB 초과). 자동 수집이 덮지 않는다 |
+| POST | `/admin/blogs/{id}/icon/refresh` | `{site_url?}`(선택, `https?://`) | `202 {queued: bool}`. 없으면 "다시 받기"(업로드 아이콘도 자동 수집 결과로 교체), `site_url`이면 "주소에서 받기"(그 사이트 아이콘, 못 받으면 지금 아이콘 유지) |
 | GET | `/admin/users` | `page, page_size` | 목록 + `{user_code,email,name,role,credits:{remaining,granted_today},created_at,updated_at}` |
 | POST | `/admin/users/{user_code}/credits` | `{amount, expires_at}` (`expires_at ≤ now+365일`) | `201 {user_code, amount, expires_at}` / 400 `request.invalid` (`details.field="expires_at"`, `details.max_days=365`) |
 | GET | `/admin/suggested-questions` | `include_inactive` | 목록(페이지네이션 없음) |
@@ -277,5 +294,5 @@
 파이프라인 상태(실패 잡 수 · 대기 잡 수와 모두 미뤄졌으면 재개 시각 · 마지막 RSS 수집)가 늘 보인다.
 1. **운영(ops)**: 수집 → 요약 → 임베딩 단계 카드(남은 개수·대기·실패·백필), 오류별로 묶은
    실패 잡(글 제목·블로그·재시도), 대기·실행 중 잡 목록.
-2. **설정(settings)**: 챗봇 추천 질문. 요약 모델은 고르지 않는다 — Gemini를 하루 예산만큼
-   먼저 쓰고, 그다음은 헬스체크로 정한 정상 모델 순서를 쓴다.
+2. **설정(settings)**: 챗봇 추천 질문. 요약 모델은 고르지 않는다 — Gemini 3 Flash → 3.5 Flash Lite를
+   각자 하루 예산만큼 먼저 쓰고, 그다음은 헬스체크로 정한 정상 모델 순서를 쓴다.

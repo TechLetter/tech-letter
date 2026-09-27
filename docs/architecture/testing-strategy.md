@@ -12,7 +12,7 @@
 `tests/contract/` 의 계약 모듈에는 `integration`과 `contract` 마커를 **함께** 붙인다(새 파일도 동일 — 모듈 상단 `pytestmark = [pytest.mark.integration, pytest.mark.contract]`). 계약 테스트도 Mongo가 필요하므로 기본 실행에서 제외되며, `uv run pytest -q`는 단위 테스트만 실행한다.
 
 ```bash
-uv run pytest -q                                      # 단위 415개
+uv run pytest -q                                      # 단위 570개(2026-09-27)
 ./scripts/dev.sh test-infra                           # Mongo 27018 · Qdrant 6334 기동
 uv run pytest -q -m integration                       # 통합 + 계약(컨테이너 필요)
 uv run pytest -q -m "integration and contract"        # 계약만(컨테이너 필요)
@@ -33,6 +33,8 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 - `core/llm/chat`: `RoutingChatClient`가 `model_id`로 올바른 provider 클라이언트를 고르는지.
 - `chat/use_case`: 순서 보장(가드 실패 시 크레딧 미차감, 차감 실패 시 에이전트 미호출, 에이전트 실패 시 환불 호출).
 - `summary/pipeline`: 예외 분류(렌더 실패/봇 차단/파싱 실패 → 각각 다른 처리).
+- `search/`: 한글 2-gram 토큰화, BM25 문서 벡터, RRF 융합, 최신성 감쇠, 벡터 전용 하한, 질의 벡터 캐시·IP 한도, 장애 시 한쪽만으로 낮춤.
+- `core/ratelimit`·`summary/summarizer`: 분당 상한 대기, 1·2순위 예산 소진 순서. `embedding/pipeline`: 하루 청크 예산 초과 시 API 미호출 + `QuotaExceededError`.
 - `api/schemas`: `is_bookmarked` boolean 고정, `ai_summary` null 직렬화, `Paged[T]`의 `total_pages` 계산.
 
 ## 4. 통합 테스트
@@ -42,6 +44,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 - `tests/integration/test_credits.py::test_concurrent_consume_never_goes_negative`: 동시 consume → 잔액이 절대 음수가 되지 않음.
 - `test_pipeline_e2e.py`: RSS 픽스처 → summary(Fake) → embedding(Fake) → Qdrant → `GET /posts`.
 - `test_content_aggregator.py`: 연속 실패 시 블로그 자동 비활성화.
+- `test_search.py`: 실제 Qdrant로 어휘 색인 멱등·삭제, 하이브리드 순위·필터·페이지, 자동완성, 벡터 장애 시 어휘만. 엔드포인트 모양은 `tests/contract/test_search_contract.py`. `test_blog_icons.py`: 아이콘 수집 순서·SVG·Medium 로고 거르기.
 
 ## 4.1 커버리지 공백
 

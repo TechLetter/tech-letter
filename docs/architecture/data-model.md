@@ -7,6 +7,7 @@
 |---|---|---|
 | `posts` | `content` | 핵심 데이터 |
 | `blogs` | `content` | |
+| `blog_icons` | `content` | 블로그 아이콘 64px webp 바이트. `_id = blog_id`. 수집은 summary-worker |
 | `users` | `users` | |
 | `bookmarks` | `users` | |
 | `credits` | `users` | TTL로 매일 소멸·재생성 |
@@ -17,14 +18,15 @@
 | `chat_suggested_questions` | `chat` | |
 | `jobs` | `core.jobs` | 잡 큐. 상태 4종: pending/running/done/dead |
 | `llm_model_stats` | `core.llm` | 모델×용도별 성적 기록과 자동 강등용. `_id = "{model_id}:{purpose}"` |
-| `llm_daily_usage` | `core.llm` | provider별 일일 사용량. `_id = "{date}:{provider}"`, TTL 없음(영구 누적, 하루 1~2건) |
+| `llm_daily_usage` | `core.llm` | 일일 사용량 장부. `_id = "{date}:{key}"`(key: 요약 1순위 `google`, 2순위 `google:gemini-3.5-flash-lite`, 임베딩 `gemini-embedding-chunks`), 날짜는 07:00 UTC 기준. TTL 없음(영구 누적, 하루 몇 건) |
 | `llm_model_checks` | `core.llm` | OpenRouter 무료 모델 헬스체크 원시 기록(1시간 주기). TTL 30일 |
 | `llm_model_daily` | `core.llm` | 위 기록의 날짜×모델 집계. `_id = "{date}:{model_id}"`, TTL 400일 |
 | `llm_model_catalog` | `core.llm` | 모델별 "지금까지 알던 상태" 1건씩(카탈로그 변동 감지용) |
 | `llm_model_events` | `core.llm` | 모델 추가·삭제·저하·복구 이벤트. TTL 90일 |
 
-모델 선호목록은 없다. 요약은 Gemini를 하루 예산(`SUMMARY_DAILY_BUDGET`)만큼 먼저 쓰고, 그다음과
-챗봇·플래너는 헬스체크가 정한 정상 모델 순서(24h 가용률·지연, 성공률 낮으면 뒤로)를 쓴다.
+모델 선호목록은 없다. 요약은 Gemini 1순위(`SUMMARY_DAILY_BUDGET`)·2순위(`SUMMARY_SECONDARY_DAILY_BUDGET`)를
+각자 하루 예산만큼 먼저 쓰고, 그다음과 챗봇·플래너는 헬스체크가 정한 정상 모델 순서(24h 가용률·지연,
+성공률 낮으면 뒤로)를 쓴다([architecture.md](architecture.md) §5).
 
 ### 1.2 인덱스
 ```
@@ -80,6 +82,12 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 - `last_fetch_error`는 200자 이내로 절단해서 저장한다.
 - 실패 48회가 누적되고 마지막 회차가 `PermanentError`(HTTP 400/401/403/404/410/451)일 때만 RSS 수집기가 `is_active=false`로 자동 전환한다. 5xx·타임아웃만으로는 비활성화하지 않는다.
 
+**`blog_icons`**: `_id(=blog_id), data(Binary webp | null), hash(sha1 앞 12자, ETag), source(받은 URL | "manual"), manual(bool), updated_at`
+- `data=null`은 "자동 수집을 시도했지만 못 찾음"이다(화면은 이름 첫 글자 배지). 문서가 아예 없으면 아직 시도 안 한 블로그다 — `backfill icons` 기본 대상.
+- `manual=true`(어드민 업로드 또는 "주소에서 받기")는 자동 수집이 덮지 않는다. "다시 받기"가 `manual=false`로 풀고 다시 수집한다.
+- 100KB 초과·webp 아닌 업로드는 거부한다(보통 2~5KB).
+- 수집 순서(`summary/icons.py`): 블로그 페이지의 `apple-touch-icon` → `<link rel="icon">`(큰 것부터, `mask-icon` 제외) → `/favicon.ico` → SVG 아이콘 → RSS 채널 이미지. 처음 열리는 것을 64px webp로 바꾼다. SVG는 Pillow가 못 열어 summary-worker의 Chromium으로 PNG를 그린다(`renderer.rasterize_svg`, `<img>`로 넣어 SVG 속 스크립트·외부 리소스는 안 불린다). Medium 기본 로고(페이지 아이콘·피드 채널 이미지 둘 다, 13곳이 같은 아이콘이 됐다)는 거른다 — 퍼블리케이션 로고는 Medium이 서버 요청을 막아 못 받으므로 어드민이 회사 홈페이지 등 다른 주소를 준다("주소에서 받기", `site_url`).
+
 **`users`**: `_id, created_at, updated_at, user_code("google:<uuid>", UNIQUE), provider, provider_sub, email, name, role("user"|"admin")`
 
 **`bookmarks`**: `_id, user_code, post_id(문자열), created_at, updated_at`
@@ -109,12 +117,16 @@ API 계약에서는 `status.ai_summarized` → `status.summarized`, `aisummary` 
 | 컬렉션 | `tech_letter_posts__gemini-embedding-001__3072` (규칙 `{base}__{model}__{dim}`) |
 | 벡터 | 3072-dim, Cosine |
 | payload | `post_id, title, blog_name, link, published_at, chunk_index, chunk_text, model_name` |
+| 청크 | 2000자, overlap 200(`EMBEDDING_WORKER_CHUNK_SIZE/_OVERLAP`), 글당 최대 200청크 |
 | payload index | `post_id` (Qdrant payload index) |
 | on_disk_payload | 서버 기본값에 의존(애플리케이션에서 `true`를 지정하지 않음) |
 
 - point id는 `uuid5(NAMESPACE_URL, "{post_id}:{model}:{dim}:{chunk_index}")` — 결정적이므로 upsert가 멱등하다.
 - 삭제는 `{base}__` 접두어를 가진 모든 컬렉션에서 `post_id`가 일치하는 포인트를 제거한다.
 - 임베딩 모델은 Gemini `gemini-embedding-001`로 고정돼 있어 컬렉션명이 항상 같은 값으로 계산된다.
+- **청크 크기 2000자** (2026-09-27, 이전 1000자): Gemini 무료 등급은 배치 안의 청크 하나를 요청 1회로 세고 하루 1,000회다. 1000자일 때 글당 평균 12청크라 하루 80여 편밖에 못 넣었다. 2000자는 모델 입력 한도(2,048토큰) 안이다. **기존 벡터는 1000자 청크 그대로 두고** 새 글부터 적용한다(같은 컬렉션에 섞여도 된다 — 검색·RAG는 청크 점수만 본다).
+- **하루 청크 예산 800** (`EMBEDDING_DAILY_CHUNK_BUDGET`, 0이면 끔): 1,000회 중 나머지 200은 검색·챗봇 질의 임베딩 몫이다. 글 하나의 청크 수가 오늘 남은 몫보다 많으면 API를 부르지 않고 `QuotaExceededError`로 다음 07:00 UTC까지 미룬다(attempt 미소모). 장부는 Mongo(`llm_daily_usage`)라 워커가 여럿이어도 같이 센다. 분당은 80청크(RPM 100 중 20은 api 몫).
+- **어휘(BM25) 색인** `{base}__lexical`: sparse 벡터 `bm25`(IDF modifier), 포스트당 포인트 1개, payload `post_id, blog_id, categories, published_at, title, blog_name, link`, payload index `post_id·blog_id·categories`. 상세는 [search.md](search.md).
 
 ## 3. 환경변수 이름
 
