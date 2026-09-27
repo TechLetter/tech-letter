@@ -81,8 +81,10 @@ async def test_every_listed_gemini_model_goes_to_the_primary_client() -> None:
     """요약 1·2순위(3 Flash, 3.5 Flash Lite) 둘 다 Google 클라이언트로 간다."""
     primary = RecordingClient("primary")
     fallback = RecordingClient("fallback")
-    client = RoutingChatClient(  # type: ignore[arg-type]
-        [PRIMARY_MODEL, "gemini-3.5-flash-lite"], primary, fallback
+    client = RoutingChatClient(
+        [PRIMARY_MODEL, "gemini-3.5-flash-lite"],
+        primary,  # type: ignore[arg-type]
+        fallback,  # type: ignore[arg-type]
     )
 
     await client.complete("gemini-3.5-flash-lite", "s", "u")

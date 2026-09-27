@@ -283,7 +283,9 @@ async def test_the_primary_still_goes_first_while_it_has_room(settings) -> None:
 
     await tiered(llm, budget, settings).summarize("본문")
 
-    assert llm.candidate_lists[0][0] == "gemini-3-flash-preview"
+    first = llm.candidate_lists[0]
+    assert first is not None
+    assert first[0] == "gemini-3-flash-preview"
     assert budget.consumed == ["google"]
 
 
