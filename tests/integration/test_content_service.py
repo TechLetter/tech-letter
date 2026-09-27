@@ -245,6 +245,10 @@ async def test_summary_is_written_and_embedding_is_queued(
     assert found.aisummary.tags == ["Kafka"]
     assert found.aisummary.generated_at is not None
     assert await mongo_db["jobs"].count_documents({"type": JobType.EMBEDDING_REQUESTED.value}) == 1
+    # 어휘 색인은 임베딩을 기다리지 않는다 — 임베딩 쿼터가 밀려도 새 글이 검색된다.
+    assert (
+        await mongo_db["jobs"].count_documents({"type": JobType.LEXICAL_INDEX_REQUESTED.value}) == 1
+    )
 
 
 async def test_applying_a_summary_keeps_the_embedded_flag(post_service, posts, queue, blog) -> None:
