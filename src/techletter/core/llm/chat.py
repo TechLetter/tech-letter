@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from techletter.core.llm.errors import JsonOutputError
 from techletter.core.llm.stats import ModelPurpose
+from techletter.core.llm.usage import record_usage
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -128,6 +129,7 @@ class LangChainChatClient(ChatClient):
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
         usage = getattr(response, "usage_metadata", None) or {}
+        record_usage(usage)
         if usage:
             # 토큰 폭주를 눈에 보이게 둔다.
             logger.debug(

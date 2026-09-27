@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +31,7 @@ from techletter.core.errors import (
     RetryableError,
 )
 from techletter.core.llm.model_events import known_model_ids
+from techletter.core.llm.usage import track_usage
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -109,15 +111,17 @@ class ChatUseCase:
         session, is_new = await self._resolve_session(user_code, session_id, safe_query)
         consumed = await self._credits.consume(user_code, self._settings.credits_per_message)
 
+        started = time.monotonic()
         try:
-            context = await self._memory.build(safe_query, session.messages, session.memory)
-            # 선택 인자는 있을 때만 넘긴다. 테스트 대역은 옛 시그니처를 쓴다.
-            options: dict[str, Any] = {}
-            if selected_model_id is not None:
-                options["model_id"] = selected_model_id
-            if post_ids:
-                options["post_ids"] = post_ids
-            result = await self._agent.run(safe_query, context, on_activity, **options)
+            with track_usage() as usage:
+                context = await self._memory.build(safe_query, session.messages, session.memory)
+                # 선택 인자는 있을 때만 넘긴다. 테스트 대역은 옛 시그니처를 쓴다.
+                options: dict[str, Any] = {}
+                if selected_model_id is not None:
+                    options["model_id"] = selected_model_id
+                if post_ids:
+                    options["post_ids"] = post_ids
+                result = await self._agent.run(safe_query, context, on_activity, **options)
         except BaseException as exc:
             # 취소(브라우저 종료)도 여기로 온다. 환불은 반드시 끝까지 돌린다.
             await asyncio.shield(self._refund(user_code, consumed.credit_ids, type(exc).__name__))
@@ -139,6 +143,12 @@ class ChatUseCase:
                 result=result,
                 consumed=consumed.consumed,
                 remaining=consumed.remaining,
+                usage={
+                    "input_tokens": usage.input_tokens,
+                    "output_tokens": usage.output_tokens,
+                    "llm_calls": usage.calls,
+                    "latency_ms": round((time.monotonic() - started) * 1000),
+                },
             )
         )
 
@@ -197,6 +207,7 @@ class ChatUseCase:
         result: Any,
         consumed: int,
         remaining: int,
+        usage: dict[str, int] | None = None,
     ) -> ChatAnswer:
         session_id = str(session.id)
         # 새 세션은 생성할 때 첫 질문을 이미 담았다. 두 번 넣지 않는다.
@@ -208,6 +219,8 @@ class ChatUseCase:
             "intent": result.intent,
             "activities": result.activities,
             "model_id": result.model_id,
+            # 답변 옆 (i): 이 질문 하나에 든 토큰(계획·재작성·답변 합)과 응답 시간.
+            "usage": usage,
         }
         session = await self._sessions.append(
             session,
