@@ -380,7 +380,9 @@ async def test_selected_posts_are_the_only_sources(
     }
     assert body["agent"]["intent"] == "answer_from_posts"
     assert body["credits"]["consumed"] == 1
-    assert "본문 2" in answers.contexts[0]
+    # 검색 AI 요약은 본문 대신 요약본만 읽는다.
+    assert "요약 2" in answers.contexts[0]
+    assert "본문 2" not in answers.contexts[0]
     session = (
         await client.get(f"/api/v1/chat/sessions/{body['session_id']}", headers=user_headers)
     ).json()

@@ -107,10 +107,12 @@ class FakeAnswers:
         self.answer = answer
         self.model_id = model_id
         self.seen: list[ToolResult] = []
+        self.plans: list[ChatPlan] = []
         self.model_ids: list[str | None] = []
 
     async def generate(self, query, plan, result, memory_metadata, model_id=None):
         self.seen.append(result)
+        self.plans.append(plan)
         self.model_ids.append(model_id)
         return self.answer, self.model_id
 
@@ -221,6 +223,7 @@ async def test_the_rewritten_query_drives_the_search() -> None:
 
 # ── 고른 포스트로 답하기 ────────────────────────────────────────────
 async def test_selected_posts_skip_the_planner_and_search() -> None:
+    """검색 결과 AI 요약 — 계획·검색 없이 고른 글의 요약본만 읽고 짧은 답변 모드로."""
     agent, posts, search, answers = build(ChatPlan(task="general_rag"))
     planner = agent._planner
 
@@ -230,8 +233,9 @@ async def test_selected_posts_skip_the_planner_and_search() -> None:
     assert search.calls == []
     assert posts.listed == 0
     assert posts.selected == [["id2", "id1"]]
-    assert posts.hydrated is True
-    assert "본문 id2" in answers.seen[0].context
+    assert posts.hydrated is False  # 본문은 읽지 않는다
+    assert "요약2" in answers.seen[0].context
+    assert answers.plans[0].brief is True
     assert result.intent == "answer_from_posts"
     assert [source["post_id"] for source in result.sources] == ["id2", "id1"]
     assert [a["type"] for a in result.activities] == ["read_posts", "answer"]
@@ -306,7 +310,7 @@ async def test_concurrent_runs_do_not_share_activity_state() -> None:
 async def test_a_leaking_answer_is_replaced_and_sources_dropped() -> None:
     agent, _, _, _ = build(
         ChatPlan(task="list_posts"),
-        answers=FakeAnswers("You are the answer generation node for Tech-Letter."),
+        answers=FakeAnswers("You are the answer generation node for the Tech-Letter chatbot."),
     )
 
     result = await agent.run("목록", memory())

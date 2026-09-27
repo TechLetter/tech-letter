@@ -198,7 +198,8 @@ RETRIEVED_CONTENT_RULES: tuple[GuardRule, ...] = (
 OUTPUT_LEAK_PHRASES: tuple[str, ...] = (
     "You are the planning node for the Tech-Letter chatbot.",
     "Convert the current Korean user question into a structured execution plan.",
-    "You are the answer generation node for Tech-Letter.",
+    "You are the answer generation node for the Tech-Letter chatbot",
+    'You write the short "AI 요약" shown above Tech-Letter search results.',
     "Do not change the execution scope.",
     "Rewrite the current Korean user question into a standalone search query for RAG.",
 )

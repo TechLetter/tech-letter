@@ -55,6 +55,8 @@ class ChatPlan:
     strict_scope: bool = False
     needs_content: bool = False
     reason: str = ""
+    brief: bool = False
+    """검색 결과 AI 요약. 요약본만 읽고 짧게 답한다(`BRIEF_ANSWER_SYSTEM_PROMPT`)."""
 
 
 @dataclass(slots=True)

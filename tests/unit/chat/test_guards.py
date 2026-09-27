@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
+from techletter.chat.agent.prompts import (
+    ANSWER_SYSTEM_PROMPT,
+    BRIEF_ANSWER_SYSTEM_PROMPT,
+    PLANNER_SYSTEM_PROMPT,
+)
 from techletter.chat.guards import (
     POLICY_BLOCK_MESSAGE,
     OutputGuard,
@@ -230,7 +234,12 @@ def test_old_prompt_headings_and_normal_security_text_pass(answer: str) -> None:
 
 @pytest.mark.parametrize("phrase", OUTPUT_LEAK_PHRASES)
 def test_output_leak_rules_are_bound_to_live_prompt_constants(phrase: str) -> None:
-    live_prompts = (ANSWER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT, _REWRITE_SYSTEM)
+    live_prompts = (
+        ANSWER_SYSTEM_PROMPT,
+        BRIEF_ANSWER_SYSTEM_PROMPT,
+        PLANNER_SYSTEM_PROMPT,
+        _REWRITE_SYSTEM,
+    )
 
     assert any(phrase in prompt for prompt in live_prompts)
     assert OutputGuard().inspect(phrase).action == "block"
