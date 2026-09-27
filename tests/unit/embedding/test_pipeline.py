@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from techletter.core.errors import PermanentError
+from techletter.core.errors import PermanentError, QuotaExceededError
 from techletter.embedding.chunker import Chunker
-from techletter.embedding.pipeline import ChunkRateLimiter, EmbeddingPipeline
+from techletter.embedding.pipeline import BUDGET_KEY, ChunkRateLimiter, EmbeddingPipeline
 from techletter.settings import EmbeddingSettings
 
 
@@ -28,11 +28,15 @@ def settings() -> EmbeddingSettings:
     return EmbeddingSettings(chunk_size=100, chunk_overlap=10)  # type: ignore[call-arg]
 
 
-def test_chunk_sizes_match_the_existing_vectors() -> None:
-    """이미 만들어진 벡터와 기준이 같아야 검색 결과가 흔들리지 않는다."""
+def test_chunks_are_sized_for_the_free_tier_quota() -> None:
+    """무료 등급은 청크 하나를 요청 한 번으로 센다. 2026-09-27에 1000자에서 2000자로 늘렸다.
+
+    기존 벡터(1000자)는 그대로 두고 새 글부터 적용한다. 크기가 섞이면 점수 분포가
+    조금 달라질 뿐 검색은 된다. 다시 바꿀 때는 이 트레이드오프를 보고 정한다.
+    """
     defaults = EmbeddingSettings()
 
-    assert defaults.chunk_size == 1000
+    assert defaults.chunk_size == 2000
     assert defaults.chunk_overlap == 200
 
 
@@ -159,3 +163,46 @@ async def test_batches_shrink_to_fit_the_minute_limit(settings) -> None:
 
     assert embedder.batches and all(size <= 3 for size in embedder.batches)
     assert clock.slept  # 3개를 넘는 순간부터 다음 1분을 기다렸다
+
+
+# ── 하루 청크 예산 ──────────────────────────────────────────────────
+class FakeBudget:
+    def __init__(self, used: int = 0) -> None:
+        self.used = used
+
+    async def remaining(self, provider: str, limit: int) -> int:
+        assert provider == BUDGET_KEY
+        return max(limit - self.used, 0)
+
+    async def consume(self, provider: str, amount: int = 1) -> int:
+        self.used += amount
+        return self.used
+
+
+async def test_embedding_is_counted_against_the_daily_budget() -> None:
+    settings = EmbeddingSettings(chunk_size=100, chunk_overlap=10, daily_chunk_budget=50)  # type: ignore[call-arg]
+    budget = FakeBudget()
+    pipeline = EmbeddingPipeline(Chunker(settings), FakeEmbedder(), settings, "m", budget=budget)  # type: ignore[arg-type]
+
+    result = await pipeline.run("가나다 " * 60)
+
+    assert budget.used == len(result.chunks)
+
+
+async def test_an_exhausted_budget_defers_without_calling_the_api() -> None:
+    settings = EmbeddingSettings(chunk_size=100, chunk_overlap=10, daily_chunk_budget=50)  # type: ignore[call-arg]
+    embedder = FakeEmbedder()
+    pipeline = EmbeddingPipeline(
+        Chunker(settings),
+        embedder,  # type: ignore[arg-type]
+        settings,
+        "m",
+        budget=FakeBudget(used=48),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(QuotaExceededError) as caught:
+        await pipeline.run("가나다 " * 60)
+
+    assert embedder.batches == []
+    assert caught.value.reset_at is not None
+    assert caught.value.reset_at.hour == 7
