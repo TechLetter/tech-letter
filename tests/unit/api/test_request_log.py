@@ -19,3 +19,14 @@ def test_other_queries_are_kept() -> None:
 
 def test_an_empty_query_stays_empty() -> None:
     assert redact_query(b"") == ""
+
+
+def test_uvicorn_access_log_is_off_after_logging_setup() -> None:
+    """uvicorn 접근 로그는 전체 URL(검색어 포함)을 찍으므로 끈다."""
+    import logging
+
+    from techletter.core.logging import setup_logging
+
+    setup_logging("INFO", "test")
+
+    assert logging.getLogger("uvicorn.access").disabled is True

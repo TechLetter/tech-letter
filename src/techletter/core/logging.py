@@ -103,6 +103,10 @@ def setup_logging(level: str = "INFO", service: str = "techletter") -> None:
         logger = logging.getLogger(name)
         logger.handlers.clear()
         logger.propagate = True
+    # 접근 로그는 `RequestTraceMiddleware`가 검색어를 가려서 남긴다. uvicorn은 이 로거에
+    # 핸들러가 닿으면(propagate) `access_log=False`여도 전체 URL을 찍는다 — 검색어가 그대로
+    # 남았다(2026-09-27). 끈다.
+    logging.getLogger("uvicorn.access").disabled = True
 
 
 def get_logger(name: str) -> logging.Logger:
