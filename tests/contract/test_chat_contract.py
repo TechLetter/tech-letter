@@ -195,6 +195,12 @@ async def test_a_chat_answer_matches_the_contract(client, user_headers, stub_cha
     }
     assert body["credits"] == {"consumed": 1, "remaining": 4}
     assert body["agent"]["model_id"] == "test-answer-model"
+    assert set(body["agent"]["usage"]) == {
+        "input_tokens",
+        "output_tokens",
+        "llm_calls",
+        "latency_ms",
+    }
     assert body["memory"]["status"] in {"ready", "pending", "failed"}
 
 
