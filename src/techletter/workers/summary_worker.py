@@ -14,10 +14,10 @@ from techletter.core.jobs.runner import JobRunner
 from techletter.core.jobs.types import JobType
 from techletter.core.llm.budget import DailyBudget
 from techletter.core.llm.chat import LangChainChatClient, LlmGateway, RoutingChatClient
+from techletter.core.llm.quota import QuotaGate, QuotaModel
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
-from techletter.core.ratelimit import MinuteRateLimiter
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.icons import BlogIconHandler
 from techletter.summary.pipeline import SummaryPipeline
@@ -34,40 +34,44 @@ logger = get_logger(__name__)
 
 
 def build_summarizer(container: Container) -> Summarizer:
-    """요약 워커와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다."""
+    """요약 워커와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다.
+
+    3 Flash → 3.5 Flash Lite → OpenRouter 무료 모델 순서다. 앞의 둘은 하루·분당
+    한도 안에서만 부른다(`QuotaGate`). 한 모델이 503·429로 실패하면 다음으로 간다.
+    """
     settings = container.settings
-    # 요약은 Gemini를 1순위로 쓰고 예산이 다하면 OpenRouter 무료 모델로
-    # 넘어간다. 후보 목록에 두 provider의 모델 id가 섞여 오므로,
-    # 하나의 provider만 아는 LangChainChatClient 로는 처리할 수 없다 —
-    # `RoutingChatClient`가 model_id를 보고 알맞은 클라이언트로 나눠 보낸다.
+    router = settings.router
+    google = settings.summary_llm.provider
+    quota = QuotaGate(
+        DailyBudget(container.db, reset_utc_hour=router.quota_reset_utc_hour),
+        [
+            # 1순위 장부 키는 예전 그대로(provider 이름) 둔다 — 오늘 쓴 양을 이어서 센다.
+            QuotaModel(
+                settings.summary_llm.model_name,
+                google,
+                router.summary_daily_budget,
+                router.summary_primary_rpm,
+            ),
+            QuotaModel(
+                router.summary_secondary_model,
+                f"{google}:{router.summary_secondary_model}",
+                router.summary_secondary_daily_budget,
+                router.summary_secondary_rpm,
+            ),
+        ],
+    )
+    # 후보에 두 provider의 모델 id가 섞인다. `RoutingChatClient`가 model_id를 보고
+    # 한도 모델은 Google 클라이언트로, 나머지는 OpenRouter 클라이언트로 보낸다.
     llm = LlmGateway(
-        ModelRouter(
-            settings.router,
-            ScouterClient(settings.router, container.db),
-            container.model_stats,
-        ),
+        ModelRouter(router, ScouterClient(router, container.db), container.model_stats),
         RoutingChatClient(
-            [settings.summary_llm.model_name, settings.router.summary_secondary_model],
+            quota.model_ids,
             LangChainChatClient(settings.summary_llm),
             LangChainChatClient(settings.chat_llm),
         ),
+        quota=quota,
     )
-    return Summarizer(
-        llm,
-        settings.summary,
-        budget=DailyBudget(container.db, reset_utc_hour=settings.router.quota_reset_utc_hour),
-        primary_model=settings.summary_llm.model_name,
-        primary_provider=settings.summary_llm.provider,
-        daily_limit=settings.router.summary_daily_budget,
-        secondary_model=settings.router.summary_secondary_model,
-        secondary_daily_limit=settings.router.summary_secondary_daily_budget,
-        rate_limiters={
-            settings.summary_llm.model_name: MinuteRateLimiter(settings.router.summary_primary_rpm),
-            settings.router.summary_secondary_model: MinuteRateLimiter(
-                settings.router.summary_secondary_rpm
-            ),
-        },
-    )
+    return Summarizer(llm, settings.summary)
 
 
 def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:

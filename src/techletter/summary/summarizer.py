@@ -19,9 +19,7 @@ from techletter.core.logging import get_logger
 from techletter.summary.topics import normalize_topics, topic_prompt_lines
 
 if TYPE_CHECKING:  # pragma: no cover
-    from techletter.core.llm.budget import DailyBudget
     from techletter.core.llm.chat import LlmGateway
-    from techletter.core.ratelimit import MinuteRateLimiter
     from techletter.settings import SummarySettings
 
 __all__ = [
@@ -137,61 +135,11 @@ def normalize_tags(values: Any, limit: int) -> list[str]:
 
 
 class Summarizer:
-    """요약 한 건.
+    """요약 한 건. 모델 순서와 한도는 `LlmGateway`가 정한다(`build_summarizer`)."""
 
-    `budget`과 `primary_model`을 주면 **1순위 모델을 예산 안에서만** 쓴다.
-    Gemini 무료 티어는 하루 20회라, 다 쓰고 나서 429를 맞고 재시도하는
-    대신 미리 다음 모델로 흘린다. `secondary_model`이 있으면 무료 모델 전에
-    그것을 자기 예산 안에서 쓴다(3.5 Flash Lite, 하루 500회).
-    """
-
-    def __init__(
-        self,
-        llm: LlmGateway,
-        settings: SummarySettings,
-        *,
-        budget: DailyBudget | None = None,
-        primary_model: str = "",
-        primary_provider: str = "google",
-        daily_limit: int = 0,
-        secondary_model: str = "",
-        secondary_daily_limit: int = 0,
-        rate_limiters: dict[str, MinuteRateLimiter] | None = None,
-    ) -> None:
+    def __init__(self, llm: LlmGateway, settings: SummarySettings) -> None:
         self._llm = llm
         self._settings = settings
-        self._budget = budget
-        self._primary_model = primary_model
-        self._primary_provider = primary_provider
-        self._daily_limit = daily_limit
-        self._secondary_model = secondary_model
-        self._secondary_daily_limit = secondary_daily_limit
-        self._rate_limiters = rate_limiters or {}
-
-    async def _candidates(self) -> list[str] | None:
-        """예산이 남았으면 1순위 모델을 맨 앞에 세우고, 그 자리에서 예산을 센다.
-
-        맨 앞에 선 모델은 반드시 한 번 호출된다. 실패한 호출도 구글 한도를 깎으므로
-        성공했을 때만 세면 장부가 실제 사용량보다 적게 나와 한도를 넘긴다.
-        """
-        if not (self._budget and self._primary_model):
-            return None
-        # 1순위 장부 키는 예전 그대로(provider 이름) 둔다 — 오늘 쓴 양을 이어서 센다.
-        tiers = [(self._primary_model, self._primary_provider, self._daily_limit)]
-        if self._secondary_model:
-            key = f"{self._primary_provider}:{self._secondary_model}"
-            tiers.append((self._secondary_model, key, self._secondary_daily_limit))
-        for model, key, limit in tiers:
-            if await self._budget.has_room(key, limit):
-                await self._budget.consume(key)
-                # 분당 한도에 닿았으면 무료 모델로 넘기지 않고 자리가 날 때까지 기다린다.
-                # 맨 앞 후보는 반드시 불리므로 여기서 한 번 세면 된다.
-                if (limiter := self._rate_limiters.get(model)) is not None:
-                    await limiter.acquire(1)
-                fallback = await self._llm.candidates("summary")
-                return [model, *(m for m in fallback if m != model)]
-            logger.info("summary model budget exhausted", extra={"model": model})
-        return None
 
     async def summarize(self, plain_text: str) -> SummaryResult:
         # 본문 최대가 91K자다. 그대로 넣으면 무료 모델의 컨텍스트를 넘고
@@ -203,7 +151,6 @@ class Summarizer:
             SYSTEM_INSTRUCTION,
             text,
             max_tokens=DEFAULT_MAX_TOKENS,
-            candidates=await self._candidates(),
         )
 
         error = payload.get("error")
@@ -241,7 +188,6 @@ class Summarizer:
             TOPIC_CLASSIFY_INSTRUCTION,
             json.dumps(posts, ensure_ascii=False),
             max_tokens=_CLASSIFY_MAX_TOKENS,
-            candidates=await self._candidates(),
         )
         wanted = {str(post["id"]) for post in posts}
         results: dict[str, list[str]] = {}

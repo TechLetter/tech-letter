@@ -14,6 +14,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from techletter.core.llm.errors import JsonOutputError
+from techletter.core.llm.quota import is_daily_quota_error
 from techletter.core.llm.stats import ModelPurpose
 from techletter.core.llm.usage import record_usage
 from techletter.core.logging import get_logger
@@ -21,6 +22,7 @@ from techletter.core.logging import get_logger
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable
 
+    from techletter.core.llm.quota import QuotaGate
     from techletter.core.llm.router import ModelRouter
     from techletter.settings import GenerativeLlmSettings
 
@@ -183,15 +185,37 @@ class RoutingChatClient(ChatClient):
 
 
 class LlmGateway:
-    """라우터 + 클라이언트. 도메인 코드가 쓰는 진입점이다."""
+    """라우터 + 클라이언트. 도메인 코드가 쓰는 진입점이다.
 
-    def __init__(self, router: ModelRouter, client: ChatClient) -> None:
+    `quota`를 주면 그 모델들을 라우터 후보 앞에 순서대로 세우고, 부르기 직전마다
+    한도를 확인한다(`QuotaGate`).
+    """
+
+    def __init__(
+        self, router: ModelRouter, client: ChatClient, *, quota: QuotaGate | None = None
+    ) -> None:
         self._router = router
         self._client = client
+        self._quota = quota
 
     async def candidates(self, purpose: ModelPurpose | str) -> list[str]:
-        """라우터가 고른 후보. 호출자가 앞에 모델을 끼워 넣을 때 쓴다."""
-        return await self._router.candidates(_purpose(purpose))
+        """한도 모델 → 라우터가 고른 모델 순서."""
+        routed = await self._router.candidates(_purpose(purpose))
+        if self._quota is None:
+            return routed
+        first = self._quota.model_ids
+        return [*first, *(m for m in routed if m not in first)]
+
+    async def _call(self, model_id: str, system: str, user: str, max_tokens: int) -> str:
+        if self._quota is None:
+            return await self._client.complete(model_id, system, user, max_tokens=max_tokens)
+        await self._quota.acquire(model_id)
+        try:
+            return await self._client.complete(model_id, system, user, max_tokens=max_tokens)
+        except Exception as exc:
+            if is_daily_quota_error(exc):
+                await self._quota.exhaust(model_id)
+            raise
 
     async def complete(
         self,
@@ -203,9 +227,11 @@ class LlmGateway:
         candidates: list[str] | None = None,
     ) -> tuple[str, str]:
         """텍스트 응답과 실제로 답한 모델 id를 준다."""
+        if candidates is None:
+            candidates = await self.candidates(purpose)
         return await self._router.run(
             _purpose(purpose),
-            lambda model_id: self._client.complete(model_id, system, user, max_tokens=max_tokens),
+            lambda model_id: self._call(model_id, system, user, max_tokens),
             candidates=candidates,
         )
 
@@ -225,7 +251,8 @@ class LlmGateway:
         """
 
         async def call(model_id: str) -> dict[str, Any]:
-            raw = await self._client.complete(model_id, system, user, max_tokens=max_tokens)
-            return extract_json(raw)
+            return extract_json(await self._call(model_id, system, user, max_tokens))
 
+        if candidates is None:
+            candidates = await self.candidates(purpose)
         return await self._router.run(_purpose(purpose), call, candidates=candidates)

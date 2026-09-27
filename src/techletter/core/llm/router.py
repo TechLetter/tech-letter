@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from techletter.core.errors import PermanentError, RetryableError
 from techletter.core.llm.errors import JsonOutputError, classify_llm_error
+from techletter.core.llm.quota import QuotaSkipped
 from techletter.core.llm.stats import ModelPurpose
 from techletter.core.logging import get_logger
 
@@ -68,8 +69,8 @@ class ModelRouter:
 
         1. 지금 응답하는 모델 전체, 추천 점수(성능×가용성×속도) 높은 순 — scouter가 정렬
         2. scouter가 죽었으면 정적 폴백
-        성적이 나쁜 모델은 뒤로 민다. 요약은 이 앞에 Gemini를 하루 예산만큼 먼저 쓴다
-        (`Summarizer`).
+        성적이 나쁜 모델은 뒤로 민다. 요약은 이 앞에 한도가 있는 Gemini 모델을 세운다
+        (`LlmGateway`의 `QuotaGate`).
         """
         healthy = await self._scouter.healthy_models()
         ordered = [m.model_id for m in healthy]
@@ -95,6 +96,7 @@ class ModelRouter:
     ) -> tuple[T, str]:
         """후보를 순서대로 시도하고 (결과, 사용한 모델)을 준다.
 
+        - `QuotaSkipped`: 오늘 예산을 다 쓴 모델이다. 성적에 적지 않고 다음 모델로.
         - `JsonOutputError`: 같은 모델을 다시 시도하지 않고 다음 모델로.
         - 쿼터/레이트리밋: 다음 모델로. 전부 실패하면 마지막 원인을 올린다.
         - `PermanentError`: 입력·프롬프트 문제이므로 즉시 전파한다.
@@ -108,6 +110,9 @@ class ModelRouter:
         for model_id in models:
             try:
                 result = await call(model_id)
+            except QuotaSkipped as exc:
+                last_error = exc
+                continue
             except PermanentError:
                 await self._record(model_id, purpose, ok=False)
                 raise
