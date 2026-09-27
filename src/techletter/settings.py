@@ -174,6 +174,11 @@ class RouterSettings(BaseSettings):
     2초 안팎이다. OpenRouter 무료 1위(형식 무시)·2위(20초+)보다 낫다."""
     summary_secondary_daily_budget: int = Field(default=450, alias="SUMMARY_SECONDARY_DAILY_BUDGET")
     """무료 등급 하루 500회 중 워커 몫. 나머지는 여유분."""
+    summary_primary_rpm: int = Field(default=4, alias="SUMMARY_PRIMARY_RPM")
+    """1순위 분당 호출 상한. 무료 등급 한도 5회에서 SDK 재시도 몫을 뺐다(2026-09-27
+    대시보드에 9/5로 넘은 기록). 넘기면 429로 폴백하는 대신 기다린다. 0이면 끈다."""
+    summary_secondary_rpm: int = Field(default=12, alias="SUMMARY_SECONDARY_RPM")
+    """2순위 분당 호출 상한. 무료 등급 한도 15회."""
     static_fallback: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="LLM_STATIC_FALLBACK_MODELS"
     )

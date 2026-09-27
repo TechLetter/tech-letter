@@ -17,6 +17,7 @@ from techletter.core.llm.chat import LangChainChatClient, LlmGateway, RoutingCha
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
+from techletter.core.ratelimit import MinuteRateLimiter
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.icons import BlogIconHandler
 from techletter.summary.pipeline import SummaryPipeline
@@ -60,6 +61,12 @@ def build_summarizer(container: Container) -> Summarizer:
         daily_limit=settings.router.summary_daily_budget,
         secondary_model=settings.router.summary_secondary_model,
         secondary_daily_limit=settings.router.summary_secondary_daily_budget,
+        rate_limiters={
+            settings.summary_llm.model_name: MinuteRateLimiter(settings.router.summary_primary_rpm),
+            settings.router.summary_secondary_model: MinuteRateLimiter(
+                settings.router.summary_secondary_rpm
+            ),
+        },
     )
 
 
