@@ -166,6 +166,14 @@ class RouterSettings(BaseSettings):
     min_attempts_for_demotion: int = 10
     quota_reset_utc_hour: int = Field(default=7, alias="LLM_QUOTA_RESET_UTC_HOUR")
     summary_daily_budget: int = Field(default=20, alias="SUMMARY_DAILY_BUDGET")
+    summary_secondary_model: str = Field(
+        default="gemini-3.5-flash-lite", alias="SUMMARY_SECONDARY_MODEL"
+    )
+    """1순위(하루 20회)를 다 쓰면 무료 모델로 가기 전에 쓰는 Gemini 모델. 빈 값이면 끈다.
+    2026-09-27 비교(같은 글 6개): 3 Flash보다 조금 덜 구체적이지만 형식을 잘 지키고
+    2초 안팎이다. OpenRouter 무료 1위(형식 무시)·2위(20초+)보다 낫다."""
+    summary_secondary_daily_budget: int = Field(default=450, alias="SUMMARY_SECONDARY_DAILY_BUDGET")
+    """무료 등급 하루 500회 중 워커 몫. 나머지는 여유분."""
     static_fallback: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="LLM_STATIC_FALLBACK_MODELS"
     )

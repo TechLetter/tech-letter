@@ -19,6 +19,8 @@ from techletter.core.llm.usage import record_usage
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Iterable
+
     from techletter.core.llm.router import ModelRouter
     from techletter.settings import GenerativeLlmSettings
 
@@ -154,18 +156,21 @@ class RoutingChatClient(ChatClient):
     고정된다 — Google용으로 만든 클라이언트에 OpenRouter 모델 id
     (`nvidia/...:free`)를 넣으면 Gemini API가 "그런 모델 없다"며 404를 준다.
 
-    `primary_model`과 정확히 일치하는 model_id만 `primary`로 보내고, 나머지는
+    `primary_models`에 든 model_id(Gemini 1·2순위)만 `primary`로 보내고, 나머지는
     전부 `fallback`(OpenRouter)으로 보낸다 — 후보 목록의 나머지는 전부
     `router.candidates()`가 만든 OpenRouter 모델 id이기 때문이다.
     """
 
-    def __init__(self, primary_model: str, primary: ChatClient, fallback: ChatClient) -> None:
-        self._primary_model = primary_model
+    def __init__(
+        self, primary_models: str | Iterable[str], primary: ChatClient, fallback: ChatClient
+    ) -> None:
+        names = [primary_models] if isinstance(primary_models, str) else list(primary_models)
+        self._primary_models = {name for name in names if name}
         self._primary = primary
         self._fallback = fallback
 
     def _pick(self, model_id: str) -> ChatClient:
-        return self._primary if model_id == self._primary_model else self._fallback
+        return self._primary if model_id in self._primary_models else self._fallback
 
     async def complete(
         self, model_id: str, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_TOKENS
