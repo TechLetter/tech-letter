@@ -21,6 +21,7 @@ from techletter.summary.topics import normalize_topics, topic_prompt_lines
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.budget import DailyBudget
     from techletter.core.llm.chat import LlmGateway
+    from techletter.core.ratelimit import MinuteRateLimiter
     from techletter.settings import SummarySettings
 
 __all__ = [
@@ -155,6 +156,7 @@ class Summarizer:
         daily_limit: int = 0,
         secondary_model: str = "",
         secondary_daily_limit: int = 0,
+        rate_limiters: dict[str, MinuteRateLimiter] | None = None,
     ) -> None:
         self._llm = llm
         self._settings = settings
@@ -164,6 +166,7 @@ class Summarizer:
         self._daily_limit = daily_limit
         self._secondary_model = secondary_model
         self._secondary_daily_limit = secondary_daily_limit
+        self._rate_limiters = rate_limiters or {}
 
     async def _candidates(self) -> list[str] | None:
         """예산이 남았으면 1순위 모델을 맨 앞에 세우고, 그 자리에서 예산을 센다.
@@ -181,6 +184,10 @@ class Summarizer:
         for model, key, limit in tiers:
             if await self._budget.has_room(key, limit):
                 await self._budget.consume(key)
+                # 분당 한도에 닿았으면 무료 모델로 넘기지 않고 자리가 날 때까지 기다린다.
+                # 맨 앞 후보는 반드시 불리므로 여기서 한 번 세면 된다.
+                if (limiter := self._rate_limiters.get(model)) is not None:
+                    await limiter.acquire(1)
                 fallback = await self._llm.candidates("summary")
                 return [model, *(m for m in fallback if m != model)]
             logger.info("summary model budget exhausted", extra={"model": model})

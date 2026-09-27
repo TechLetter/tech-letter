@@ -299,6 +299,37 @@ async def test_both_spent_falls_back_to_the_router(settings) -> None:
     assert budget.consumed == []
 
 
+class RecordingLimiter:
+    def __init__(self) -> None:
+        self.acquired = 0
+
+    async def acquire(self, count: int) -> None:
+        self.acquired += count
+
+
+async def test_the_chosen_gemini_waits_for_its_per_minute_limit(settings) -> None:
+    """분당 한도는 실제로 맨 앞에 선 모델의 제한기에서만 센다."""
+    llm = FakeLlm(payload(), model="gemini-3.5-flash-lite")
+    primary, secondary = RecordingLimiter(), RecordingLimiter()
+    summarizer = Summarizer(
+        llm,  # type: ignore[arg-type]
+        settings,
+        budget=LedgerBudget({"google": False}),  # type: ignore[arg-type]
+        primary_model="gemini-3-flash-preview",
+        daily_limit=20,
+        secondary_model="gemini-3.5-flash-lite",
+        secondary_daily_limit=450,
+        rate_limiters={  # type: ignore[dict-item]
+            "gemini-3-flash-preview": primary,
+            "gemini-3.5-flash-lite": secondary,
+        },
+    )
+
+    await summarizer.summarize("본문")
+
+    assert (primary.acquired, secondary.acquired) == (0, 1)
+
+
 async def test_without_a_budget_the_router_decides(settings) -> None:
     llm = FakeLlm(payload())
 
