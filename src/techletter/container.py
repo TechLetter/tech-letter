@@ -21,6 +21,7 @@ from techletter.core.logging import get_logger
 if TYPE_CHECKING:  # pragma: no cover
     from pymongo.asynchronous.database import AsyncDatabase
 
+    from techletter.chat.agent import ChatAgent
     from techletter.chat.sessions import ChatSessionService
     from techletter.chat.suggested_questions import SuggestedQuestionService
     from techletter.chat.use_case import ChatUseCase
@@ -29,8 +30,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.service import BlogService, PostService
     from techletter.content.trends import TrendsService
     from techletter.core.db.qdrant import VectorStore
+    from techletter.core.llm.chat import LlmGateway
     from techletter.core.llm.stats import ModelStatsStore
     from techletter.search.service import SearchService
+    from techletter.search.summary import SearchSummaryService
     from techletter.settings import Settings
     from techletter.users.auth_service import AuthService
     from techletter.users.credits import CreditService
@@ -57,7 +60,9 @@ class Container:
     _db: AsyncDatabase | None = None
     _vector_store: VectorStore | None = None
     _chat: ChatUseCase | None = None
+    _chat_agent: ChatAgent | None = None
     _search: SearchService | None = None
+    _search_summary: SearchSummaryService | None = None
 
     # ── 수명주기 ───────────────────────────────────────────────────
     @classmethod
@@ -70,6 +75,7 @@ class Container:
         import techletter.core.llm.model_history  # noqa: PLC0415
         import techletter.core.llm.model_scan  # noqa: PLC0415
         import techletter.core.llm.stats  # noqa: PLC0415
+        import techletter.search.summary  # noqa: PLC0415
         import techletter.users.repositories  # noqa: F401, PLC0415
 
         mongo = MongoConnection(settings.mongo)
@@ -242,18 +248,24 @@ class Container:
             self._chat = self._build_chat()
         return self._chat
 
-    def _build_chat(self) -> ChatUseCase:
-        from techletter.chat.agent import (  # noqa: PLC0415
-            AnswerGenerator,
-            ChatAgent,
-            PostLookupTool,
-            QueryPlanner,
-            VectorSearchTool,
-        )
-        from techletter.chat.memory import MemoryBuilder  # noqa: PLC0415
-        from techletter.chat.use_case import ChatUseCase  # noqa: PLC0415
+    @property
+    def chat_agent(self) -> ChatAgent:
+        """챗봇과 검색 AI 요약이 같은 에이전트를 쓴다."""
+        if self._chat_agent is None:
+            self._chat_agent = self._build_chat_agent()
+        return self._chat_agent
+
+    @property
+    def search_summary(self) -> SearchSummaryService:
+        """진행 중인 요약을 요청 사이에 나눠 써야 해서 한 번만 만든다."""
+        if self._search_summary is None:
+            from techletter.search.summary import SearchSummaryService  # noqa: PLC0415
+
+            self._search_summary = SearchSummaryService(self.db, self.chat_agent, self.sessions)
+        return self._search_summary
+
+    def _chat_llm(self) -> LlmGateway:
         from techletter.core.llm.chat import LangChainChatClient, LlmGateway  # noqa: PLC0415
-        from techletter.core.llm.embeddings import LangChainEmbedder  # noqa: PLC0415
         from techletter.core.llm.router import ModelRouter  # noqa: PLC0415
         from techletter.core.llm.scouter import ScouterClient  # noqa: PLC0415
 
@@ -262,8 +274,20 @@ class Container:
             ScouterClient(self.settings.router, self.db),
             stats=self.model_stats,
         )
-        llm = LlmGateway(router, LangChainChatClient(self.settings.chat_llm))
-        agent = ChatAgent(
+        return LlmGateway(router, LangChainChatClient(self.settings.chat_llm))
+
+    def _build_chat_agent(self) -> ChatAgent:
+        from techletter.chat.agent import (  # noqa: PLC0415
+            AnswerGenerator,
+            ChatAgent,
+            PostLookupTool,
+            QueryPlanner,
+            VectorSearchTool,
+        )
+        from techletter.core.llm.embeddings import LangChainEmbedder  # noqa: PLC0415
+
+        llm = self._chat_llm()
+        return ChatAgent(
             planner=QueryPlanner(llm),
             posts=PostLookupTool(self.posts),
             search=VectorSearchTool(
@@ -275,11 +299,16 @@ class Container:
             ),
             answers=AnswerGenerator(llm),
         )
+
+    def _build_chat(self) -> ChatUseCase:
+        from techletter.chat.memory import MemoryBuilder  # noqa: PLC0415
+        from techletter.chat.use_case import ChatUseCase  # noqa: PLC0415
+
         return ChatUseCase(
             sessions=self.sessions,
             credits=self.credits,
-            memory=MemoryBuilder(llm, self.settings.chat),
-            agent=agent,
+            memory=MemoryBuilder(self._chat_llm(), self.settings.chat),
+            agent=self.chat_agent,
             queue=self.queue,
             settings=self.settings.chat,
         )

@@ -213,6 +213,8 @@
 | GET | `/filters/blogs` | - | `categories[], tags[]` | `{items,total}` |
 | GET | `/filters/topic-groups` | - | | `{items,total}`(2.8) |
 | GET | `/search/suggest` | - | `q` | `{items,total}`(2.10). 2글자 미만이면 빈 목록 |
+| POST | `/search/summary` | 필수 | `{query, post_ids}`(post_ids 1~8개) | `{key, answer, sources, model_id, cached}`. 크레딧 없음, 7일 캐시. 캐시에 없는 요청이 분당 6회를 넘으면 429 `llm.rate_limited`, post_ids가 틀리면 400 `request.invalid` |
+| POST | `/search/summary/continue` | 필수 | `{key}` | `{session_id}` — 요약의 질문·답을 담은 챗봇 세션. 만료된 key면 404 |
 | GET | `/blogs/{id}/icon` | - | | `200 image/webp`(+`ETag`, `If-None-Match` 일치 시 `304`) / 아이콘 없으면 **`204`** 본문 없음. 둘 다 `Cache-Control: public, max-age=3600` |
 | GET | `/trends/weekly` | - | `limit`(기본 8, 최대 30) | 2.7 |
 | GET | `/llm-models/summary` | - | | 2.11 |
@@ -239,13 +241,13 @@
 | POST | `/chat/sessions` | | `201 ChatSession` |
 | GET | `/chat/sessions/{id}` | | `ChatSession`(messages 포함) / 400 `chat.session_not_found` |
 | DELETE | `/chat/sessions/{id}` | | `204` / 400 `chat.session_not_found` |
-| POST | `/chat/messages` | `{query, session_id?, model_id?, post_ids?}` | `200 ChatAnswer` |
-| POST | `/chat/messages/stream` | `{query, session_id?, model_id?, post_ids?}` | SSE |
+| POST | `/chat/messages` | `{query, session_id?, model_id?}` | `200 ChatAnswer` |
+| POST | `/chat/messages/stream` | `{query, session_id?, model_id?}` | SSE |
 
 처리 순서: 프롬프트 가드 → 세션 검증 → 크레딧 1 차감 → 에이전트 → 성공 시 메시지 저장 / 실패 시 환불.
 `model_id`는 선택 필드이며 무료 모델 카탈로그에 있는 id만 허용한다. 생략하면 자동으로
 모델을 고른다. 유효하지 않은 id는 400 `request.invalid`(`details.field="model_id"`)다.
-`post_ids`(최대 8개, ObjectId 문자열, 중복은 제거)를 주면 플래너 없이 그 글들만 근거로 짧게 답한다 — 검색 결과의 "AI 요약"([search.md](search.md) §5). 형식이 틀리거나 9개 이상이면 400 `request.invalid`(크레딧 미차감).
+검색 결과의 "AI 요약"은 채팅이 아니라 `POST /search/summary`다(아래 검색 절, [search.md](search.md) §5).
 에러: `policy.blocked`(403) · `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).
 
 ### 3.4 어드민 (`role=admin`)
