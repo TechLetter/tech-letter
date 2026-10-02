@@ -247,6 +247,48 @@ class VectorStore:
             for point in response.points
         ]
 
+    async def search_in_posts(
+        self,
+        query_vector: list[float],
+        model_name: str,
+        post_ids: list[str],
+        *,
+        per_post: int = 2,
+    ) -> dict[str, list[SearchHit]]:
+        """고른 글마다 질의에 가장 가까운 청크를 `per_post`개까지 준다.
+
+        챗봇은 하이브리드 검색으로 글을 먼저 고른 뒤 그 글 안에서 근거를 고른다.
+        전역 상위 청크만 보면 어휘로 찾은 글의 본문을 못 읽는다.
+        """
+        if not query_vector or not post_ids:
+            return {}
+        collection = self.collection_for(model_name, len(query_vector))
+        try:
+            response = await self._client.query_points_groups(
+                collection_name=collection,
+                query=query_vector,
+                group_by="post_id",
+                limit=len(post_ids),
+                group_size=per_post,
+                query_filter=Filter(
+                    must=[FieldCondition(key="post_id", match=MatchAny(any=post_ids))]
+                ),
+                with_payload=True,
+            )
+        except Exception as exc:
+            if _is_collection_not_found_error(exc):
+                return {}
+            raise VectorStoreUnavailableError(
+                f"qdrant grouped search failed for collection: {collection}"
+            ) from exc
+        return {
+            str(group.id): [
+                SearchHit(score=point.score, payload=dict(point.payload or {}))
+                for point in group.hits
+            ]
+            for group in response.groups
+        }
+
     # ── 어휘(BM25) 색인 ────────────────────────────────────────────
     @property
     def lexical_collection(self) -> str:

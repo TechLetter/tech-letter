@@ -4,7 +4,7 @@
 
 | 층 | 대상 | 도구 | 마커 |
 |---|---|---|---|
-| **단위** | 도메인 서비스, 가드, 플래너, 파서, 검증기, 잡 정책, LLM 라우터, JWT, 관용 파서 | pytest + Fake | (기본) |
+| **단위** | 도메인 서비스, 챗봇 범위 읽기(scope)·근거·출력 가드, 파서, 검증기, 잡 정책, LLM 라우터, JWT, 관용 파서 | pytest + Fake | (기본) |
 | **계약** | API 라우트의 응답 구조, SSE 프레임 | pytest + httpx `AsyncClient` | `integration` + `contract` |
 | **통합** | 레포지토리↔Mongo, 잡 큐 클레임/재시도, Qdrant, 워커 파이프라인 | 실행 중인 Mongo/Qdrant 컨테이너 필요 | `integration` |
 | **E2E** | 프론트+백엔드 실제 브라우저 시나리오 | Playwright(pytest-playwright) | `e2e` |
@@ -29,7 +29,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 - `core/pagination`: 관용 파싱 표(`""`, `abc`, `0`, `-1`, `101`).
 - `core/jobs/policy`: 백오프 표, 쿼터 리셋 계산(리셋 시각 경계·jitter), attempt 롤백, max 초과 시 dead 전이, `dead_retryable_alert` 임계치.
 - `core/jobs/queue`: 중복 억제, 동시 클레임 시 단일 승자, 스테일 락 회수, `count_dead`.
-- `core/llm/router`: 요약 체인∩헬스 순서, 챗봇·플래너 자동 후보, 헬스 기록 없을 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
+- `core/llm/router`: 요약 체인∩헬스 순서, 챗봇 자동 후보, 헬스 기록 없을 시 정적 폴백, 429 시 다음 모델, JSON 실패 시 다음 모델, 전부 실패 시 예외 종류.
 - `core/llm/chat`: `RoutingChatClient`가 `model_id`로 올바른 provider 클라이언트를 고르는지.
 - `chat/use_case`: 순서 보장(가드 실패 시 크레딧 미차감, 차감 실패 시 에이전트 미호출, 에이전트 실패 시 환불 호출).
 - `summary/pipeline`: 예외 분류(렌더 실패/봇 차단/파싱 실패 → 각각 다른 처리).

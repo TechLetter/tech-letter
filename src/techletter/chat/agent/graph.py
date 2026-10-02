@@ -1,56 +1,110 @@
 """에이전트 실행.
 
-단계는 전부 async다 — 동기 코드가 섞이면 요청 하나가 이벤트 루프를 통째로 막는다.
+흐름: 범위 읽기(코드) → 근거 모으기(하이브리드 검색 → 글 안의 청크) → 답변 LLM 1회.
 
-흐름: 계획 → (도구 하나) → 답변 → 출력 가드.
-사용자가 포스트를 골라 왔으면(`post_ids`) 계획을 건너뛰고 그 글만 읽는다 —
-무엇을 근거로 할지 이미 정해져 있어 검색할 이유가 없다.
-입력 가드와 메모리 구성은 여기 밖에 있다 — 크레딧을 깎기 전에 끝나야 한다.
+- 목록 요청은 LLM 없이 제목·링크를 나열한다.
+- "거기서", "그 글"처럼 직전 답을 가리키면 그 답의 출처 글 안에서 답한다.
+- 짧은 후속 질문("보안은?")은 직전 질문을 붙여 검색한다. LLM 재작성은 하지 않는다.
+- `post_ids`(검색 결과 AI 요약)는 고른 글의 요약본만 읽고 짧게 답한다.
 
-에이전트 인스턴스는 프로세스마다 하나이고 요청 여러 개가 동시에 쓴다.
-그래서 실행별 상태(진행 상황, 콜백)는 **전부 state 안에** 둔다. `self`에
-붙이면 동시 요청끼리 활동 목록을 섞어 쓴다.
+예전의 LLM 플래너(작업 6종 JSON)와 질문 재작성은 없앴다. 플래너가 없는 블로그·태그를
+지어내 관련 글을 놓쳤고(2026-09-27 기준선 20문항 중 3건), 재작성은 후속 질문마다
+호출을 하나 더 썼다.
+
+에이전트 인스턴스는 프로세스마다 하나이고 요청 여러 개가 동시에 쓴다. 실행별 상태는
+지역 변수에 둔다.
 """
 
 from __future__ import annotations
 
+import re
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from techletter.chat.agent.answer import build_post_context
-from techletter.chat.agent.policies import should_return_no_result
-from techletter.chat.agent.state import Activity, ChatPlan, ToolResult
+from techletter.chat.agent.answer import build_post_context, format_post_list
+from techletter.chat.agent.prompts import NO_MATCH_ANSWER
+from techletter.chat.agent.scope import BlogRef, Scope, is_reference, read_scope
+from techletter.chat.agent.state import Activity, PostConstraints, ToolResult
 from techletter.chat.guards import OutputGuard
+from techletter.content.models import ListPostsFilter
 from techletter.core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Awaitable, Callable
 
     from techletter.chat.agent.answer import AnswerGenerator
-    from techletter.chat.agent.planner import QueryPlanner
-    from techletter.chat.agent.state import ChatTask
-    from techletter.chat.agent.tools import PostLookupTool, VectorSearchTool
+    from techletter.chat.agent.evidence import EvidenceBuilder
+    from techletter.chat.agent.tools import PostLookupTool
     from techletter.chat.memory import MemoryContext
-
-    type Step = Callable[[AgentState], Awaitable[dict[str, Any]]]
+    from techletter.content.repositories import BlogRepository
 
 __all__ = ["ActivityRecorder", "AgentResult", "ChatAgent"]
 
 logger = get_logger(__name__)
 
 BRIEF_MAX_POSTS = 5
+_BLOGS_TTL_SECONDS = 600
+
+# 목록 요청에서 검색어가 아닌 말. 이것을 빼고도 남는 말이 있으면 그 말로 검색해 나열한다.
+_LIST_NOISE = re.compile(
+    r"목록|리스트업|리스트|보여\s*줘|알려\s*줘|뽑아\s*줘|추천\s*해?\s*줘|정리\s*해?\s*줘|"
+    r"이번\s*주|지난\s*주|이번\s*달|지난\s*달|\d+\s*(?:개|편|건|월|년)|\([^)]*\)|[?.!,~]",
+    re.I,
+)
+_LIST_STOPWORDS = frozenset(
+    {
+        "좀",
+        "최근",
+        "최신",
+        "요즘",
+        "새로",
+        "새로운",
+        "올라온",
+        "나온",
+        "쓴",
+        "글",
+        "글들",
+        "포스트",
+        "아티클",
+        "게시물",
+        "블로그",
+        "기술",
+        "테크",
+        "카테고리",
+        "주제",
+        "관련",
+        "관련된",
+        "대한",
+        "대해",
+        "위주",
+        "있어",
+        "있나",
+        "뭐",
+        "어떤",
+        "무슨",
+        "오늘",
+        "어제",
+        "올해",
+        "작년",
+        "만",
+    }
+)
+_PARTICLE = re.compile(r"(?:에서|으로|에는|에도|에|의|은|는|이|가|을|를|로|도|만|들)$")
+# 이보다 뜻 있는 말이 적은 후속 질문은 직전 질문을 붙여 검색한다("보안 문제는?").
+_FOLLOW_UP_MIN_TERMS = 3
 
 
-def _apply(state: AgentState, changes: dict[str, Any]) -> None:
-    for key, value in changes.items():
-        setattr(state, key, value)
+def _terms(text: str) -> list[str]:
+    """조사를 뗀 두 글자 이상의 낱말."""
+    words = (_PARTICLE.sub("", w) for w in re.split(r"\s+", text))
+    return [w for w in words if len(w) >= 2 and w not in _LIST_STOPWORDS]
 
 
 _LABELS = {
-    "plan": "질문 의도 분석",
+    "search": "관련 글 검색",
     "list_posts": "포스트 목록 조회",
     "read_posts": "본문/요약 조회",
-    "search": "내용 기반 검색",
     "answer": "답변 생성",
 }
 
@@ -81,21 +135,6 @@ class ActivityRecorder:
             await self._sink(activity)
 
 
-@dataclass
-class AgentState:
-    """단계들이 주고받는 값. 각 단계가 돌려준 dict를 여기에 덮어쓴다."""
-
-    query: str = ""
-    search_query: str = ""
-    post_ids: list[str] = field(default_factory=list)
-    memory_metadata: dict[str, Any] = field(default_factory=dict)
-    recorder: ActivityRecorder = field(default_factory=ActivityRecorder)
-    plan: ChatPlan = field(default_factory=ChatPlan)
-    tool_result: ToolResult = field(default_factory=ToolResult)
-    answer: str = ""
-    model_id: str | None = None
-
-
 @dataclass(slots=True)
 class AgentResult:
     answer: str
@@ -106,125 +145,58 @@ class AgentResult:
     model_id: str | None = None
 
 
+def _no_match(answer: str) -> bool:
+    """모델이 "관련 글을 찾지 못했습니다"로 시작하면 뒤에 설명을 붙였어도 없는 것이다."""
+    return answer.strip().startswith(NO_MATCH_ANSWER)
+
+
+_CITATION = re.compile(r"\s*\[\d{1,2}\](?:\[\d{1,2}\])*")
+_NO_MATCH_NOTE_CHARS = 300
+
+
+def _no_match_answer(answer: str) -> str:
+    """출처를 비우니 `[n]`은 지운다. 덧붙인 설명은 짧게 남긴다(무엇은 있는지, 왜 범위 밖인지)."""
+    text = _CITATION.sub("", answer.strip())
+    return text if len(text) <= _NO_MATCH_NOTE_CHARS else text[:_NO_MATCH_NOTE_CHARS].rstrip() + "…"
+
+
+def _describe(scope: Scope) -> str:
+    parts = [
+        p for p in (scope.period_label, f"{scope.blog.name} 블로그" if scope.blog else "") if p
+    ]
+    return " ".join(parts)
+
+
 class ChatAgent:
     def __init__(
         self,
         *,
-        planner: QueryPlanner,
+        evidence: EvidenceBuilder,
         posts: PostLookupTool,
-        search: VectorSearchTool,
         answers: AnswerGenerator,
+        blogs: BlogRepository | None = None,
         output_guard: OutputGuard | None = None,
     ) -> None:
-        self._planner = planner
+        self._evidence = evidence
         self._posts = posts
-        self._search = search
         self._answers = answers
+        self._blog_repo = blogs
+        self._blogs: list[BlogRef] = []
+        self._blogs_at = 0.0
+        # 검색 AI 요약에만 쓴다. 챗봇 답변은 덮어쓰지 않는다.
         self._output_guard = output_guard or OutputGuard()
-        self._tools: dict[ChatTask, Step] = {
-            "list_posts": self._list_posts,
-            # 요약/본문 기반 답변은 목록을 뽑은 뒤 본문을 채운다.
-            "summarize_posts": self._read_posts,
-            "answer_from_posts": self._read_posts,
-            "semantic_search_posts": self._semantic_search,
-            "general_rag": self._general_rag,
-            "no_result": self._no_result,
-        }
 
-    # ── 단계 ───────────────────────────────────────────────────────
-    async def _plan(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("plan", "running")
-        plan = await self._planner.plan(state.search_query, state.memory_metadata)
-        await state.recorder.emit("plan", "completed")
-        return {"plan": plan}
-
-    async def _list_posts(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("list_posts", "running")
-        result = await self._posts.list_posts(state.plan.constraints)
-        await state.recorder.emit("list_posts", "completed")
-        return {"tool_result": result}
-
-    async def _read_posts(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("list_posts", "running")
-        result = await self._posts.list_posts(state.plan.constraints)
-        await state.recorder.emit("list_posts", "completed")
-        if should_return_no_result(state.plan, result):
-            return {"tool_result": result}
-
-        await state.recorder.emit("read_posts", "running")
-        result.posts = await self._posts.hydrate(result.posts)
-        result.context = build_post_context(result.posts)
-        await state.recorder.emit("read_posts", "completed")
-        return {"tool_result": result}
-
-    async def _read_selected(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("read_posts", "running")
-        # 짧은 요약은 상위 몇 편이면 충분하다. 출처 번호도 이 순서를 따른다.
-        result = await self._posts.get_posts(state.post_ids[:BRIEF_MAX_POSTS])
-        if result.status == "ok":
-            result.context = build_post_context(result.posts, summaries_only=True)
-        await state.recorder.emit("read_posts", "completed")
-        return {"tool_result": result}
-
-    async def _semantic_search(self, state: AgentState) -> dict[str, Any]:
-        # 범위를 못 박은 질문은 메타데이터 조회가 정확하다. 벡터 검색은
-        # 날짜·블로그 조건을 지키지 못한다.
-        if state.plan.strict_scope and state.plan.constraints.has_scope():
-            return await self._read_posts(state)
-
-        await state.recorder.emit("search", "running")
-        result = await self._search.search(state.search_query, state.plan.constraints)
-        await state.recorder.emit("search", "completed")
-        return {"tool_result": result}
-
-    async def _general_rag(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("search", "running")
-        result = await self._search.search(state.search_query)
-        await state.recorder.emit("search", "completed")
-        return {"tool_result": result}
-
-    async def _no_result(self, state: AgentState) -> dict[str, Any]:
-        del state  # 조건 없이 고정 응답을 낸다
-        return {
-            "tool_result": ToolResult(
-                status="no_result", message="요청 조건에 맞는 포스트를 찾지 못했습니다."
-            )
-        }
-
-    async def _complete_sources(self, state: AgentState) -> None:
-        """출처 카드용 필드를 채운다. 실패해도 답변은 막지 않는다."""
-        sources = state.tool_result.sources
-        if not any(s.blog_id is None or s.published_at is None for s in sources):
-            return
-        try:
-            state.tool_result.sources = await self._posts.complete_sources(sources)
-        except Exception:
-            logger.warning("source completion failed", exc_info=True)
-
-    async def _answer(self, state: AgentState) -> dict[str, Any]:
-        await state.recorder.emit("answer", "running")
-        if state.model_id is None:
-            generated = await self._answers.generate(
-                state.query, state.plan, state.tool_result, state.memory_metadata
-            )
-        else:
-            generated = await self._answers.generate(
-                state.query,
-                state.plan,
-                state.tool_result,
-                state.memory_metadata,
-                model_id=state.model_id,
-            )
-        # 기존 테스트용 답변 구현처럼 문자열만 돌려주는 구현도 허용한다.
-        # 실제 AnswerGenerator는 (답변, 실제로 사용한 모델) 튜플을 준다.
-        if isinstance(generated, tuple) and len(generated) == 2:
-            answer = str(generated[0])
-            model_id = generated[1] if isinstance(generated[1], str) else None
-        else:
-            answer = str(generated)
-            model_id = None
-        await state.recorder.emit("answer", "completed")
-        return {"answer": answer, "model_id": model_id}
+    async def _known_blogs(self) -> list[BlogRef]:
+        if self._blog_repo is None:
+            return []
+        if not self._blogs or time.monotonic() - self._blogs_at > _BLOGS_TTL_SECONDS:
+            try:
+                active = await self._blog_repo.list_active()
+                self._blogs = [BlogRef(str(b.id), b.name) for b in active]
+                self._blogs_at = time.monotonic()
+            except Exception:
+                logger.warning("blog list failed; scope without blogs", exc_info=True)
+        return self._blogs
 
     # ── 실행 ───────────────────────────────────────────────────────
     async def run(
@@ -232,46 +204,150 @@ class ChatAgent:
         query: str,
         memory: MemoryContext,
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
+        *,
         model_id: str | None = None,
         post_ids: list[str] | None = None,
+        client: str | None = None,
     ) -> AgentResult:
         recorder = ActivityRecorder(on_activity)
-        state = AgentState(
-            query=query,
-            search_query=memory.rewritten_query or query,
-            post_ids=list(post_ids or []),
-            memory_metadata=memory.to_metadata(),
-            recorder=recorder,
-            model_id=model_id,
+        if post_ids:
+            return await self._brief(query, post_ids, recorder)
+
+        scope = read_scope(query, await self._known_blogs())
+        flt = ListPostsFilter(
+            summarized=True,
+            blog_id=scope.blog.id if scope.blog else None,
+            published_from=scope.published_from,
+            published_to=scope.published_to,
+        )
+        boost = scope.boost_blog.id if scope.boost_blog else None
+        if scope.unknown_blog:
+            return AgentResult(
+                answer=f"'{scope.unknown_blog}' 블로그는 Tech-Letter가 모으는 블로그에 없습니다.",
+                intent="no_result",
+                activities=recorder.items,
+            )
+
+        if scope.is_list:
+            return await self._list(
+                query, scope=scope, flt=flt, boost=boost, client=client, recorder=recorder
+            )
+
+        await recorder.emit("search", "running")
+        if is_reference(query) and memory.previous_source_ids:
+            intent = "answer_from_posts"
+            result = await self._evidence.for_posts(
+                query, memory.previous_source_ids, client=client
+            )
+        else:
+            intent = "general_rag"
+            search_text = query
+            if memory.previous_query and len(_terms(query)) < _FOLLOW_UP_MIN_TERMS:
+                search_text = f"{memory.previous_query} {query}"
+            excluding = bool(scope.exclude_blogs)
+            result = await self._evidence.for_query(
+                search_text,
+                flt,
+                client=client,
+                boost_blog_id=boost,
+                # "말고 다른 사례"면 직전 답의 글과 이름이 나온 블로그를 뺀다.
+                exclude_ids=frozenset(memory.previous_source_ids) if excluding else frozenset(),
+                exclude_blog_ids=frozenset(b.id for b in scope.exclude_blogs),
+            )
+        await recorder.emit("search", "completed")
+
+        if result.status != "ok":
+            described = _describe(scope)
+            message = (
+                f"{described} 조건에 맞는 글을 찾지 못했습니다." if described else NO_MATCH_ANSWER
+            )
+            return AgentResult(
+                answer=message, intent="no_result", activities=recorder.items, model_id=None
+            )
+
+        await recorder.emit("answer", "running")
+        answer, used = await self._answers.answer(query, result, memory.recent, model_id)
+        await recorder.emit("answer", "completed")
+        if _no_match(answer):
+            return AgentResult(
+                answer=_no_match_answer(answer),
+                intent="no_result",
+                activities=recorder.items,
+                model_id=used,
+            )
+        return AgentResult(
+            answer=answer,
+            sources=[source.to_dict() for source in result.sources],
+            intent=intent,
+            activities=recorder.items,
+            model_id=used,
         )
 
-        if state.post_ids:
-            # 고른 글만 근거로 삼는다. 범위가 못 박혀 있으니 다른 글로 대체하지 않는다.
-            # 고른 글로 묻는 건 지금은 검색 결과 AI 요약뿐이다 — 짧은 답변 모드.
-            state.plan = ChatPlan(
-                task="answer_from_posts",
-                strict_scope=True,
-                needs_content=True,
-                reason="search_summary",
-                brief=True,
+    async def _list(
+        self,
+        query: str,
+        *,
+        scope: Scope,
+        flt: ListPostsFilter,
+        boost: str | None,
+        client: str | None,
+        recorder: ActivityRecorder,
+    ) -> AgentResult:
+        """목록은 LLM 없이 나열한다. 주제어가 남으면 그 말로 검색한 순서, 아니면 최신순."""
+        await recorder.emit("list_posts", "running")
+        text = _LIST_NOISE.sub(" ", query)
+        if scope.blog:
+            text = re.sub(re.escape(scope.blog.name), " ", text, flags=re.I)
+        keywords = " ".join(_terms(text))
+        if len(keywords) >= 2 and not scope.topics:
+            posts, _ = await self._evidence.rank(
+                keywords, flt, client=client, boost_blog_id=boost, limit=scope.limit
             )
-            _apply(state, await self._read_selected(state))
+            result = self._posts.records(posts, message=f"'{keywords}' 관련 글을 찾았습니다.")
         else:
-            # 계획 → 도구 하나 → 답변. 분기는 계획이 고른 task 하나뿐이고 되돌아오지 않는다.
-            _apply(state, await self._plan(state))
-            _apply(state, await self._tools[state.plan.task](state))
-        await self._complete_sources(state)
-        _apply(state, await self._answer(state))
+            result = await self._posts.list_posts(
+                PostConstraints(
+                    published_from=scope.published_from,
+                    published_to=scope.published_to,
+                    blog_id=scope.blog.id if scope.blog else None,
+                    blog_name=scope.blog.name if scope.blog else None,
+                    categories=scope.topics,
+                    limit=scope.limit,
+                )
+            )
+        await recorder.emit("list_posts", "completed")
+        if result.status != "ok":
+            described = _describe(scope)
+            message = (
+                f"{described} 조건에 맞는 글을 찾지 못했습니다." if described else NO_MATCH_ANSWER
+            )
+            return AgentResult(answer=message, intent="no_result", activities=recorder.items)
+        return AgentResult(
+            answer=format_post_list(result),
+            sources=[source.to_dict() for source in result.sources],
+            intent="list_posts",
+            activities=recorder.items,
+        )
 
-        checked = self._output_guard.inspect(state.answer)
+    async def _brief(
+        self, query: str, post_ids: list[str], recorder: ActivityRecorder
+    ) -> AgentResult:
+        """검색 결과 AI 요약 — 고른 글의 요약본만 읽고 짧게. 출처 번호는 고른 순서다."""
+        await recorder.emit("read_posts", "running")
+        result: ToolResult = await self._posts.get_posts(post_ids[:BRIEF_MAX_POSTS])
+        await recorder.emit("read_posts", "completed")
+        if result.status != "ok":
+            return AgentResult(answer=result.message, intent="no_result", activities=recorder.items)
+        result.context = build_post_context(result.posts, summaries_only=True)
+        await recorder.emit("answer", "running")
+        answer, used = await self._answers.brief(query, result)
+        await recorder.emit("answer", "completed")
+        checked = self._output_guard.inspect(answer)
         return AgentResult(
             answer=checked.text,
-            # 답변이 차단되면 출처도 붙이지 않는다.
-            sources=[]
-            if checked.blocked
-            else [source.to_dict() for source in state.tool_result.sources],
-            intent=state.plan.task,
+            sources=[] if checked.blocked else [s.to_dict() for s in result.sources],
+            intent="answer_from_posts",
             activities=recorder.items,
             guard=checked.to_metadata() if checked.blocked else {},
-            model_id=state.model_id,
+            model_id=used,
         )

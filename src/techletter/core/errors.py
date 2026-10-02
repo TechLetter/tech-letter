@@ -28,7 +28,6 @@ __all__ = [
     "LlmRateLimitedError",
     "LlmUnavailableError",
     "PermanentError",
-    "PolicyBlockedError",
     "QuotaExceededError",
     "ResourceConflictError",
     "ResourceNotFoundError",
@@ -124,15 +123,6 @@ class ChatSessionNotFoundError(AppError):
     code = "chat.session_not_found"
     status = 400
     default_message = "세션을 찾을 수 없습니다. 새 채팅을 시작해 주세요."
-
-
-class PolicyBlockedError(AppError):
-    code = "policy.blocked"
-    status = 403
-    default_message = (
-        "요청에 내부 지시 변경 또는 민감 정보 요청으로 해석될 수 있는 내용이 포함되어 "
-        "처리하지 않았습니다."
-    )
 
 
 class LlmRateLimitedError(AppError):

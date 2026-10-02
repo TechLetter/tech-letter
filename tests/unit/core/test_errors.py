@@ -20,7 +20,6 @@ from techletter.core import errors
         (errors.InsufficientCreditsError, "credit.insufficient", 402),
         (errors.CreditError, "credit.error", 500),
         (errors.ChatSessionNotFoundError, "chat.session_not_found", 400),
-        (errors.PolicyBlockedError, "policy.blocked", 403),
         (errors.LlmRateLimitedError, "llm.rate_limited", 429),
         (errors.LlmUnavailableError, "llm.unavailable", 503),
         (errors.InternalError, "internal.error", 500),

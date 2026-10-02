@@ -6,7 +6,6 @@ import asyncio
 
 import pytest
 
-from techletter.chat.models import ChatSession, SessionMemory
 from techletter.chat.repositories import ChatSessionRepository, SuggestedQuestionRepository
 from techletter.chat.sessions import ChatSessionService
 from techletter.chat.suggested_questions import SuggestedQuestionService
@@ -32,7 +31,7 @@ def repo(mongo_db) -> ChatSessionRepository:
 
 @pytest.fixture
 def sessions(repo) -> ChatSessionService:
-    settings = ChatSettings(compression_min_messages=6, compression_batch_size=3)  # type: ignore[call-arg]
+    settings = ChatSettings()
     return ChatSessionService(repo, settings)
 
 
@@ -160,85 +159,6 @@ async def test_deleting_a_user_removes_every_session(sessions) -> None:
     assert deleted == 2
     _, remaining = await sessions.list(OTHER, Page(1, 10))
     assert remaining == 1
-
-
-# ── 메모리 압축 ─────────────────────────────────────────────────────
-def make_session(count: int, memory: SessionMemory | None = None) -> ChatSession:
-    session = ChatSession.start(USER, "첫 질문")
-    session.messages = session.messages * count
-    session.memory = memory
-    return session
-
-
-def test_a_short_conversation_does_not_need_compression(sessions) -> None:
-    assert sessions.needs_compression(make_session(5)) is False
-
-
-def test_a_long_conversation_needs_compression(sessions) -> None:
-    assert sessions.needs_compression(make_session(6)) is True
-
-
-def test_a_pending_compression_is_not_requested_again(sessions) -> None:
-    session = make_session(20, SessionMemory(status="pending"))
-
-    assert sessions.needs_compression(session) is False
-
-
-def test_compression_waits_for_a_full_batch(sessions) -> None:
-    covered = SessionMemory(summary="s", covered_message_count=6, status="completed")
-
-    assert sessions.needs_compression(make_session(8, covered)) is False
-    assert sessions.needs_compression(make_session(9, covered)) is True
-
-
-async def test_claiming_compression_is_exclusive(sessions, repo) -> None:
-    session = await sessions.create(USER, "질문")
-
-    first = await sessions.claim_compression(str(session.id))
-    second = await sessions.claim_compression(str(session.id))
-
-    assert (first, second) == (True, False)
-    stored = await repo.get(str(session.id))
-    assert stored is not None and stored.memory is not None
-    assert stored.memory.status == "pending"
-    assert stored.memory.requested_at is not None
-
-
-async def test_claiming_preserves_the_previous_summary(sessions, repo) -> None:
-    """압축이 끝나기 전까지는 직전 요약으로 답해야 한다."""
-    session = await sessions.create(USER, "질문")
-    await sessions.store_summary(str(session.id), "이전 요약", 4)
-
-    await sessions.claim_compression(str(session.id))
-
-    stored = await repo.get(str(session.id))
-    assert stored is not None and stored.memory is not None
-    assert stored.memory.summary == "이전 요약"
-    assert stored.memory.covered_message_count == 4
-
-
-async def test_storing_a_summary_does_not_reorder_the_session_list(sessions, repo) -> None:
-    """압축은 백그라운드 잡이다. 사용자가 만지지 않은 세션이 목록 위로 올라오면 안 된다."""
-    session = await sessions.create(USER, "질문")
-    before = (await repo.get(str(session.id))).updated_at  # type: ignore[union-attr]
-
-    await sessions.store_summary(str(session.id), "요약", 4)
-
-    after = (await repo.get(str(session.id))).updated_at  # type: ignore[union-attr]
-    assert after == before
-
-
-async def test_a_failed_compression_keeps_the_old_summary(sessions, repo) -> None:
-    session = await sessions.create(USER, "질문")
-    await sessions.store_summary(str(session.id), "쓸만한 요약", 4)
-    stored = await repo.get(str(session.id))
-
-    await sessions.mark_compression_failed(str(session.id), stored.memory)  # type: ignore[union-attr]
-
-    after = await repo.get(str(session.id))
-    assert after is not None and after.memory is not None
-    assert after.memory.status == "failed"
-    assert after.memory.summary == "쓸만한 요약"
 
 
 # ── 추천 질문 ───────────────────────────────────────────────────────

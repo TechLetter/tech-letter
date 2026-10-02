@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from techletter.chat.agent.state import PostRecord, Source, ToolResult
@@ -19,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.models import Post
     from techletter.content.repositories import PostRepository
 
-__all__ = ["PostLookupTool", "describe_constraints"]
+__all__ = ["PostLookupTool", "describe_constraints", "post_record"]
 
 
 def describe_constraints(constraints: PostConstraints) -> str:
@@ -38,7 +37,7 @@ def describe_constraints(constraints: PostConstraints) -> str:
     return ", ".join(parts) if parts else "최신순"
 
 
-def _record(post: Post) -> PostRecord:
+def post_record(post: Post) -> PostRecord:
     summary = post.aisummary.summary if post.aisummary else ""
     return PostRecord(
         id=str(post.id),
@@ -77,7 +76,7 @@ class PostLookupTool:
                 published_to=constraints.published_to,
                 # 챗봇은 요약이 끝난 글만 다룬다. 요약이 없으면 인용할 내용이 없다.
                 summarized=True,
-                search=constraints.blog_name,
+                blog_id=constraints.blog_id,
             ),
             Page(page=1, page_size=constraints.limit),
         )
@@ -88,7 +87,7 @@ class PostLookupTool:
                 total=total,
                 message=f"{described} 조건에 맞는 포스트를 찾지 못했습니다.",
             )
-        records = [_record(post) for post in found]
+        records = [post_record(post) for post in found]
         return ToolResult(
             status="ok",
             posts=records,
@@ -97,11 +96,24 @@ class PostLookupTool:
             message=f"{described} 조건으로 포스트를 조회했습니다.",
         )
 
+    def records(self, posts: list[Post], *, message: str = "") -> ToolResult:
+        """이미 고른 글을 목록 결과로 만든다."""
+        if not posts:
+            return ToolResult(status="no_result", message="관련 글을 찾지 못했습니다.")
+        records = [post_record(post) for post in posts]
+        return ToolResult(
+            status="ok",
+            posts=records,
+            sources=[_source(record) for record in records],
+            total=len(records),
+            message=message,
+        )
+
     async def get_posts(self, post_ids: list[str]) -> ToolResult:
         """사용자가 고른 포스트를 고른 순서대로. 요약이 없는 글은 뺀다."""
         found = await self._posts.get_many(post_ids)
         records = [
-            _record(post)
+            post_record(post)
             for post_id in post_ids
             if (post := found.get(post_id)) is not None and post.status.ai_summarized
         ]
@@ -114,29 +126,3 @@ class PostLookupTool:
             total=len(records),
             message="선택한 포스트를 읽었습니다.",
         )
-
-    async def complete_sources(self, sources: list[Source]) -> list[Source]:
-        """비어 있는 blog_id·발행일·링크를 한 번의 질의로 채운다."""
-        found = await self._posts.get_many([source.post_id for source in sources])
-        completed: list[Source] = []
-        for source in sources:
-            post = found.get(source.post_id)
-            if post is None:
-                completed.append(source)
-                continue
-            completed.append(
-                replace(
-                    source,
-                    blog_id=source.blog_id or (str(post.blog_id) if post.blog_id else None),
-                    published_at=source.published_at or to_iso_z(post.published_at),
-                    link=source.link or post.link,
-                )
-            )
-        return completed
-
-    async def hydrate(self, records: list[PostRecord]) -> list[PostRecord]:
-        """본문을 한 번의 질의로 채운다."""
-        bodies = await self._posts.get_plain_texts([record.id for record in records])
-        for record in records:
-            record.plain_text = bodies.get(record.id)
-        return records

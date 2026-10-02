@@ -35,6 +35,7 @@ __all__ = [
     "MIN_QUERY_CHARS",
     "EmbedRateLimiter",
     "QueryVectorCache",
+    "Retrieval",
     "SearchService",
     "Suggestion",
     "group_dense",
@@ -158,6 +159,14 @@ class EmbedRateLimiter:
 
 
 @dataclass(frozen=True, slots=True)
+class Retrieval:
+    post_ids: list[str]
+    """관련도 순. 필터·요약 여부를 통과한 글만."""
+    vector: list[float] | None = None
+    """질의 벡터. 임베딩이 막혔거나 실패했으면 None."""
+
+
+@dataclass(frozen=True, slots=True)
 class Suggestion:
     post_id: str
     title: str
@@ -237,12 +246,19 @@ class SearchService:
         self, query: str, flt: ListPostsFilter, *, client: str | None = None
     ) -> list[str]:
         """필터를 통과한 포스트 id를 관련도 순으로 준다(최대 `max_results`)."""
+        return (await self.retrieve(query, flt, client=client)).post_ids
+
+    async def retrieve(
+        self, query: str, flt: ListPostsFilter, *, client: str | None = None
+    ) -> Retrieval:
+        """`rank`와 같은 순위에 질의 벡터를 곁들인다. 챗봇이 고른 글 안에서 청크를 고를 때
+        같은 벡터를 다시 임베딩하지 않게 한다."""
         lexical = await self._lexical(query, flt)
         lexical_ids = [str(hit.payload.get("post_id") or "") for hit in lexical]
         lexical_ids = [post_id for post_id in lexical_ids if post_id]
         in_lexical = set(lexical_ids)
 
-        dense = await self._dense(query, client)
+        dense, vector = await self._dense(query, client)
         dense_ids = [
             post_id
             for post_id, score in dense
@@ -251,7 +267,7 @@ class SearchService:
 
         fused = rrf_fuse([lexical_ids, dense_ids], self._settings.rrf_k)
         if not fused:
-            return []
+            return Retrieval([], vector)
         # 필터·요약 여부는 Mongo가 판정한다. 벡터 쪽 payload에는 주제·블로그 id가 없다.
         published = await self._posts.matching_ids(flt, list(fused))
         now = self._now()
@@ -270,7 +286,7 @@ class SearchService:
             for post_id, published_at in published.items()
         ]
         scored.sort(key=lambda item: (-item[0], order[item[1]]))
-        return [post_id for _, post_id in scored[: self._settings.max_results]]
+        return Retrieval([post_id for _, post_id in scored[: self._settings.max_results]], vector)
 
     async def _lexical(self, query: str, flt: ListPostsFilter) -> list[SearchHit]:
         # 주제와 태그가 함께 오면 목록 API는 합집합으로 거른다. 주제만으로 미리
@@ -287,14 +303,32 @@ class SearchService:
             logger.warning("lexical search failed; using dense only", exc_info=True)
             return []
 
-    async def _dense(self, query: str, client: str | None = None) -> list[tuple[str, float]]:
+    async def embed(self, query: str, client: str | None = None) -> list[float] | None:
+        """질의 벡터. 캐시·사용자별 한도를 따른다. 막혔거나 실패하면 None."""
+        vector = self._cache.get(query)
+        if vector is not None:
+            return vector
+        if not self._limiter.allow(client):
+            return None
+        try:
+            vector = await self._embedder.embed_query(query)
+        except Exception:
+            logger.warning("query embedding failed", exc_info=True)
+            return None
+        self._cache.put(query, vector)
+        return vector
+
+    async def _dense(
+        self, query: str, client: str | None = None
+    ) -> tuple[list[tuple[str, float]], list[float] | None]:
+        vector: list[float] | None = None
         try:
             vector = self._cache.get(query)
             if vector is None:
                 # 캐시에 있는 검색어는 임베딩을 안 부르니 세지 않는다.
                 if not self._limiter.allow(client):
                     logger.info("query embedding rate limited; using lexical only")
-                    return []
+                    return [], None
                 vector = await self._embedder.embed_query(query)
                 self._cache.put(query, vector)
             hits = await self._store.search(
@@ -306,5 +340,5 @@ class SearchService:
         except Exception:
             # 임베딩 한도·Qdrant 장애가 검색 전체를 막지 않게 어휘 결과만으로 답한다.
             logger.warning("dense search failed; using lexical only", exc_info=True)
-            return []
-        return group_dense(hits)
+            return [], vector
+        return group_dense(hits), vector

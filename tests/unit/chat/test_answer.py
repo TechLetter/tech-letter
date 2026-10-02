@@ -1,67 +1,95 @@
-"""답변 생성 — 검색 AI 요약은 짧은 프롬프트, 챗봇은 깊은 프롬프트."""
+"""답변 생성 — 프롬프트와 입력 구성."""
 
 from __future__ import annotations
 
-import json
-
 from techletter.chat.agent.answer import AnswerGenerator, build_post_context
-from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT, BRIEF_ANSWER_SYSTEM_PROMPT
-from techletter.chat.agent.state import ChatPlan, PostRecord, ToolResult
+from techletter.chat.agent.prompts import (
+    ANSWER_SYSTEM_PROMPT,
+    BRIEF_ANSWER_SYSTEM_PROMPT,
+    NO_MATCH_ANSWER,
+)
+from techletter.chat.agent.state import PostRecord, ToolResult
+from techletter.chat.memory import Turn
 
 
 class FakeLlm:
-    def __init__(self) -> None:
-        self.systems: list[str] = []
-        self.users: list[dict] = []
+    def __init__(self, reply: str = "답") -> None:
+        self.reply = reply
+        self.calls: list[dict] = []
 
-    async def complete(self, role, system, user, candidates=None):
-        self.systems.append(system)
-        self.users.append(json.loads(user))
-        return "답변", "model-a"
+    async def candidates(self, purpose):
+        return ["auto/a", "auto/b", "auto/c", "auto/d"]
 
-    async def candidates(self, role):
-        return []
+    async def complete(self, purpose, system, user, **kwargs):
+        self.calls.append({"system": system, "user": user, **kwargs})
+        return self.reply, "used-model"
 
 
-def post(index: int) -> PostRecord:
-    return PostRecord(
-        id=f"id{index}",
-        title=f"제목{index}",
-        link=f"https://x.test/{index}",
-        blog_name="Alpha",
-        published_at="2026-09-01T00:00:00Z",
-        summary=f"요약{index}",
-        plain_text=f"본문{index}",
+def found(context: str = "[1] 제목 — Alpha") -> ToolResult:
+    return ToolResult(status="ok", context=context)
+
+
+async def test_the_answer_sees_history_posts_and_question_in_order() -> None:
+    llm = FakeLlm()
+
+    await AnswerGenerator(llm).answer(  # type: ignore[arg-type]
+        "보안은?", found(), [Turn("user", "MCP 사례"), Turn("assistant", "답 [1]")]
     )
+
+    call = llm.calls[0]
+    assert call["system"] == ANSWER_SYSTEM_PROMPT
+    user = call["user"]
+    assert user.index("[이전 대화]") < user.index("[글]") < user.index("[질문]")
+    assert "user: MCP 사례" in user
+
+
+async def test_long_previous_answers_are_clipped() -> None:
+    llm = FakeLlm()
+
+    await AnswerGenerator(llm).answer("q", found(), [Turn("assistant", "가" * 5000)])  # type: ignore[arg-type]
+
+    assert "가" * 601 not in llm.calls[0]["user"]
+
+
+async def test_an_empty_reply_becomes_no_match() -> None:
+    answer, _ = await AnswerGenerator(FakeLlm("  ")).answer("q", found(), [])  # type: ignore[arg-type]
+
+    assert answer == NO_MATCH_ANSWER
+
+
+async def test_a_chosen_model_goes_first_within_the_attempt_limit() -> None:
+    llm = FakeLlm()
+
+    await AnswerGenerator(llm).answer("q", found(), [], model_id="auto/b")  # type: ignore[arg-type]
+
+    assert llm.calls[0]["candidates"] == ["auto/b", "auto/a", "auto/c"]
 
 
 async def test_the_search_summary_uses_the_brief_prompt() -> None:
     llm = FakeLlm()
-    result = ToolResult(status="ok", posts=[post(1)], context="ctx")
 
-    await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "kafka", ChatPlan(task="answer_from_posts", brief=True), result, {}
-    )
+    await AnswerGenerator(llm).brief("Kafka", found("[Post 1] ..."))  # type: ignore[arg-type]
 
-    assert llm.systems == [BRIEF_ANSWER_SYSTEM_PROMPT]
+    assert llm.calls[0]["system"] == BRIEF_ANSWER_SYSTEM_PROMPT
+    assert "[Post 1]" in llm.calls[0]["user"]
 
 
-async def test_the_chatbot_uses_the_in_depth_prompt() -> None:
-    llm = FakeLlm()
-    result = ToolResult(status="ok", posts=[post(1)], context="ctx")
-
-    await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "kafka", ChatPlan(task="general_rag"), result, {}
-    )
-
-    assert llm.systems == [ANSWER_SYSTEM_PROMPT]
+def test_the_prompt_names_the_no_match_reply() -> None:
+    assert NO_MATCH_ANSWER in ANSWER_SYSTEM_PROMPT
 
 
 def test_summary_context_skips_the_body() -> None:
-    brief = build_post_context([post(1), post(2)], summaries_only=True)
-    full = build_post_context([post(1)])
+    post = PostRecord(
+        id="1",
+        title="t",
+        link="l",
+        blog_name="b",
+        published_at="",
+        summary="요약",
+        plain_text="본문",
+    )
 
-    assert "[Post 2]" in brief
-    assert "요약1" in brief
-    assert "본문1" not in brief
-    assert "본문1" in full
+    context = build_post_context([post], summaries_only=True)
+
+    assert "요약" in context
+    assert "본문" not in context

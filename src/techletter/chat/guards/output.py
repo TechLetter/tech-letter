@@ -1,12 +1,13 @@
-"""출력 가드 — 답변에 시스템 프롬프트 조각이 새어 나왔는지 본다."""
+"""출력 가드 — 검색 AI 요약에 시스템 프롬프트 조각이 새어 나왔는지 본다."""
 
 from __future__ import annotations
 
 from techletter.chat.guards.models import GuardFinding, GuardResult
-from techletter.chat.guards.prompt import POLICY_BLOCK_MESSAGE
 from techletter.chat.guards.rules import OUTPUT_LEAK_RULES
 
-__all__ = ["OutputGuard"]
+__all__ = ["BLOCKED_ANSWER", "OutputGuard"]
+
+BLOCKED_ANSWER = "요약을 만들지 못했습니다."
 
 
 class OutputGuard:
@@ -19,8 +20,8 @@ class OutputGuard:
                 return GuardResult(
                     action="block",
                     risk_level="high",
-                    text=POLICY_BLOCK_MESSAGE,
+                    text=BLOCKED_ANSWER,
                     findings=[GuardFinding(category=rule.category)],
-                    message=POLICY_BLOCK_MESSAGE,
+                    message=BLOCKED_ANSWER,
                 )
         return GuardResult(action="pass", risk_level="low", text=answer)

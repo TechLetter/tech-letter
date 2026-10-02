@@ -1,7 +1,6 @@
 """채팅 DTO.
 
 메시지 메타데이터를 `metadata` 중첩이 아니라 **평탄화**해서 내보낸다.
-`memory.status`는 DB의 `none`/`completed`를 계약의 `ready`로 바꾼다.
 """
 
 from __future__ import annotations
@@ -23,16 +22,7 @@ __all__ = [
     "MessageIn",
     "SuggestedQuestionIn",
     "SuggestedQuestionOut",
-    "memory_status",
 ]
-
-# DB에 남아 있는 값 → 계약이 정한 값. `none`은 "아직 압축한 적 없음"이고
-# `completed`는 "요약이 준비됨"인데, 프론트가 보기에는 둘 다 "정상"이다.
-_MEMORY_STATUS = {"none": "ready", "completed": "ready", "pending": "pending", "failed": "failed"}
-
-
-def memory_status(raw: str | None) -> str:
-    return _MEMORY_STATUS.get(raw or "none", "ready")
 
 
 class ChatMessageOut(BaseModel):
@@ -41,23 +31,16 @@ class ChatMessageOut(BaseModel):
     created_at: str | None
     sources: list[dict[str, Any]] | None = None
     agent: dict[str, Any] | None = None
-    guard: dict[str, Any] | None = None
-    memory: dict[str, Any] | None = None
 
     @classmethod
     def of(cls, message: ChatMessage) -> ChatMessageOut:
         metadata = message.metadata or {}
-        memory = metadata.get("memory")
-        if isinstance(memory, dict):
-            memory = {**memory, "status": memory_status(memory.get("status"))}
         return cls(
             role=message.role,
             content=message.content,
             created_at=to_iso_z(message.created_at),
             sources=metadata.get("sources"),
             agent=metadata.get("agent"),
-            guard=metadata.get("guard"),
-            memory=memory,
         )
 
 
@@ -103,13 +86,10 @@ class ChatAnswerOut(BaseModel):
     answer: str
     sources: list[dict[str, Any]]
     agent: dict[str, Any]
-    guard: dict[str, Any]
-    memory: dict[str, Any]
     credits: dict[str, int]
 
     @classmethod
     def of(cls, answer: ChatAnswer) -> ChatAnswerOut:
-        memory = {**answer.memory, "status": memory_status(answer.memory.get("status"))}
         # 구버전 기록이나 직접 만든 답변에도 nested 계약을 고정한다. 모델을
         # 부르지 않은 경로는 명시적으로 null을 내보낸다.
         agent = {**answer.agent, "model_id": answer.agent.get("model_id")}
@@ -119,8 +99,6 @@ class ChatAnswerOut(BaseModel):
             answer=answer.answer,
             sources=answer.sources,
             agent=agent,
-            guard=answer.guard or {"action": "pass", "risk_level": "low", "findings": []},
-            memory=memory,
             # 정수 두 개(consumed_credits/remaining_credits) → 객체 하나.
             credits={"consumed": answer.consumed_credits, "remaining": answer.remaining_credits},
         )

@@ -52,7 +52,6 @@
 | `credit.insufficient` | 402 | 크레딧 부족 |
 | `credit.error` | 500 | 크레딧 처리 실패 |
 | `chat.session_not_found` | 400 | session_id 무효 |
-| `policy.blocked` | 403 | 프롬프트 가드 차단 |
 | `llm.rate_limited` | 429 | 챗봇 모델 후보가 모두 rate limit/쿼터 소진 |
 | `llm.unavailable` | 503 | 챗봇 모델 후보가 모두 실패/장애 |
 | `internal.error` | 500 | 그 외 |
@@ -137,7 +136,7 @@
   ]
 }
 ```
-목록 응답(`GET /chat/sessions`)은 `messages`를 `null`로 준다. 메시지 메타데이터(`sources`/`agent`/`guard`/`memory`)는 평탄화되어 있다.
+목록 응답(`GET /chat/sessions`)은 `messages`를 `null`로 준다. 메시지 메타데이터(`sources`/`agent`)는 평탄화되어 있다.
 
 ### 2.6 `ChatAnswer` (`POST /chat/messages` 응답 및 SSE `done`)
 ```json
@@ -147,17 +146,15 @@
   "answer": "마크다운 …",
   "sources": [ {"post_id":"…","title":"…","blog_name":"…","link":"…","score":0.83,
                  "blog_id":"…","published_at":"…"} ],
-  "agent":  {"mode":"…","intent":"…","model_id":null,"activities":[{"type":"search","label":"…","status":"done"}],
-             "usage":{"input_tokens":1234,"output_tokens":456,"llm_calls":3,"latency_ms":5120}},
-  "guard":  {"action":"pass","risk_level":"low","message":null,"findings":[]},
-  "memory": {"used":true,"status":"ready","compressed":false,"compression_failed":false,"recent_message_count":6},
+  "agent":  {"intent":"general_rag|answer_from_posts|list_posts|no_result","model_id":null,
+             "usage":{"input_tokens":1234,"output_tokens":456,"llm_calls":1,"latency_ms":3120}},
   "credits": {"consumed":1,"remaining":6}
 }
 ```
 `agent.model_id`는 실제 사용 모델 ID(`string|null`)이며, 알 수 없으면 `null`이다.
-`agent.usage`는 이 질문 하나의 LLM 호출(질의 재작성·계획·답변, 폴백 시도 포함) 토큰 합계와, 메모리 구성부터 답변까지 걸린 시간이다. 메시지 메타데이터에도 저장된다(이 필드가 생기기 전 메시지는 없다).
+`agent.usage`는 이 질문 하나의 LLM 호출(답변, 폴백 시도 포함) 토큰 합계와, 답변까지 걸린 시간이다. 화면 (i)는 `llm_calls`를 보여 주지 않는다. 메시지 메타데이터에도 저장된다(이 필드가 생기기 전 메시지는 없다).
 `sources[].blog_id`·`published_at`은 출처 카드의 아이콘·날짜용이며 `null`일 수 있다.
-`guard.action ∈ {pass, sanitize, block}`, `memory.status ∈ {ready, pending, failed}`.
+`guard`·`memory`는 2026-09-27에 뺐다(입력 가드·대화 압축을 없앴다). 그 전 메시지의 저장 값은 내보내지 않는다.
 
 ### 2.7 Trends
 - `GET /trends/weekly` → `{"period": {from_at, to, previous_from, previous_to}, "post_count": n, "blog_count": n, "items": [{topic, blog_count, post_count, previous_blog_count, previous_post_count, posts: Post[≤3]}]}`
@@ -244,11 +241,11 @@
 | POST | `/chat/messages` | `{query, session_id?, model_id?}` | `200 ChatAnswer` |
 | POST | `/chat/messages/stream` | `{query, session_id?, model_id?}` | SSE |
 
-처리 순서: 프롬프트 가드 → 세션 검증 → 크레딧 1 차감 → 에이전트 → 성공 시 메시지 저장 / 실패 시 환불.
+처리 순서: 세션 검증 → 크레딧 1 차감 → 에이전트([search.md](search.md) §6) → 성공 시 메시지 저장 / 실패 시 환불.
 `model_id`는 선택 필드이며 무료 모델 카탈로그에 있는 id만 허용한다. 생략하면 자동으로
 모델을 고른다. 유효하지 않은 id는 400 `request.invalid`(`details.field="model_id"`)다.
 검색 결과의 "AI 요약"은 채팅이 아니라 `POST /search/summary`다(아래 검색 절, [search.md](search.md) §5).
-에러: `policy.blocked`(403) · `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).
+에러: `chat.session_not_found`(400) · `credit.insufficient`(402) · `llm.rate_limited`(429) · `llm.unavailable`(503).
 
 ### 3.4 어드민 (`role=admin`)
 | 메서드 | 경로 | 요청 | 응답 |

@@ -8,10 +8,10 @@ pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
 class Unused:
-    async def plan(self, *args, **kwargs):
-        raise AssertionError("계획을 세우면 안 된다")
+    async def for_query(self, *args, **kwargs):
+        raise AssertionError("검색하면 안 된다")
 
-    async def search(self, *args, **kwargs):
+    async def for_posts(self, *args, **kwargs):
         raise AssertionError("검색하면 안 된다")
 
 
@@ -20,7 +20,7 @@ class Answers:
         self.answer = answer
         self.contexts: list[str] = []
 
-    async def generate(self, query, plan, result, memory_metadata, model_id=None):
+    async def brief(self, query, result):
         self.contexts.append(result.context)
         return self.answer, "test-model"
 
@@ -33,9 +33,8 @@ def answers(ctx) -> Answers:
 
     fake = Answers()
     agent = ChatAgent(
-        planner=Unused(),  # type: ignore[arg-type]
+        evidence=Unused(),  # type: ignore[arg-type]
         posts=PostLookupTool(ctx.posts),
-        search=Unused(),  # type: ignore[arg-type]
         answers=fake,  # type: ignore[arg-type]
     )
     ctx._search_summary = SearchSummaryService(ctx.db, agent, ctx.sessions)
@@ -146,9 +145,8 @@ async def test_too_many_new_summaries_are_429(client, ctx, user_headers, seeded)
     from techletter.search.summary import SearchSummaryService
 
     agent = ChatAgent(
-        planner=Unused(),  # type: ignore[arg-type]
+        evidence=Unused(),  # type: ignore[arg-type]
         posts=PostLookupTool(ctx.posts),
-        search=Unused(),  # type: ignore[arg-type]
         answers=Answers(),  # type: ignore[arg-type]
     )
     ctx._search_summary = SearchSummaryService(ctx.db, agent, ctx.sessions, misses_per_minute=1)

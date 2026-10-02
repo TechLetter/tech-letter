@@ -1,476 +1,287 @@
-"""에이전트 그래프 — 어떤 도구를 타고 무엇을 답하는가."""
+"""챗봇 에이전트 — 범위 읽기 → 근거 → 답변 1회."""
 
 from __future__ import annotations
 
-import asyncio
+from types import SimpleNamespace
+from typing import Any
 
-import pytest
-
-from techletter.chat.agent.answer import (
-    NO_RESULT_MESSAGE,
-    AnswerGenerator,
-    build_post_context,
-    format_post_list,
-)
-from techletter.chat.agent.graph import ChatAgent
-from techletter.chat.agent.state import (
-    Activity,
-    ChatPlan,
-    PostConstraints,
-    PostRecord,
-    Source,
-    ToolResult,
-)
-from techletter.chat.memory import MemoryContext
+from techletter.chat.agent import ChatAgent
+from techletter.chat.agent.prompts import BRIEF_ANSWER_SYSTEM_PROMPT, NO_MATCH_ANSWER
+from techletter.chat.agent.state import PostRecord, Source, ToolResult
+from techletter.chat.memory import MemoryContext, Turn
 
 
-class FakePlanner:
-    def __init__(self, plan: ChatPlan) -> None:
-        self.plan_result = plan
-        self.queries: list[str] = []
-
-    async def plan(self, query: str, memory_metadata: dict) -> ChatPlan:
-        self.queries.append(query)
-        return self.plan_result
-
-
-def record(index: int) -> PostRecord:
-    return PostRecord(
-        id=f"id{index}",
-        title=f"제목{index}",
-        link=f"https://blog.test/{index}",
-        blog_name="Alpha",
-        published_at="2025-03-01T00:00:00.000Z",
-        summary=f"요약{index}",
-        tags=["Kafka"],
+def result(*ids: str) -> ToolResult:
+    records = [
+        PostRecord(
+            id=i, title=f"제목 {i}", link=f"https://x/{i}", blog_name="Alpha", published_at=""
+        )
+        for i in ids
+    ]
+    return ToolResult(
+        status="ok" if ids else "no_result",
+        posts=records,
+        context="\n".join(f"[{n}] {r.title}" for n, r in enumerate(records, 1)),
+        sources=[
+            Source(post_id=r.id, title=r.title, blog_name="Alpha", link=r.link) for r in records
+        ],
+        total=len(records),
     )
+
+
+class FakeEvidence:
+    def __init__(self, found: ToolResult | None = None) -> None:
+        self.found = found if found is not None else result("p1", "p2")
+        self.queries: list[tuple[str, Any, str | None]] = []
+        self.scoped: list[tuple[str, list[str]]] = []
+        self.ranked: list[tuple[str, int | None]] = []
+
+    async def for_query(self, query, flt, *, client=None, boost_blog_id=None, **kwargs):
+        self.queries.append((query, flt, boost_blog_id))
+        return self.found
+
+    async def for_posts(self, query, post_ids, *, client=None):
+        self.scoped.append((query, post_ids))
+        return self.found
+
+    async def rank(self, query, flt, *, client=None, boost_blog_id=None, limit=None, **kwargs):
+        self.ranked.append((query, limit))
+        return [SimpleNamespace(id=i) for i in ("p1", "p2")], None
 
 
 class FakePosts:
-    def __init__(self, result: ToolResult | None = None) -> None:
-        self.result = result or ToolResult(
-            status="ok",
-            posts=[record(1)],
-            sources=[Source(post_id="id1", title="제목1", blog_name="Alpha", link="l")],
-            total=1,
-            message="조회했습니다.",
-        )
-        self.hydrated = False
+    def __init__(self) -> None:
+        self.listed: list[Any] = []
         self.selected: list[list[str]] = []
-        self.listed = 0
 
-    async def list_posts(self, constraints: PostConstraints) -> ToolResult:
-        self.listed += 1
-        return self.result
+    async def list_posts(self, constraints):
+        self.listed.append(constraints)
+        return result("p9")
 
-    async def get_posts(self, post_ids: list[str]) -> ToolResult:
+    def records(self, posts, *, message=""):
+        return result(*[p.id for p in posts])
+
+    async def get_posts(self, post_ids):
         self.selected.append(post_ids)
-        records = [record(int(pid[2:])) for pid in post_ids if pid.startswith("id")]
-        if not records:
-            return ToolResult(status="no_result", message="선택한 포스트를 찾지 못했습니다.")
-        return ToolResult(
-            status="ok",
-            posts=records,
-            sources=[
-                Source(post_id=r.id, title=r.title, blog_name=r.blog_name, link=r.link)
-                for r in records
-            ],
-            total=len(records),
-        )
-
-    async def complete_sources(self, sources: list[Source]) -> list[Source]:
-        from dataclasses import replace
-
-        return [replace(s, blog_id="b1", published_at="2025-03-01T00:00:00.000Z") for s in sources]
-
-    async def hydrate(self, records: list[PostRecord]) -> list[PostRecord]:
-        self.hydrated = True
-        for item in records:
-            item.plain_text = f"본문 {item.id}"
-        return records
-
-
-class FakeSearch:
-    def __init__(self, result: ToolResult | None = None) -> None:
-        self.result = result or ToolResult(
-            status="ok", context="검색 문맥", total=1, message="검색 완료"
-        )
-        self.calls: list[tuple[str, bool]] = []
-
-    async def search(self, query: str, constraints: PostConstraints | None = None) -> ToolResult:
-        self.calls.append((query, constraints is not None))
-        return self.result
+        return result(*[p for p in post_ids if p.startswith("p")])
 
 
 class FakeAnswers:
-    def __init__(self, answer: str = "답변", model_id: str | None = None) -> None:
-        self.answer = answer
-        self.model_id = model_id
-        self.seen: list[ToolResult] = []
-        self.plans: list[ChatPlan] = []
-        self.model_ids: list[str | None] = []
+    def __init__(self, reply: str = "답변 [1]") -> None:
+        self.reply = reply
+        self.calls: list[dict] = []
 
-    async def generate(self, query, plan, result, memory_metadata, model_id=None):
-        self.seen.append(result)
-        self.plans.append(plan)
-        self.model_ids.append(model_id)
-        return self.answer, self.model_id
+    async def answer(self, query, found, recent, model_id=None):
+        self.calls.append({"query": query, "recent": recent, "model_id": model_id})
+        return self.reply, "answer-model"
+
+    async def brief(self, query, found):
+        self.calls.append({"query": query, "brief": True, "context": found.context})
+        return self.reply, "brief-model"
 
 
-def build(
-    plan: ChatPlan,
-    *,
-    posts: FakePosts | None = None,
-    search: FakeSearch | None = None,
-    answers: FakeAnswers | None = None,
-) -> tuple[ChatAgent, FakePosts, FakeSearch, FakeAnswers]:
+class FakeBlogs:
+    async def list_active(self):
+        return [
+            SimpleNamespace(id="b-kakao", name="카카오"),
+            SimpleNamespace(id="b-toss", name="토스"),
+        ]
+
+
+def agent(
+    evidence=None, posts=None, answers=None
+) -> tuple[ChatAgent, FakeEvidence, FakePosts, FakeAnswers]:
+    evidence = evidence or FakeEvidence()
     posts = posts or FakePosts()
-    search = search or FakeSearch()
     answers = answers or FakeAnswers()
-    agent = ChatAgent(
-        planner=FakePlanner(plan),  # type: ignore[arg-type]
+    built = ChatAgent(
+        evidence=evidence,  # type: ignore[arg-type]
         posts=posts,  # type: ignore[arg-type]
-        search=search,  # type: ignore[arg-type]
         answers=answers,  # type: ignore[arg-type]
+        blogs=FakeBlogs(),  # type: ignore[arg-type]
     )
-    return agent, posts, search, answers
+    return built, evidence, posts, answers
 
 
-def memory(rewritten: str = "") -> MemoryContext:
-    return MemoryContext(rewritten_query=rewritten)
+async def test_a_question_is_one_answer_call_over_the_evidence() -> None:
+    chat, evidence, _, answers = agent()
+
+    out = await chat.run("Kafka 리밸런싱 대응 사례", MemoryContext())
+
+    assert len(answers.calls) == 1
+    assert [s["post_id"] for s in out.sources] == ["p1", "p2"]
+    assert out.intent == "general_rag"
+    assert out.model_id == "answer-model"
+    assert evidence.queries[0][0] == "Kafka 리밸런싱 대응 사례"
 
 
-# ── 라우팅 ──────────────────────────────────────────────────────────
-async def test_list_posts_does_not_read_bodies() -> None:
-    """목록은 제목과 링크면 된다. 본문을 읽으면 느리고 비싸다."""
-    agent, posts, _, _ = build(ChatPlan(task="list_posts"))
+async def test_a_named_blog_filters_the_search() -> None:
+    chat, evidence, _, _ = agent()
 
-    result = await agent.run("목록 보여줘", memory())
+    await chat.run("카카오 블로그에서 Kafka 운영 경험 정리해줘", MemoryContext())
 
-    assert result.intent == "list_posts"
-    assert posts.hydrated is False
+    assert evidence.queries[0][1].blog_id == "b-kakao"
 
 
-@pytest.mark.parametrize("task", ["summarize_posts", "answer_from_posts"])
-async def test_content_tasks_read_bodies(task: str) -> None:
-    agent, posts, _, answers = build(ChatPlan(task=task))  # type: ignore[arg-type]
+async def test_a_bare_blog_name_boosts_without_filtering() -> None:
+    chat, evidence, _, _ = agent()
 
-    await agent.run("정리해줘", memory())
+    await chat.run("토스 결제 시스템 글 정리해줘", MemoryContext())
 
-    assert posts.hydrated is True
-    assert "본문 id1" in answers.seen[0].context
-
-
-async def test_general_rag_searches_without_constraints() -> None:
-    agent, _, search, _ = build(ChatPlan(task="general_rag"))
-
-    await agent.run("Kafka가 뭐야", memory())
-
-    assert search.calls == [("Kafka가 뭐야", False)]
+    _, flt, boost = evidence.queries[0]
+    assert flt.blog_id is None
+    assert boost == "b-toss"
 
 
-async def test_semantic_search_passes_constraints() -> None:
-    agent, _, search, _ = build(ChatPlan(task="semantic_search_posts"))
+async def test_a_reference_answers_inside_the_previous_sources() -> None:
+    chat, evidence, _, _ = agent()
+    memory = MemoryContext(previous_query="vLLM 사례", previous_source_ids=["p7", "p8"])
 
-    await agent.run("검색", memory())
+    out = await chat.run("거기서 KV 캐시는 어떻게 다뤘어?", memory)
 
-    assert search.calls[0][1] is True
-
-
-async def test_a_scoped_semantic_search_uses_metadata_lookup_instead() -> None:
-    """벡터 검색은 날짜·블로그 조건을 지키지 못한다."""
-    plan = ChatPlan(
-        task="semantic_search_posts",
-        strict_scope=True,
-        constraints=PostConstraints(tags=["Kafka"]),
-    )
-    agent, posts, search, _ = build(plan)
-
-    await agent.run("지난달 Kafka 글", memory())
-
-    assert search.calls == []
-    assert posts.hydrated is True
+    assert evidence.scoped == [("거기서 KV 캐시는 어떻게 다뤘어?", ["p7", "p8"])]
+    assert evidence.queries == []
+    assert out.intent == "answer_from_posts"
 
 
-async def test_no_result_task_short_circuits() -> None:
-    agent, _, search, answers = build(ChatPlan(task="no_result"))
-
-    result = await agent.run("불가능한 조건", memory())
-
-    assert search.calls == []
-    assert answers.seen[0].status == "no_result"
-    assert result.intent == "no_result"
-
-
-async def test_strict_scope_with_no_matches_skips_reading_bodies() -> None:
-    plan = ChatPlan(
-        task="summarize_posts", strict_scope=True, constraints=PostConstraints(tags=["Nope"])
-    )
-    agent, posts, _, _ = build(plan, posts=FakePosts(ToolResult(status="no_result")))
-
-    await agent.run("정리해줘", memory())
-
-    assert posts.hydrated is False
-
-
-async def test_the_rewritten_query_drives_the_search() -> None:
-    agent, _, search, _ = build(ChatPlan(task="general_rag"))
-
-    await agent.run("그건 왜 그래?", memory(rewritten="Kafka 리밸런싱 원인"))
-
-    assert search.calls[0][0] == "Kafka 리밸런싱 원인"
-
-
-# ── 고른 포스트로 답하기 ────────────────────────────────────────────
-async def test_selected_posts_skip_the_planner_and_search() -> None:
-    """검색 결과 AI 요약 — 계획·검색 없이 고른 글의 요약본만 읽고 짧은 답변 모드로."""
-    agent, posts, search, answers = build(ChatPlan(task="general_rag"))
-    planner = agent._planner
-
-    result = await agent.run("요약해줘", memory(), post_ids=["id2", "id1"])
-
-    assert planner.queries == []  # type: ignore[attr-defined]
-    assert search.calls == []
-    assert posts.listed == 0
-    assert posts.selected == [["id2", "id1"]]
-    assert posts.hydrated is False  # 본문은 읽지 않는다
-    assert "요약2" in answers.seen[0].context
-    assert answers.plans[0].brief is True
-    assert result.intent == "answer_from_posts"
-    assert [source["post_id"] for source in result.sources] == ["id2", "id1"]
-    assert [a["type"] for a in result.activities] == ["read_posts", "answer"]
-
-
-async def test_selected_posts_that_are_gone_answer_no_result() -> None:
-    agent, posts, _, answers = build(ChatPlan(task="general_rag"))
-
-    result = await agent.run("요약해줘", memory(), post_ids=["missing"])
-
-    assert posts.hydrated is False
-    assert answers.seen[0].status == "no_result"
-    assert result.sources == []
-
-
-async def test_sources_are_completed_for_source_cards() -> None:
-    """벡터 청크에는 blog_id가 없다. 출처 카드가 아이콘·날짜를 그리게 채운다."""
-    search = FakeSearch(
-        ToolResult(
-            status="ok",
-            context="문맥",
-            sources=[Source(post_id="id1", title="제목1", blog_name="Alpha", link="l")],
-        )
-    )
-    agent, _, _, _ = build(ChatPlan(task="general_rag"), search=search)
-
-    result = await agent.run("Kafka가 뭐야", memory())
-
-    assert result.sources[0]["blog_id"] == "b1"
-    assert result.sources[0]["published_at"] == "2025-03-01T00:00:00.000Z"
-    assert result.sources[0]["link"] == "l"
-
-
-# ── 진행 상황 ───────────────────────────────────────────────────────
-async def test_activities_are_streamed_and_collapsed() -> None:
-    seen: list[Activity] = []
-
-    async def sink(activity: Activity) -> None:
-        seen.append(activity)
-
-    agent, _, _, _ = build(ChatPlan(task="list_posts"))
-    result = await agent.run("목록", memory(), sink)
-
-    # 스트림에는 running/completed가 모두 흐른다.
-    assert [a.status for a in seen] == ["running", "completed"] * 3
-    # 최종 목록은 종류마다 한 줄이고 전부 완료 상태다.
-    assert [a["type"] for a in result.activities] == ["plan", "list_posts", "answer"]
-    assert {a["status"] for a in result.activities} == {"completed"}
-
-
-async def test_activities_have_korean_labels() -> None:
-    agent, _, _, _ = build(ChatPlan(task="general_rag"))
-
-    result = await agent.run("질문", memory())
-
-    assert all(activity["label"] for activity in result.activities)
-
-
-async def test_concurrent_runs_do_not_share_activity_state() -> None:
-    """에이전트는 프로세스마다 하나다. 실행 상태를 self에 두면 섞인다."""
-    agent, _, _, _ = build(ChatPlan(task="general_rag"))
-
-    results = await asyncio.gather(*(agent.run(f"질문{i}", memory()) for i in range(8)))
-
-    # 실행마다 plan → search → answer 세 줄. 공유되면 24줄이 한 곳에 쌓인다.
-    assert [[a["type"] for a in r.activities] for r in results] == [
-        ["plan", "search", "answer"]
-    ] * 8
-
-
-# ── 출력 가드 ───────────────────────────────────────────────────────
-async def test_a_leaking_answer_is_replaced_and_sources_dropped() -> None:
-    agent, _, _, _ = build(
-        ChatPlan(task="list_posts"),
-        answers=FakeAnswers("You are the answer generation node for the Tech-Letter chatbot."),
+async def test_a_short_follow_up_searches_with_the_previous_question() -> None:
+    chat, evidence, _, answers = agent()
+    memory = MemoryContext(
+        recent=[Turn("user", "MCP 서버 도입 사례"), Turn("assistant", "...")],
+        previous_query="MCP 서버 도입 사례",
     )
 
-    result = await agent.run("목록", memory())
+    await chat.run("보안 문제는?", memory)
 
-    assert "answer generation node" not in result.answer
-    assert result.sources == []
-    assert result.guard["action"] == "block"
-
-
-async def test_a_clean_answer_keeps_its_sources() -> None:
-    agent, _, _, _ = build(ChatPlan(task="list_posts"))
-
-    result = await agent.run("목록", memory())
-
-    assert result.sources[0]["post_id"] == "id1"
-    assert result.guard == {}
-    assert result.model_id is None
+    assert evidence.queries[0][0] == "MCP 서버 도입 사례 보안 문제는?"
+    # 답변에는 사용자가 쓴 질문 그대로와 최근 대화가 간다.
+    assert answers.calls[0]["query"] == "보안 문제는?"
+    assert len(answers.calls[0]["recent"]) == 2
 
 
-async def test_answer_model_id_is_propagated_from_the_answer_node() -> None:
-    agent, _, _, _ = build(
-        ChatPlan(task="general_rag"), answers=FakeAnswers(model_id="answer-model")
+async def test_a_scope_only_list_needs_no_llm() -> None:
+    chat, _, posts, answers = agent()
+
+    out = await chat.run("카카오 블로그 글 목록 5개 보여줘", MemoryContext())
+
+    assert answers.calls == []
+    assert posts.listed[0].blog_id == "b-kakao"
+    assert posts.listed[0].limit == 5
+    assert out.intent == "list_posts"
+    assert "제목 p9" in out.answer
+
+
+async def test_a_list_with_keywords_ranks_by_them() -> None:
+    chat, evidence, posts, answers = agent()
+
+    out = await chat.run("Debezium 관련 글 목록", MemoryContext())
+
+    assert evidence.ranked[0][0] == "Debezium"
+    assert posts.listed == []
+    assert answers.calls == []
+    assert [s["post_id"] for s in out.sources] == ["p1", "p2"]
+
+
+async def test_nothing_found_in_a_scope_says_so_without_llm() -> None:
+    chat, _, _, answers = agent(evidence=FakeEvidence(result()))
+
+    out = await chat.run("지난달 카카오 블로그 Kafka 정리", MemoryContext())
+
+    assert answers.calls == []
+    assert out.intent == "no_result"
+    assert "지난달 카카오 블로그" in out.answer
+    assert out.sources == []
+
+
+async def test_when_the_posts_do_not_answer_there_are_no_sources() -> None:
+    chat, _, _, _ = agent(answers=FakeAnswers(NO_MATCH_ANSWER))
+
+    out = await chat.run("오늘 서울 날씨 어때?", MemoryContext())
+
+    assert out.answer == NO_MATCH_ANSWER
+    assert out.sources == []
+    assert out.intent == "no_result"
+
+
+async def test_the_chosen_model_reaches_the_answer() -> None:
+    chat, _, _, answers = agent()
+
+    await chat.run("Kafka", MemoryContext(), model_id="qwen/free")
+
+    assert answers.calls[0]["model_id"] == "qwen/free"
+
+
+# ── 검색 결과 AI 요약(post_ids) ─────────────────────────────────────
+async def test_selected_posts_use_the_brief_path() -> None:
+    chat, evidence, posts, answers = agent()
+
+    out = await chat.run("요약", MemoryContext(), post_ids=["p1", "p2", "p3", "p4", "p5", "p6"])
+
+    assert posts.selected == [["p1", "p2", "p3", "p4", "p5"]]
+    assert answers.calls[0]["brief"] is True
+    assert evidence.queries == []
+    assert [s["post_id"] for s in out.sources] == ["p1", "p2", "p3", "p4", "p5"]
+
+
+async def test_a_leaked_brief_prompt_is_blocked() -> None:
+    leak = BRIEF_ANSWER_SYSTEM_PROMPT.splitlines()[0]
+    chat, _, _, _ = agent(answers=FakeAnswers(leak))
+
+    out = await chat.run("요약", MemoryContext(), post_ids=["p1"])
+
+    assert out.sources == []
+    assert out.guard
+
+
+async def test_a_topic_list_filters_by_the_topic() -> None:
+    chat, evidence, posts, _ = agent()
+
+    await chat.run("MCP 관련 글 목록", MemoryContext())
+
+    assert evidence.ranked == []
+    assert "AI 에이전트·MCP" in posts.listed[0].categories
+
+
+async def test_list_filler_words_are_not_search_terms() -> None:
+    """평가 q05·q06: "에 올라온"이 검색어로 남아 최신순 목록이 아니었다."""
+    chat, evidence, posts, _ = agent()
+
+    await chat.run("카카오 블로그에 올라온 글 목록 보여줘", MemoryContext())
+    await chat.run("최근에 올라온 글 5개만 알려줘", MemoryContext())
+
+    assert evidence.ranked == []
+    assert posts.listed[0].blog_id == "b-kakao"
+    assert posts.listed[1].limit == 5
+
+
+async def test_a_follow_up_with_its_own_terms_searches_alone() -> None:
+    chat, evidence, _, _ = agent()
+    memory = MemoryContext(previous_query="사내 MCP 서버 도입 사례", previous_source_ids=["p1"])
+
+    await chat.run("그런 MCP 서버들에 보안 문제는 없었어?", memory)
+
+    assert evidence.queries[0][0] == "그런 MCP 서버들에 보안 문제는 없었어?"
+
+
+async def test_an_unknown_blog_is_answered_without_search() -> None:
+    chat, evidence, posts, answers = agent()
+
+    out = await chat.run("우아한형제들 블로그 글 목록", MemoryContext())
+
+    assert "우아한형제들" in out.answer
+    assert out.intent == "no_result"
+    assert (evidence.queries, posts.listed, answers.calls) == ([], [], [])
+
+
+async def test_an_answer_opening_with_no_match_drops_the_sources() -> None:
+    """평가 q01·q21: 모델이 "찾지 못했습니다" 뒤에 설명을 붙여도 없는 것이다."""
+    chat, _, _, _ = agent(
+        answers=FakeAnswers(f"{NO_MATCH_ANSWER} 다만 CDC 사례는 있습니다 [1][2].")
     )
 
-    result = await agent.run("질문", memory())
+    out = await chat.run("Rockset 사례 있어?", MemoryContext())
 
-    assert result.model_id == "answer-model"
-
-
-async def test_selected_model_is_propagated_to_the_answer_node() -> None:
-    agent, _, _, answers = build(ChatPlan(task="general_rag"))
-
-    await agent.run("질문", memory(), model_id="selected/free")
-
-    assert answers.model_ids == ["selected/free"]
-
-
-# ── 답변 조립 ───────────────────────────────────────────────────────
-class RecordingLlm:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
-        self.calls += 1
-        return "모델 답변", "m"
-
-
-class CandidateLlm(RecordingLlm):
-    def __init__(self) -> None:
-        super().__init__()
-        self.selected: list[str] | None = None
-        self._router = type(
-            "Router", (), {"_settings": type("Settings", (), {"max_model_attempts": 3})()}
-        )()
-
-    async def candidates(self, purpose: str) -> list[str]:
-        return ["automatic-a", "selected/free", "automatic-b", "automatic-b", "automatic-c"]
-
-    async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
-        self.selected = kwargs.get("candidates")
-        return await super().complete(purpose, system, user, **kwargs)
-
-
-async def test_list_answers_are_built_without_calling_a_model() -> None:
-    """링크를 지어내거나 개수를 틀리는 것을 원천 차단한다."""
-    llm = RecordingLlm()
-    result = ToolResult(status="ok", posts=[record(1), record(2)], total=7, message="조회했습니다.")
-
-    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "목록", ChatPlan(task="list_posts"), result, {}
-    )
-
-    assert llm.calls == 0
-    assert model_id is None
-    assert "전체 7개 중 2개입니다" in answer
-    assert "[제목1](https://blog.test/1)" in answer
-    assert "태그: Kafka" in answer
-
-
-async def test_no_result_answers_skip_the_model() -> None:
-    llm = RecordingLlm()
-
-    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "질문", ChatPlan(task="general_rag"), ToolResult(status="no_result"), {}
-    )
-
-    assert llm.calls == 0
-    assert model_id is None
-    assert answer == NO_RESULT_MESSAGE
-
-
-async def test_a_failed_tool_does_not_reach_the_model() -> None:
-    llm = RecordingLlm()
-
-    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "질문", ChatPlan(task="general_rag"), ToolResult(status="failed", message="검색 실패"), {}
-    )
-
-    assert llm.calls == 0
-    assert model_id is None
-    assert answer == "검색 실패"
-
-
-async def test_model_id_from_answer_generation_is_returned() -> None:
-    llm = RecordingLlm()
-
-    answer, model_id = await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "질문", ChatPlan(task="general_rag"), ToolResult(status="ok"), {}
-    )
-
-    assert answer == "모델 답변"
-    assert model_id == "m"
-
-
-async def test_selected_model_is_first_and_candidates_are_deduplicated_and_capped() -> None:
-    llm = CandidateLlm()
-
-    await AnswerGenerator(llm).generate(  # type: ignore[arg-type]
-        "질문", ChatPlan(task="general_rag"), ToolResult(status="ok"), {}, model_id="selected/free"
-    )
-
-    assert llm.selected == ["selected/free", "automatic-a", "automatic-b"]
-
-
-async def test_the_context_is_clipped_before_it_reaches_the_model() -> None:
-    captured: dict[str, str] = {}
-
-    class Capturing(RecordingLlm):
-        async def complete(self, purpose, system, user, **kwargs) -> tuple[str, str]:
-            captured["user"] = user
-            return "답변", "m"
-
-    result = ToolResult(status="ok", context="가" * 5000)
-    await AnswerGenerator(Capturing(), max_context_chars=100).generate(  # type: ignore[arg-type]
-        "질문", ChatPlan(task="general_rag"), result, {}
-    )
-
-    assert "가" * 101 not in captured["user"]
-
-
-def test_an_empty_post_list_reports_no_result() -> None:
-    assert format_post_list(ToolResult(status="ok")) == NO_RESULT_MESSAGE
-
-
-def test_post_context_prefers_the_body_over_the_summary() -> None:
-    post = record(1)
-    post.plain_text = "전체 본문"
-
-    context = build_post_context([post])
-
-    assert "전체 본문" in context
-    assert "요약1" not in context
-
-
-def test_post_context_falls_back_to_the_summary() -> None:
-    assert "요약1" in build_post_context([record(1)])
-
-
-def test_post_context_handles_a_post_with_neither() -> None:
-    post = record(1)
-    post.summary = ""
-
-    assert "본문/요약 없음" in build_post_context([post])
+    assert out.sources == []
+    assert out.intent == "no_result"
+    # 설명은 남기고, 출처가 없으니 번호는 지운다(채점에서 한 줄 답이 성의 없다고 나왔다).
+    assert out.answer == f"{NO_MATCH_ANSWER} 다만 CDC 사례는 있습니다."

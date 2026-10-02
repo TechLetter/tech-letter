@@ -20,6 +20,7 @@ class JobType(StrEnum):
     EMBEDDING_DELETE_REQUESTED = "embedding.delete_requested"
     LEXICAL_INDEX_REQUESTED = "search.lexical_index_requested"
     CHAT_COMPRESSION_REQUESTED = "chat.compression_requested"
+    """은퇴(2026-09-27). 새로 걸지 않는다. 옛 잡 기록을 읽을 때만 쓴다."""
     BLOG_ICON_REQUESTED = "blog.icon_requested"
 
 

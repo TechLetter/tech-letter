@@ -258,12 +258,9 @@ class EmbeddingSettings(BaseSettings):
 class ChatSettings(BaseSettings):
     model_config = _BASE
     rag_top_k: int = Field(default=5, alias="CHATBOT_RAG_TOP_K")
-    rag_score_threshold: float = Field(default=0.5, alias="CHATBOT_RAG_SCORE_THRESHOLD")
+    rag_chunks_per_post: int = Field(default=2, alias="CHATBOT_RAG_CHUNKS_PER_POST")
     memory_recent_messages: int = 8
     memory_max_message_chars: int = 1200
-    memory_max_summary_chars: int = 1800
-    compression_min_messages: int = Field(default=12, alias="CHAT_CONTEXT_COMPRESSION_MIN_MESSAGES")
-    compression_batch_size: int = Field(default=6, alias="CHAT_CONTEXT_COMPRESSION_BATCH_SIZE")
     credits_per_message: int = 1
     daily_credit_grant: int = 10
 
@@ -276,8 +273,7 @@ class SearchSettings(BaseSettings):
     dense_candidates: int = 100
     """벡터 검색으로 가져올 **청크** 수. 포스트로 묶으면 이보다 적어진다."""
     dense_min_score: float = 0.7
-    """어휘로는 안 걸리고 벡터로만 걸린 글을 남기는 최소 코사인 점수. 챗봇의
-    `CHATBOT_RAG_SCORE_THRESHOLD`(0.5)는 답변 문맥용이라 목록에 쓰기엔 느슨하다."""
+    """어휘로는 안 걸리고 벡터로만 걸린 글을 남기는 최소 코사인 점수. 챗봇도 같은 값을 쓴다."""
     rrf_k: int = 60
     recency_half_life_days: float = 1100.0
     """융합 점수에 곱하는 최신성 감쇠의 반감기. 1년이면 약 0.8, 2년이면 약 0.65배."""

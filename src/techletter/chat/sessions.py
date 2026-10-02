@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from techletter.chat.models import DEFAULT_TITLE, ChatMessage, ChatSession, SessionMemory
+from techletter.chat.models import DEFAULT_TITLE, ChatMessage, ChatSession
 from techletter.chat.models import title_from as _title_from
 from techletter.core.errors import ChatSessionNotFoundError
 from techletter.core.logging import get_logger
@@ -60,54 +60,3 @@ class ChatSessionService:
         if updated is None:
             raise ChatSessionNotFoundError(f"chat session not found: {session.id}")
         return updated
-
-    # ── 메모리 압축 ────────────────────────────────────────────────
-    def needs_compression(self, session: ChatSession) -> bool:
-        """대화가 길어져 요약이 필요한지 본다.
-
-        `pending`이면 이미 잡이 돌고 있으니 다시 걸지 않는다. 마지막 압축
-        이후 쌓인 메시지가 배치 크기를 넘어야 한다.
-        """
-        count = len(session.messages)
-        if count < self._settings.compression_min_messages:
-            return False
-        memory = session.memory
-        if memory and memory.status == "pending":
-            return False
-        covered = memory.covered_message_count if memory else 0
-        return count - covered >= self._settings.compression_batch_size
-
-    async def claim_compression(self, session_id: str) -> bool:
-        return await self._sessions.claim_compression(session_id)
-
-    async def store_summary(
-        self, session_id: str, summary: str, covered_message_count: int
-    ) -> None:
-        await self._sessions.set_memory(
-            session_id,
-            SessionMemory(
-                summary=summary,
-                covered_message_count=max(0, covered_message_count),
-                status="completed",
-                updated_at=utcnow(),
-            ),
-        )
-
-    async def mark_compression_failed(
-        self, session_id: str, previous: SessionMemory | None
-    ) -> None:
-        """실패를 기록하되 **직전 요약은 보존한다**.
-
-        요약을 지우면 다음 대화가 맥락을 통째로 잃는다. 실패 사유는 잡의
-        `last_error`에 남는다(핸들러가 예외를 다시 던진다).
-        """
-        await self._sessions.set_memory(
-            session_id,
-            SessionMemory(
-                summary=previous.summary if previous else "",
-                covered_message_count=previous.covered_message_count if previous else 0,
-                status="failed",
-                requested_at=previous.requested_at if previous else None,
-                updated_at=utcnow(),
-            ),
-        )

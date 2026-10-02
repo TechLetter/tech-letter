@@ -72,11 +72,11 @@ tech-letter/
 │   │   ├── models.py repositories.py service.py credits.py auth_service.py
 │   ├── chat/
 │   │   ├── models.py repositories.py sessions.py suggested_questions.py
-│   │   ├── use_case.py           # ChatUseCase: 가드→세션→차감→에이전트→기록/환불
-│   │   ├── guards/  prompt.py output.py retrieved.py rules.py models.py
-│   │   ├── memory.py handlers.py
-│   │   └── agent/  state.py graph.py planner.py answer.py prompts.py policies.py
-│   │               tools/  content_posts.py  vector_search.py
+│   │   ├── use_case.py           # ChatUseCase: 세션→차감→에이전트→기록/환불
+│   │   ├── guards/  output.py rules.py models.py text.py   # 검색 AI 요약의 출력 가드
+│   │   ├── memory.py             # 최근 대화 + 직전 출처 id (LLM 없음)
+│   │   └── agent/  scope.py evidence.py graph.py answer.py prompts.py state.py
+│   │               tools/  content_posts.py
 │   ├── summary/                  # summary-worker 전용 의존(playwright, trafilatura, bs4, Pillow)
 │   │   ├── renderer.py parser.py validator.py summarizer.py constants.py pipeline.py handlers.py
 │   │   ├── topics.py published.py icons.py   # 주제·부모 주제 목록 / 발행일 보정 / 블로그 아이콘 수집

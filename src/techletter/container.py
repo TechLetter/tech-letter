@@ -280,24 +280,22 @@ class Container:
         from techletter.chat.agent import (  # noqa: PLC0415
             AnswerGenerator,
             ChatAgent,
+            EvidenceBuilder,
             PostLookupTool,
-            QueryPlanner,
-            VectorSearchTool,
         )
-        from techletter.core.llm.embeddings import LangChainEmbedder  # noqa: PLC0415
 
-        llm = self._chat_llm()
         return ChatAgent(
-            planner=QueryPlanner(llm),
-            posts=PostLookupTool(self.posts),
-            search=VectorSearchTool(
-                embedder=LangChainEmbedder(self.settings.embedding_llm),
+            evidence=EvidenceBuilder(
+                search=self.search,
                 store=self.vector_store,
+                posts=self.posts,
                 embedding_model=self.settings.embedding_llm.model_name,
-                top_k=self.settings.chat.rag_top_k,
-                score_threshold=self.settings.chat.rag_score_threshold,
+                max_posts=self.settings.chat.rag_top_k,
+                chunks_per_post=self.settings.chat.rag_chunks_per_post,
             ),
-            answers=AnswerGenerator(llm),
+            posts=PostLookupTool(self.posts),
+            answers=AnswerGenerator(self._chat_llm()),
+            blogs=self.blogs,
         )
 
     def _build_chat(self) -> ChatUseCase:
@@ -307,7 +305,7 @@ class Container:
         return ChatUseCase(
             sessions=self.sessions,
             credits=self.credits,
-            memory=MemoryBuilder(self._chat_llm(), self.settings.chat),
+            memory=MemoryBuilder(self.settings.chat),
             agent=self.chat_agent,
             queue=self.queue,
             settings=self.settings.chat,
