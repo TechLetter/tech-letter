@@ -19,7 +19,6 @@ __all__ = [
     "ChatRole",
     "ChatSession",
     "MemoryStatus",
-    "SessionMemory",
     "SuggestedQuestion",
     "title_from",
 ]
@@ -52,21 +51,10 @@ class ChatMessage(SubDocument):
     """`sources`/`agent`/`guard`/`memory`. DTO에서는 평탄화한다."""
 
 
-class SessionMemory(SubDocument):
-    """`chat_sessions.memory`. 압축된 대화 요약."""
-
-    summary: str = ""
-    covered_message_count: int = 0
-    status: MemoryStatus = "none"
-    requested_at: MongoDateTime | None = None
-    updated_at: MongoDateTime | None = None
-
-
 class ChatSession(BaseDocument):
     user_code: str = ""
     title: str = DEFAULT_TITLE
     messages: list[ChatMessage] = Field(default_factory=list)
-    memory: SessionMemory | None = None
 
     @classmethod
     def start(cls, user_code: str, first_message: str | None = None) -> ChatSession:

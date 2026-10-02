@@ -25,7 +25,7 @@
 | `llm_model_events` | `core.llm` | 모델 추가·삭제·저하·복구 이벤트. TTL 90일 |
 
 모델 선호목록은 없다. 요약은 Gemini 1순위(`SUMMARY_DAILY_BUDGET`)·2순위(`SUMMARY_SECONDARY_DAILY_BUDGET`)를
-각자 하루 예산만큼 먼저 쓰고, 그다음과 챗봇·플래너는 헬스체크가 정한 정상 모델 순서(24h 가용률·지연,
+각자 하루 예산만큼 먼저 쓰고, 그다음과 챗봇은 헬스체크가 정한 정상 모델 순서(24h 가용률·지연,
 성공률 낮으면 뒤로)를 쓴다([architecture.md](architecture.md) §5).
 
 ### 1.2 인덱스

@@ -21,13 +21,11 @@ from typing import TYPE_CHECKING, Any
 
 from pymongo import ASCENDING
 
-from techletter.chat.guards import PromptGuard
 from techletter.chat.memory import MemoryContext
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.errors import (
     LlmRateLimitedError,
     LlmUnavailableError,
-    PolicyBlockedError,
     QuotaExceededError,
     ResourceNotFoundError,
     RetryableError,
@@ -92,14 +90,10 @@ class SearchSummaryService:
         self._agent = agent
         self._sessions = sessions
         self._limiter = EmbedRateLimiter(misses_per_minute)
-        self._guard = PromptGuard()
         # 같은 요약을 동시에 두 번 만들지 않는다(탭 두 개, 빠른 새로고침).
         self._inflight: dict[str, asyncio.Task[SearchSummary]] = {}
 
     async def summarize(self, user_code: str, query: str, post_ids: list[str]) -> SearchSummary:
-        guard = self._guard.inspect(query)
-        if guard.blocked:
-            raise PolicyBlockedError(guard.message, details={"findings": guard.to_metadata()})
         key = summary_key(query, post_ids)
 
         doc = await self._col.find_one({"_id": key})
@@ -110,7 +104,7 @@ class SearchSummaryService:
         if task is None:
             if not self._limiter.allow(user_code):
                 raise LlmRateLimitedError()
-            task = asyncio.create_task(self._generate(key, guard.text, post_ids))
+            task = asyncio.create_task(self._generate(key, query.strip(), post_ids))
             self._inflight[key] = task
             task.add_done_callback(lambda _: self._inflight.pop(key, None))
         # 요청이 끊겨도 만들던 요약은 끝까지 만들어 저장한다.

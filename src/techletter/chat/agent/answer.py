@@ -6,13 +6,17 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
-from techletter.chat.agent.prompts import ANSWER_SYSTEM_PROMPT, BRIEF_ANSWER_SYSTEM_PROMPT
-from techletter.chat.agent.state import ChatPlan, PostRecord, ToolResult
+from techletter.chat.agent.prompts import (
+    ANSWER_SYSTEM_PROMPT,
+    BRIEF_ANSWER_SYSTEM_PROMPT,
+    NO_MATCH_ANSWER,
+)
+from techletter.chat.agent.state import PostRecord, ToolResult
 
 if TYPE_CHECKING:  # pragma: no cover
+    from techletter.chat.memory import Turn
     from techletter.core.llm.chat import LlmGateway
 
 __all__ = [
@@ -27,6 +31,8 @@ NO_RESULT_MESSAGE = "요청 조건에 맞는 포스트를 찾지 못했습니다
 SUMMARY_PREVIEW_CHARS = 160
 MAX_LABELS = 5
 AnswerGeneration = tuple[str, str | None]
+# 이전 답은 길다. 무엇을 이어 묻는지 알 만큼만 넣는다 — 사실의 근거는 이번에 읽은 글이다.
+_HISTORY_TURN_CHARS = 600
 
 
 def build_post_context(posts: list[PostRecord], *, summaries_only: bool = False) -> str:
@@ -81,71 +87,39 @@ class AnswerGenerator:
         self._llm = llm
         self._max_context_chars = max_context_chars
 
-    async def generate(
+    async def answer(
         self,
         query: str,
-        plan: ChatPlan,
         result: ToolResult,
-        memory_metadata: dict[str, object],
+        recent: list[Turn],
         model_id: str | None = None,
     ) -> AnswerGeneration:
-        if result.status in {"no_result", "failed"}:
-            return result.message or NO_RESULT_MESSAGE, None
-        if plan.task == "list_posts":
-            return format_post_list(result), None
+        """번호 붙은 글로 답한다. 글이 질문과 무관하면 `NO_MATCH_ANSWER`를 준다."""
+        history = "\n".join(f"{turn.role}: {turn.content[:_HISTORY_TURN_CHARS]}" for turn in recent)
+        parts = [
+            f"[이전 대화]\n{history}" if history else "",
+            f"[글]\n{result.context[: self._max_context_chars]}",
+            f"[질문]\n{query}",
+        ]
+        return await self._complete(
+            ANSWER_SYSTEM_PROMPT, "\n\n".join(p for p in parts if p), model_id
+        )
 
-        payload = {
-            "query": query,
-            "plan": {
-                "task": plan.task,
-                "strict_scope": plan.strict_scope,
-                "needs_content": plan.needs_content,
-                "reason": plan.reason,
-            },
-            "memory": memory_metadata,
-            "tool_result": {
-                "status": result.status,
-                "total": result.total,
-                "message": result.message,
-                # 무료 모델은 컨텍스트가 작다. 넘치면 뒤를 자른다.
-                "context": result.context[: self._max_context_chars],
-                "posts": [
-                    {
-                        "title": post.title,
-                        "blog_name": post.blog_name,
-                        "link": post.link,
-                        "published_at": post.published_at,
-                        "summary": post.summary,
-                    }
-                    for post in result.posts
-                ],
-            },
-        }
-        system_prompt = BRIEF_ANSWER_SYSTEM_PROMPT if plan.brief else ANSWER_SYSTEM_PROMPT
+    async def brief(self, query: str, result: ToolResult) -> AnswerGeneration:
+        """검색 결과 AI 요약. 요약본만 읽고 짧게 쓴다."""
+        payload = f"[Search]\n{query}\n\n[Posts]\n{result.context[: self._max_context_chars]}"
+        return await self._complete(BRIEF_ANSWER_SYSTEM_PROMPT, payload, None)
+
+    async def _complete(self, system: str, user: str, model_id: str | None) -> AnswerGeneration:
         candidates: list[str] | None = None
         if model_id is not None:
             automatic = await self._llm.candidates("chat")
-            # 게이트웨이의 자동 후보는 이미 라우터 순서를 따른다. 사용자의
-            # 선택만 앞에 넣고 중복을 제거해야 한 모델에 시도가 몰리지 않는다.
-            candidates = list(dict.fromkeys([model_id, *automatic]))
-            # 명시 후보를 넘기면 Router.run은 후보를 다시 자르지 않으므로,
-            # 라우터 설정의 상한을 여기서 그대로 적용한다.
+            # 사용자의 선택만 앞에 넣고 중복을 없앤다. 명시 후보는 라우터가 다시 자르지
+            # 않으니 시도 상한을 여기서 건다.
             router = getattr(self._llm, "_router", None)
             settings = getattr(router, "_settings", None)
-            raw_max_attempts = getattr(settings, "max_model_attempts", 3)
-            max_attempts = raw_max_attempts if isinstance(raw_max_attempts, int) else 3
-            max_attempts = max(max_attempts, 1)
-            candidates = candidates[:max_attempts]
-
-        if candidates is None:
-            answer, used_model_id = await self._llm.complete(
-                "chat", system_prompt, json.dumps(payload, ensure_ascii=False)
-            )
-        else:
-            answer, used_model_id = await self._llm.complete(
-                "chat",
-                system_prompt,
-                json.dumps(payload, ensure_ascii=False),
-                candidates=candidates,
-            )
-        return answer or NO_RESULT_MESSAGE, used_model_id
+            max_attempts = getattr(settings, "max_model_attempts", 3)
+            max_attempts = max(max_attempts if isinstance(max_attempts, int) else 3, 1)
+            candidates = list(dict.fromkeys([model_id, *automatic]))[:max_attempts]
+        answer, used = await self._llm.complete("chat", system, user, candidates=candidates)
+        return (answer or "").strip() or NO_MATCH_ANSWER, used

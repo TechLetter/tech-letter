@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from techletter.chat.models import ChatMessage, ChatSession, SessionMemory
+from techletter.chat.models import ChatMessage, ChatSession
 from techletter.content.models import AISummary, Blog, EmbeddingMeta, Post, StatusFlags
 
 POST_FIELDS = {
@@ -71,21 +71,11 @@ def test_chat_message_keeps_created_at_only() -> None:
     assert set(ChatMessage().to_mongo()) == {"role", "content", "created_at", "metadata"}
 
 
-def test_session_memory_shape() -> None:
-    assert set(SessionMemory().to_mongo()) == {
-        "summary",
-        "covered_message_count",
-        "status",
-        "requested_at",
-        "updated_at",
-    }
-
-
 def test_chat_session_shape() -> None:
     session = ChatSession.start("google:abc", "첫 질문")
     doc = session.to_mongo()
 
-    assert set(doc) == {"created_at", "updated_at", "user_code", "title", "messages", "memory"}
+    assert set(doc) == {"created_at", "updated_at", "user_code", "title", "messages"}
     assert set(doc["messages"][0]) == {"role", "content", "created_at", "metadata"}
 
 

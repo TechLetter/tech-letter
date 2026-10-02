@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from techletter.chat.models import ChatMessage, ChatSession, SessionMemory, SuggestedQuestion
+from techletter.chat.models import ChatMessage, ChatSession, SuggestedQuestion
 from techletter.core.db.indexes import IndexSpec, register_indexes
 from techletter.core.errors import ResourceConflictError
 from techletter.core.ids import to_object_id
@@ -98,52 +98,6 @@ class ChatSessionRepository:
             {"_id": oid}, {"$set": {"title": title, "updated_at": utcnow()}}
         )
         return result.matched_count > 0
-
-    async def set_memory(self, session_id: str, memory: SessionMemory) -> ChatSession | None:
-        """압축 메모리를 갱신한다. `updated_at`은 건드리지 않는다.
-
-        압축은 백그라운드 잡이다. 여기서 `updated_at`을 올리면 세션 목록의
-        정렬이 사용자가 만지지도 않은 세션 때문에 뒤바뀐다.
-        """
-        oid = to_object_id(session_id)
-        if oid is None:
-            return None
-        doc = await self._col.find_one_and_update(
-            {"_id": oid},
-            {"$set": {"memory": memory.to_mongo()}},
-            return_document=ReturnDocument.AFTER,
-        )
-        return ChatSession.model_validate(doc) if doc else None
-
-    async def claim_compression(self, session_id: str) -> bool:
-        """압축을 `pending`으로 선점한다. 이미 pending이면 False다.
-
-        원자적으로 하지 않으면 연달아 오는 메시지가 같은 압축 잡을 두 번 만든다.
-        갱신 파이프라인을 쓰는 이유는 **기존 요약을 보존**하면서 상태만 바꾸기
-        위해서다 — 압축이 끝나기 전까지는 직전 요약으로 답해야 한다.
-        """
-        oid = to_object_id(session_id)
-        if oid is None:
-            return False
-        result = await self._col.update_one(
-            {"_id": oid, "memory.status": {"$ne": "pending"}},
-            [
-                {
-                    "$set": {
-                        "memory": {
-                            "summary": {"$ifNull": ["$memory.summary", ""]},
-                            "covered_message_count": {
-                                "$ifNull": ["$memory.covered_message_count", 0]
-                            },
-                            "status": "pending",
-                            "requested_at": "$$NOW",
-                            "updated_at": {"$ifNull": ["$memory.updated_at", None]},
-                        }
-                    }
-                }
-            ],
-        )
-        return result.modified_count > 0
 
     async def delete(self, session_id: str, user_code: str) -> bool:
         oid = to_object_id(session_id)

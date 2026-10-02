@@ -8,8 +8,6 @@ from typing import Any, Literal
 
 __all__ = [
     "Activity",
-    "ChatPlan",
-    "ChatTask",
     "PostConstraints",
     "PostRecord",
     "Source",
@@ -17,14 +15,6 @@ __all__ = [
     "ToolStatus",
 ]
 
-ChatTask = Literal[
-    "list_posts",
-    "summarize_posts",
-    "answer_from_posts",
-    "semantic_search_posts",
-    "general_rag",
-    "no_result",
-]
 ToolStatus = Literal["ok", "no_result", "failed"]
 
 
@@ -32,7 +22,9 @@ ToolStatus = Literal["ok", "no_result", "failed"]
 class PostConstraints:
     published_from: datetime | None = None
     published_to: datetime | None = None
+    blog_id: str | None = None
     blog_name: str | None = None
+    """설명용. 거르는 건 `blog_id`다."""
     categories: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     limit: int = 10
@@ -40,23 +32,8 @@ class PostConstraints:
     def has_scope(self) -> bool:
         """사용자가 범위를 못 박았는지. 그렇다면 엉뚱한 글로 대체하면 안 된다."""
         return bool(
-            self.published_from
-            or self.published_to
-            or self.blog_name
-            or self.categories
-            or self.tags
+            self.published_from or self.published_to or self.blog_id or self.categories or self.tags
         )
-
-
-@dataclass(slots=True)
-class ChatPlan:
-    task: ChatTask = "general_rag"
-    constraints: PostConstraints = field(default_factory=PostConstraints)
-    strict_scope: bool = False
-    needs_content: bool = False
-    reason: str = ""
-    brief: bool = False
-    """검색 결과 AI 요약. 요약본만 읽고 짧게 답한다(`BRIEF_ANSWER_SYSTEM_PROMPT`)."""
 
 
 @dataclass(slots=True)

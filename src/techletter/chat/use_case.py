@@ -2,14 +2,12 @@
 
 순서가 전부다:
 
-1. **입력 가드** — 크레딧을 깎기 전에 본다. 정책 위반이면 사용자는 잔액을
-   잃지 않는다.
-2. **세션 확보** — 없으면 만든다.
-3. **차감** — 원자적으로. 부족하면 402.
-4. **에이전트 실행**
-5. **기록 / 환불** — 실패하면 되돌린다. 클라이언트가 끊어도 마찬가지다.
+1. **세션 확보** — 없으면 만든다.
+2. **차감** — 원자적으로. 부족하면 402.
+3. **에이전트 실행**
+4. **기록 / 환불** — 실패하면 되돌린다. 클라이언트가 끊어도 마찬가지다.
 
-5번이 `asyncio.shield` 안에 있는 이유: 스트리밍 중 브라우저를 닫으면 요청
+4번이 `asyncio.shield` 안에 있는 이유: 스트리밍 중 브라우저를 닫으면 요청
 태스크가 취소된다. 그때 차감만 남고 환불이 안 되면 사용자는 답도 못 받고
 크레딧만 잃는다.
 """
@@ -21,12 +19,10 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from techletter.chat.guards import PromptGuard
 from techletter.core.errors import (
     InvalidRequestError,
     LlmRateLimitedError,
     LlmUnavailableError,
-    PolicyBlockedError,
     QuotaExceededError,
     RetryableError,
 )
@@ -40,9 +36,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from bson import ObjectId
     from pymongo.asynchronous.database import AsyncDatabase
 
-    from techletter.chat.agent import Activity, ChatAgent
+    from techletter.chat.agent import Activity, AgentResult, ChatAgent
     from techletter.chat.memory import MemoryBuilder
-    from techletter.chat.models import ChatSession
+    from techletter.chat.models import ChatMessage, ChatSession
     from techletter.chat.sessions import ChatSessionService
     from techletter.core.jobs.queue import JobQueue
     from techletter.settings import ChatSettings
@@ -60,8 +56,6 @@ class ChatAnswer:
     answer: str
     sources: list[dict[str, Any]] = field(default_factory=list)
     agent: dict[str, Any] = field(default_factory=dict)
-    guard: dict[str, Any] = field(default_factory=dict)
-    memory: dict[str, Any] = field(default_factory=dict)
     consumed_credits: int = 0
     remaining_credits: int = 0
 
@@ -76,7 +70,6 @@ class ChatUseCase:
         agent: ChatAgent,
         queue: JobQueue,
         settings: ChatSettings,
-        prompt_guard: PromptGuard | None = None,
         catalog_db: AsyncDatabase | None = None,
     ) -> None:
         self._sessions = sessions
@@ -85,8 +78,25 @@ class ChatUseCase:
         self._agent = agent
         self._queue = queue
         self._settings = settings
-        self._guard = prompt_guard or PromptGuard()
         self._catalog_db = catalog_db
+
+    async def answer(
+        self,
+        query: str,
+        history: list[ChatMessage],
+        *,
+        model_id: str | None = None,
+        on_activity: Callable[[Activity], Awaitable[None]] | None = None,
+        client: str | None = None,
+    ) -> AgentResult:
+        """세션·크레딧 없이 답만 만든다. `run`과 평가 스크립트가 같은 경로를 쓴다."""
+        context = await self._memory.build(query, history)
+        options: dict[str, Any] = {}
+        if model_id is not None:
+            options["model_id"] = model_id
+        if client is not None:
+            options["client"] = client
+        return await self._agent.run(query, context, on_activity, **options)
 
     async def run(
         self,
@@ -97,10 +107,7 @@ class ChatUseCase:
         on_activity: Callable[[Activity], Awaitable[None]] | None = None,
         model_id: str | None = None,
     ) -> ChatAnswer:
-        guard = self._guard.inspect(query)
-        if guard.blocked:
-            raise PolicyBlockedError(guard.message, details={"findings": guard.to_metadata()})
-        safe_query = guard.text
+        safe_query = query.strip()
         selected_model_id = await self._validated_model_id(model_id)
 
         session, is_new = await self._resolve_session(user_code, session_id, safe_query)
@@ -109,12 +116,15 @@ class ChatUseCase:
         started = time.monotonic()
         try:
             with track_usage() as usage:
-                context = await self._memory.build(safe_query, session.messages, session.memory)
-                # 선택 인자는 있을 때만 넘긴다. 테스트 대역은 옛 시그니처를 쓴다.
-                options: dict[str, Any] = {}
-                if selected_model_id is not None:
-                    options["model_id"] = selected_model_id
-                result = await self._agent.run(safe_query, context, on_activity, **options)
+                # 새 세션은 첫 질문이 이미 담겨 있다. 그 질문을 기록으로 다시 보지 않는다.
+                history = session.messages[:-1] if is_new else session.messages
+                result = await self.answer(
+                    safe_query,
+                    history,
+                    model_id=selected_model_id,
+                    on_activity=on_activity,
+                    client=user_code,
+                )
         except BaseException as exc:
             # 취소(브라우저 종료)도 여기로 온다. 환불은 반드시 끝까지 돌린다.
             await asyncio.shield(self._refund(user_code, consumed.credit_ids, type(exc).__name__))
@@ -131,8 +141,6 @@ class ChatUseCase:
                 session=session,
                 query=safe_query,
                 query_already_stored=is_new,
-                guard_metadata=guard.to_metadata() if guard.action != "pass" else result.guard,
-                memory_metadata=context.to_metadata(),
                 result=result,
                 consumed=consumed.consumed,
                 remaining=consumed.remaining,
@@ -195,8 +203,6 @@ class ChatUseCase:
         session: ChatSession,
         query: str,
         query_already_stored: bool,
-        guard_metadata: dict[str, Any],
-        memory_metadata: dict[str, Any],
         result: Any,
         consumed: int,
         remaining: int,
@@ -208,9 +214,7 @@ class ChatUseCase:
             session = await self._sessions.append(session, "user", query)
 
         agent_metadata = {
-            "mode": "agent",
             "intent": result.intent,
-            "activities": result.activities,
             "model_id": result.model_id,
             # 답변 옆 (i): 이 질문 하나에 든 토큰(계획·재작성·답변 합)과 응답 시간.
             "usage": usage,
@@ -222,11 +226,8 @@ class ChatUseCase:
             metadata={
                 "sources": result.sources,
                 "agent": agent_metadata,
-                "guard": guard_metadata,
-                "memory": memory_metadata,
             },
         )
-        await self._maybe_compress(session)
 
         return ChatAnswer(
             session_id=session_id,
@@ -234,23 +235,6 @@ class ChatUseCase:
             answer=result.answer,
             sources=result.sources,
             agent=agent_metadata,
-            guard=guard_metadata,
-            memory=memory_metadata,
             consumed_credits=consumed,
             remaining_credits=remaining,
-        )
-
-    async def _maybe_compress(self, session: ChatSession) -> None:
-        """대화가 길어지면 요약 잡을 건다. 답변을 막지 않는다."""
-        from techletter.core.jobs.types import JobType  # noqa: PLC0415
-
-        if not self._sessions.needs_compression(session):
-            return
-        session_id = str(session.id)
-        if not await self._sessions.claim_compression(session_id):
-            return
-        await self._queue.enqueue(
-            JobType.CHAT_COMPRESSION_REQUESTED,
-            session_id,
-            {"session_id": session_id, "user_code": session.user_code},
         )

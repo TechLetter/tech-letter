@@ -9,9 +9,6 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from techletter.chat.handlers import CompressionRequestedHandler
-from techletter.chat.memory import MemoryBuilder
-from techletter.chat.repositories import ChatSessionRepository
 from techletter.content.handlers import EmbeddingCompletedHandler, SummaryCompletedHandler
 from techletter.content.rss import Aggregator, RssFeeder
 from techletter.core.jobs.policy import dead_retryable_alert
@@ -116,19 +113,6 @@ def build_core_worker(container: Container) -> CoreWorker:
             logger.warning(alert, extra={"dead_retryable": dead_retryable})
 
     # LLM은 대화 압축에만 쓴다. 요약·임베딩은 전용 워커가 담당한다.
-    from techletter.core.llm.chat import LangChainChatClient, LlmGateway  # noqa: PLC0415
-    from techletter.core.llm.router import ModelRouter  # noqa: PLC0415
-    from techletter.core.llm.scouter import ScouterClient  # noqa: PLC0415
-
-    llm = LlmGateway(
-        ModelRouter(
-            settings.router,
-            ScouterClient(settings.router, container.db),
-            container.model_stats,
-        ),
-        LangChainChatClient(settings.chat_llm),
-    )
-    sessions_repo = ChatSessionRepository(container.db)
 
     runner = JobRunner(
         queue,
@@ -136,9 +120,6 @@ def build_core_worker(container: Container) -> CoreWorker:
         {
             JobType.SUMMARY_COMPLETED: SummaryCompletedHandler(posts, queue),
             JobType.EMBEDDING_COMPLETED: EmbeddingCompletedHandler(posts),
-            JobType.CHAT_COMPRESSION_REQUESTED: CompressionRequestedHandler(
-                container.sessions, sessions_repo, MemoryBuilder(llm, settings.chat)
-            ),
         },
         worker_id=f"core-{uuid.uuid4().hex[:8]}",
         on_tick=heartbeat.touch,
