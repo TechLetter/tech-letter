@@ -43,23 +43,27 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 def extract_json(raw: str) -> dict[str, Any]:
     """모델 응답에서 JSON 객체를 꺼낸다.
 
-    ```json 펜스로 감싸거나 앞뒤에 설명을 붙이는 모델이 흔하다. 실패는
+    ```json 펜스로 감싸거나 앞뒤에 설명을 붙이는 모델이 흔하다. 첫 `{`부터 객체 하나만
+    읽고 뒤에 붙은 것(닫는 펜스 뒤 설명, 두 번째 객체)은 버린다. 실패는
     `JsonOutputError`로 올려 라우터가 **다음 모델**로 넘어가게 한다.
     """
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`").strip()
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].strip()
-    if not cleaned.startswith("{"):
-        start, end = cleaned.find("{"), cleaned.rfind("}")
-        if start < 0 or end <= start:
-            raise JsonOutputError(f"no json object in response: {raw[:200]!r}")
-        cleaned = cleaned[start : end + 1]
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise JsonOutputError(f"invalid json: {exc}") from exc
+    # 문자열 안에 줄바꿈을 날것으로 넣는 모델이 있어 `strict=False`로 읽는다.
+    # 첫 `{`, 그리고 ```json 펜스 바로 뒤의 `{`만 본다. 아무 `{`나 시도하면 잘린 응답에서
+    # 안쪽 객체(예: "tldr")를 전체 답으로 잘못 읽는다.
+    fence = raw.find("```json")
+    starts = [raw.find("{"), raw.find("{", fence) if fence >= 0 else -1]
+    starts = sorted({s for s in starts if s >= 0})
+    if not starts:
+        raise JsonOutputError(f"no json object in response: {raw[:200]!r}")
+    errors: list[str] = []
+    for start in starts:
+        try:
+            parsed, _ = json.JSONDecoder(strict=False).raw_decode(raw, start)
+            break
+        except json.JSONDecodeError as exc:
+            errors.append(str(exc))
+    else:
+        raise JsonOutputError(f"invalid json: {errors[0]}")
     if not isinstance(parsed, dict):
         raise JsonOutputError("json response must be an object")
     return parsed
@@ -73,7 +77,13 @@ class ChatClient:
     """모델 하나를 호출하는 최소 인터페이스."""
 
     async def complete(
-        self, model_id: str, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_TOKENS
+        self,
+        model_id: str,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        json_mode: bool = False,
     ) -> str:  # pragma: no cover - 프로토콜
         raise NotImplementedError
 
@@ -86,9 +96,9 @@ class LangChainChatClient(ChatClient):
 
     def __init__(self, settings: GenerativeLlmSettings) -> None:
         self._settings = settings
-        self._models: dict[tuple[str, int], Any] = {}
+        self._models: dict[tuple[str, int, bool], Any] = {}
 
-    def _build(self, model_id: str, max_tokens: int) -> Any:
+    def _build(self, model_id: str, max_tokens: int, json_mode: bool = False) -> Any:
         provider = self._settings.provider
         api_key = self._settings.api_key
         if provider == "google":
@@ -101,6 +111,9 @@ class LangChainChatClient(ChatClient):
                 max_output_tokens=max_tokens,
                 timeout=self._settings.timeout_seconds,
                 google_api_key=api_key,
+                # JSON을 요구하는 호출은 API가 형식을 보장하게 한다. 긴 본문에서 따옴표
+                # 이스케이프를 빠뜨려 깨지는 일이 있었다(2026-10-03 쉽게 읽기 파일럿).
+                **({"response_mime_type": "application/json"} if json_mode else {}),
             )
 
         from langchain_openai import ChatOpenAI  # noqa: PLC0415
@@ -118,18 +131,24 @@ class LangChainChatClient(ChatClient):
             extra_body={"reasoning": {"exclude": True}},
         )
 
-    def _get(self, model_id: str, max_tokens: int) -> Any:
-        key = (model_id, max_tokens)
+    def _get(self, model_id: str, max_tokens: int, json_mode: bool = False) -> Any:
+        key = (model_id, max_tokens, json_mode)
         if key not in self._models:
-            self._models[key] = self._build(model_id, max_tokens)
+            self._models[key] = self._build(model_id, max_tokens, json_mode)
         return self._models[key]
 
     async def complete(
-        self, model_id: str, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_TOKENS
+        self,
+        model_id: str,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        json_mode: bool = False,
     ) -> str:
         from langchain_core.messages import HumanMessage, SystemMessage  # noqa: PLC0415
 
-        response = await self._get(model_id, max_tokens).ainvoke(
+        response = await self._get(model_id, max_tokens, json_mode).ainvoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )
         usage = getattr(response, "usage_metadata", None) or {}
@@ -175,9 +194,17 @@ class RoutingChatClient(ChatClient):
         return self._primary if model_id in self._primary_models else self._fallback
 
     async def complete(
-        self, model_id: str, system: str, user: str, *, max_tokens: int = DEFAULT_MAX_TOKENS
+        self,
+        model_id: str,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        json_mode: bool = False,
     ) -> str:
-        return await self._pick(model_id).complete(model_id, system, user, max_tokens=max_tokens)
+        return await self._pick(model_id).complete(
+            model_id, system, user, max_tokens=max_tokens, json_mode=json_mode
+        )
 
     async def aclose(self) -> None:
         await self._primary.aclose()
@@ -206,12 +233,18 @@ class LlmGateway:
         first = self._quota.model_ids
         return [*first, *(m for m in routed if m not in first)]
 
-    async def _call(self, model_id: str, system: str, user: str, max_tokens: int) -> str:
+    async def _call(
+        self, model_id: str, system: str, user: str, max_tokens: int, json_mode: bool = False
+    ) -> str:
         if self._quota is None:
-            return await self._client.complete(model_id, system, user, max_tokens=max_tokens)
+            return await self._client.complete(
+                model_id, system, user, max_tokens=max_tokens, json_mode=json_mode
+            )
         await self._quota.acquire(model_id)
         try:
-            return await self._client.complete(model_id, system, user, max_tokens=max_tokens)
+            return await self._client.complete(
+                model_id, system, user, max_tokens=max_tokens, json_mode=json_mode
+            )
         except Exception as exc:
             if is_daily_quota_error(exc):
                 await self._quota.exhaust(model_id)
@@ -251,7 +284,9 @@ class LlmGateway:
         """
 
         async def call(model_id: str) -> dict[str, Any]:
-            return extract_json(await self._call(model_id, system, user, max_tokens))
+            return extract_json(
+                await self._call(model_id, system, user, max_tokens, json_mode=True)
+            )
 
         if candidates is None:
             candidates = await self.candidates(purpose)
