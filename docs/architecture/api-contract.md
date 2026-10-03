@@ -201,6 +201,7 @@
 | GET | `/health` | - | | `200 {"status":"ok"}` / `503 {"status":"degraded","checks":{...}}` (Traefik은 `/api`만 라우팅하므로 compose healthcheck 전용) |
 | GET | `/posts` | 선택 | `page, page_size, categories[], tags[], blog_id, published_from, published_to, q` | 목록 봉투 + `Post[]`. `q`(2글자 이상)가 있으면 하이브리드 검색 관련도순, 최대 100건. 없으면 최신순 |
 | GET | `/posts/{id}` | 선택 | | `Post` / 404 `resource.not_found` |
+| GET | `/posts/{id}/explainer` | - | | `{post_id, post_type, difficulty, reading_minutes, one_liner, points[], body_md, glossary[], generated_at}` / 404 `resource.not_found`(아직 없음). 헤더 `X-Robots-Tag: noindex, nofollow` |
 | POST | `/posts/{id}/views` | - | | `204` |
 | GET | `/bookmarks` | 필수 | `page, page_size` | 목록 + `Post[]`(`is_bookmarked: true`) |
 | POST | `/bookmarks` | 필수 | `{post_id}` | `201 {post_id, created_at}`(중복도 멱등 upsert) / 404 |
