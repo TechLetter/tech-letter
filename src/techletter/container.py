@@ -32,6 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.db.qdrant import VectorStore
     from techletter.core.llm.chat import LlmGateway
     from techletter.core.llm.stats import ModelStatsStore
+    from techletter.explainer.repository import ExplainerRepository
     from techletter.search.service import SearchService
     from techletter.search.summary import SearchSummaryService
     from techletter.settings import Settings
@@ -75,6 +76,7 @@ class Container:
         import techletter.core.llm.model_history  # noqa: PLC0415
         import techletter.core.llm.model_scan  # noqa: PLC0415
         import techletter.core.llm.stats  # noqa: PLC0415
+        import techletter.explainer.repository  # noqa: PLC0415
         import techletter.search.summary  # noqa: PLC0415
         import techletter.users.repositories  # noqa: F401, PLC0415
 
@@ -134,6 +136,12 @@ class Container:
                 quota_reset_utc_hour=self.settings.router.quota_reset_utc_hour,
             ),
         )
+
+    @property
+    def explainers(self) -> ExplainerRepository:
+        from techletter.explainer.repository import ExplainerRepository  # noqa: PLC0415
+
+        return ExplainerRepository(self.db)
 
     @property
     def model_stats(self) -> ModelStatsStore:

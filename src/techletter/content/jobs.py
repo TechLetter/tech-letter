@@ -66,6 +66,8 @@ class SummaryCompletedPayload:
     categories: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     model_name: str = ""
+    explainer: dict[str, Any] | None = None
+    """쉽게 읽기 문서(JSON 모드 덤프). 있으면 `post_explainers`에 저장한다."""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -78,6 +80,7 @@ class SummaryCompletedPayload:
             categories=[str(c) for c in (data.get("categories") or [])],
             tags=[str(t) for t in (data.get("tags") or [])],
             model_name=str(data.get("model_name") or ""),
+            explainer=data.get("explainer") if isinstance(data.get("explainer"), dict) else None,
         )
 
 

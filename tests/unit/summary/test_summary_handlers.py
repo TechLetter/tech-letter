@@ -118,7 +118,7 @@ async def test_a_summary_uses_the_stored_body() -> None:
     assert pipeline.fetched_with == []
     [(job_type, payload)] = queue.enqueued
     assert job_type == JobType.SUMMARY_COMPLETED
-    assert set(payload) == {"post_id", "summary", "categories", "tags", "model_name"}
+    assert set(payload) == {"post_id", "summary", "categories", "tags", "model_name", "explainer"}
 
 
 async def test_a_summary_without_a_body_fetches_first() -> None:

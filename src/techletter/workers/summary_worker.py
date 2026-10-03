@@ -18,6 +18,7 @@ from techletter.core.llm.quota import QuotaGate, QuotaModel
 from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
+from techletter.explainer.generator import ExplainerGenerator
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.icons import BlogIconHandler
 from techletter.summary.pipeline import SummaryPipeline
@@ -28,12 +29,22 @@ from techletter.workers.runtime import Heartbeat
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.container import Container
 
-__all__ = ["build_summarizer", "build_summary_worker"]
+__all__ = ["build_explainer", "build_summarizer", "build_summary_worker"]
 
 logger = get_logger(__name__)
 
 
 def build_summarizer(container: Container) -> Summarizer:
+    """주제 재분류 CLI가 쓴다. 새 글은 `build_explainer`가 쉽게 읽기를 만든다."""
+    return Summarizer(_summary_llm(container), container.settings.summary)
+
+
+def build_explainer(container: Container) -> ExplainerGenerator:
+    """요약 워커와 같은 모델 순서·한도로 쉽게 읽기를 만든다."""
+    return ExplainerGenerator(_summary_llm(container))
+
+
+def _summary_llm(container: Container) -> LlmGateway:
     """요약 워커와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다.
 
     3 Flash → 3.5 Flash Lite → OpenRouter 무료 모델 순서다. 앞의 둘은 하루·분당
@@ -62,7 +73,7 @@ def build_summarizer(container: Container) -> Summarizer:
     )
     # 후보에 두 provider의 모델 id가 섞인다. `RoutingChatClient`가 model_id를 보고
     # 한도 모델은 Google 클라이언트로, 나머지는 OpenRouter 클라이언트로 보낸다.
-    llm = LlmGateway(
+    return LlmGateway(
         ModelRouter(router, ScouterClient(router, container.db), container.model_stats),
         RoutingChatClient(
             quota.model_ids,
@@ -71,7 +82,6 @@ def build_summarizer(container: Container) -> Summarizer:
         ),
         quota=quota,
     )
-    return Summarizer(llm, settings.summary)
 
 
 def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
@@ -88,7 +98,12 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
                 container.posts, pipeline, container.queue
             ),
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
-                container.posts, pipeline, container.queue
+                container.posts,
+                pipeline,
+                container.queue,
+                build_explainer(container)
+                if container.settings.summary.explainer_enabled
+                else None,
             ),
             # 이미지 변환(Pillow)과 SVG를 그릴 브라우저가 이 워커 이미지에만 있다.
             JobType.BLOG_ICON_REQUESTED: BlogIconHandler(

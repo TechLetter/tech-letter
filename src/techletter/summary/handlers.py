@@ -24,6 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import PostRepository
     from techletter.core.jobs.models import Job
     from techletter.core.jobs.queue import JobQueue
+    from techletter.explainer.generator import ExplainerGenerator
     from techletter.summary.pipeline import SummaryPipeline
 
 __all__ = ["ContentFetchHandler", "SummaryRequestedHandler"]
@@ -66,10 +67,19 @@ class ContentFetchHandler:
 
 
 class SummaryRequestedHandler:
-    def __init__(self, posts: PostRepository, pipeline: SummaryPipeline, queue: JobQueue) -> None:
+    """본문 → 쉽게 읽기(TL;DR·풀어쓴 본문·주제·태그). TL;DR 한 문장이 기존 요약 자리에 들어간다."""
+
+    def __init__(
+        self,
+        posts: PostRepository,
+        pipeline: SummaryPipeline,
+        queue: JobQueue,
+        explainer: ExplainerGenerator | None = None,
+    ) -> None:
         self._posts = posts
         self._pipeline = pipeline
         self._queue = queue
+        self._explainer = explainer
 
     async def __call__(self, job: Job) -> None:
         ref = _ref(job)
@@ -81,6 +91,9 @@ class SummaryRequestedHandler:
             return
 
         try:
+            if self._explainer is not None:
+                await self._explain(ref, plain_text)
+                return
             outcome = await self._pipeline.summarize(plain_text)
         except QuotaExceededError:
             # 쿼터는 시간이 지나면 풀린다. 사유를 남기지 않는다 —
@@ -104,4 +117,30 @@ class SummaryRequestedHandler:
         logger.info(
             "post summarized",
             extra={"post_id": ref.post_id, "model": outcome.model_name},
+        )
+
+    async def _explain(self, ref: PostRefPayload, plain_text: str) -> None:
+        explainer = await self._explainer.generate(  # type: ignore[union-attr]
+            ref.post_id, ref.title, ref.blog_name, plain_text
+        )
+        await self._queue.enqueue(
+            JobType.SUMMARY_COMPLETED,
+            ref.post_id,
+            SummaryCompletedPayload(
+                post_id=ref.post_id,
+                summary=explainer.tldr.one_liner,
+                categories=explainer.categories,
+                tags=explainer.tags,
+                model_name=explainer.generation.model,
+                explainer=explainer.model_dump(mode="json", by_alias=True, exclude={"id"}),
+            ).to_dict(),
+        )
+        logger.info(
+            "post explained",
+            extra={
+                "post_id": ref.post_id,
+                "model": explainer.generation.model,
+                "chars": len(explainer.body_md),
+                "checks_passed": explainer.checks.passed,
+            },
         )
