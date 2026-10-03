@@ -90,6 +90,7 @@ _LIST_STOPWORDS = frozenset(
         "만",
     }
 )
+_TOPIC_WORD = re.compile(r"카테고리|주제")
 _PARTICLE = re.compile(r"(?:에서|으로|에는|에도|에|의|은|는|이|가|을|를|로|도|만|들)$")
 # 이보다 뜻 있는 말이 적은 후속 질문은 직전 질문을 붙여 검색한다("보안 문제는?").
 _FOLLOW_UP_MIN_TERMS = 3
@@ -299,7 +300,9 @@ class ChatAgent:
         if scope.blog:
             text = re.sub(re.escape(scope.blog.name), " ", text, flags=re.I)
         keywords = " ".join(_terms(text))
-        if len(keywords) >= 2 and not scope.topics:
+        # 주제어가 걸려도 다른 낱말이 남으면 그 말로 검색한다("무신사 DB 성능 글 목록").
+        # "카테고리", "주제"라고 못 박았을 때만 주제 목록으로 나열한다.
+        if len(keywords) >= 2 and not (scope.topics and _TOPIC_WORD.search(query)):
             posts, _ = await self._evidence.rank(
                 keywords, flt, client=client, boost_blog_id=boost, limit=scope.limit
             )

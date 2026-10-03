@@ -6,7 +6,7 @@
 
 - **어휘(BM25)**: "vllm", "카프카"처럼 단어가 그대로 들어간 글을 잘 찾는다. 벡터 검색은 이런 고유명사에 약하다.
 - **벡터(dense)**: 표현이 달라도 뜻이 가까운 글을 찾는다. 대신 무엇을 물어도 무언가를 돌려준다 → 벡터로만 걸린 글은 점수가 높을 때만 남긴다.
-- 두 점수는 척도가 달라 더하지 않고 **순위로 섞는다(RRF)**.
+- 두 점수는 척도가 달라 **질의마다 0~1로 편 뒤 가중합**한다(어휘 0.2 + 벡터 0.8). RRF(순위 융합)도 설정으로 고를 수 있다.
 
 ## 2. 어휘 색인 (`{base}__lexical`)
 
@@ -38,17 +38,28 @@
 
 ```
 q 정규화: 공백 정리, 2글자 미만이면 검색 안 함(일반 최신순 목록), 100자에서 자름
- ├─ 어휘: Qdrant sparse 검색 상위 100(SEARCH_LEXICAL_CANDIDATES), blog_id·주제 필터를 Qdrant에서 먼저 적용
+ ├─ 어휘: Qdrant sparse 검색 상위 200(SEARCH_LEXICAL_CANDIDATES), blog_id·주제 필터를 Qdrant에서 먼저 적용
  │        (주제와 태그가 함께 오면 합집합 필터라 주제로 미리 좁히지 않고 Mongo에 맡긴다)
  └─ 벡터: 질의 임베딩 → 청크 컬렉션 상위 100청크(SEARCH_DENSE_CANDIDATES) → 포스트별 최고 점수로 묶음
-          어휘에도 걸린 글은 그대로, 벡터로만 걸린 글은 코사인 ≥ 0.7(SEARCH_DENSE_MIN_SCORE)만 남김
-RRF: Σ 1/(60 + 순위)  (SEARCH_RRF_K=60, 동점이면 어휘 순서)
+          어휘에도 걸린 글은 그대로, 벡터로만 걸린 글은 코사인 ≥ 0.65(SEARCH_DENSE_MIN_SCORE)만 남김
+융합(SEARCH_FUSION=convex): 0.2·minmax(BM25) + 0.8·minmax(코사인)  (SEARCH_LEXICAL_WEIGHT, 한쪽에만 있으면 다른 쪽 0)
+      (SEARCH_FUSION=rrf면 Σ 1/(SEARCH_RRF_K + 순위))
 Mongo: 필터(주제·태그·블로그·기간)와 요약 여부를 최종 판정, published_at 조회
-최신성: 점수 × max(0.5, 0.5^(경과일/1100))  → 1년 ≈0.8배, 2년 ≈0.65배, 하한 0.5
+최신성: 기본 끔(SEARCH_RECENCY_HALF_LIFE_DAYS=0). 켜면 점수 × max(하한, 0.5^(경과일/반감기))
 상위 100건(SEARCH_MAX_RESULTS)까지 → 페이지로 잘라 Post 카드 반환 (total ≤ 100)
 ```
-- 벡터 쪽 하한 0.7은 챗봇 RAG의 `CHATBOT_RAG_SCORE_THRESHOLD`(0.5)보다 높다 — 그건 답변 문맥용이라 목록에는 느슨하다.
-- 최신성 하한 0.5: 오래됐어도 훨씬 관련 깊은 글은 위에 남게.
+- **값의 근거 (2026-10-03 튜닝)**: 정답 라벨이 붙은 222문항(dev 123 / test 99)으로 정했다. 평가 자료는 저장소 밖 `plans/rag-tuning/`에 있다.
+  - Codex 에이전트 40개가 dev에서 축별 실험을 했다. 그 뒤 조합 216개를 탐색했다.
+  - test는 마지막에 한 번만 열었다.
+
+  | test 99문항 | 이전(RRF k=60, 최신성 1100일, 벡터 0.7, 후보 100) | 지금 |
+  |---|---|---|
+  | nDCG@10 | 0.774 | 0.934 (+0.160, 95% CI [0.11, 0.21]) |
+  | Recall@5 | 0.933 | 0.989 |
+  | MRR@10 | 0.764 | 0.981 |
+
+  - 최신성 감쇠를 끈 이유: 어휘·벡터 양쪽 1위였던 정답이 감쇠 뒤 7~9위로 밀린 사례가 여럿 나왔다. 기간을 묻는 질문은 발행일 필터가 따로 맡는다.
+  - 점수 융합이 RRF보다 나았다(dev nDCG 0.817 대 RRF 최고 0.789). 임계값 0.60~0.70과 후보 풀 크기에는 둔감했다. 그래서 가운데 값을 골랐다.
 - 응답 모양·필터·페이지는 일반 목록과 같다. 그래서 별도 `/search` 대신 `/posts?q=`를 쓴다.
 
 **장애·한도 시 낮춤** (검색 전체가 막히지 않게):
@@ -74,8 +85,8 @@ Mongo: 필터(주제·태그·블로그·기간)와 요약 여부를 최종 판�
 
 | | 검색 AI 요약 | 챗봇 (§6) |
 |---|---|---|
-| 글 | 검색 결과 앞 **5개**(`BRIEF_MAX_POSTS`) | 같은 하이브리드 검색으로 앞 5개(`CHATBOT_RAG_TOP_K`) |
-| 근거 | 글마다 **요약본만** | 글마다 요약 + 그 글 안에서 질문에 가까운 청크 2개(없으면 본문 앞부분) |
+| 글 | 검색 결과 앞 **5개**(`BRIEF_MAX_POSTS`) | 같은 하이브리드 검색으로 앞 6개(`CHATBOT_RAG_TOP_K`) |
+| 근거 | 글마다 **요약본만** | 글마다 요약 + 그 글 안에서 질문에 가까운 청크 2개(1,200자까지, 없으면 본문 앞부분) |
 | 프롬프트 | `BRIEF_ANSWER_SYSTEM_PROMPT`: 굵은 핵심 한 문장 + 불릿 ≤3개, 불릿마다 `[n]`, 320자 미만 | `ANSWER_SYSTEM_PROMPT`: 직답 → 필요한 만큼만 세부, 주장마다 `[n]`, 보통 1200자 이하 |
 
 - 요약본만 쓰는 이유: 짧게 답하는데 본문 여러 편을 넣으면 컨텍스트 상한에 걸려 뒤쪽 글이 잘린다. 요약 5개 전부가 낫다.
@@ -94,7 +105,7 @@ Mongo: 필터(주제·태그·블로그·기간)와 요약 여부를 최종 판�
    - 기간: KST 달력 기준("이번 달", "지난주", "최근 7일", "2026년 9월"). 끝은 포함 경계(`$lte`).
    - 목록: "목록/리스트" 또는 "글 N개 보여줘"(설명·정리 요청 제외). 주제 이름 조각이 있으면 주제 필터로 최신순, 다른 낱말이 남으면 그 말로 검색한 순서.
 2. **근거** (`EvidenceBuilder`)
-   - 글은 목록 검색과 같은 `SearchService.retrieve`(BM25 + 벡터, RRF, 최신성, `dense_min_score`)로 고른다. 같은 질의 벡터로 **고른 글 안에서만** 청크를 고른다(`VectorStore.search_in_posts`, Qdrant group_by `post_id`).
+   - 글은 목록 검색과 같은 `SearchService.retrieve`(BM25 + 벡터 점수 융합, `dense_min_score`)로 고른다. 글 6개(`CHATBOT_RAG_TOP_K`)를 고르고, 글마다 청크 2개(`CHATBOT_RAG_CHUNKS_PER_POST`)를 넣는다. 청크는 최대 1,200자(`CHATBOT_RAG_CHUNK_CHARS`)다. 같은 질의 벡터로 **고른 글 안에서만** 청크를 고른다(`VectorStore.search_in_posts`, Qdrant group_by `post_id`).
    - 근거 번호는 **글 단위**다. 같은 글의 청크는 같은 `[n]`, `sources[n-1]`이 그 글이다.
    - "거기서", "그 글", "두 번째" 같은 참조면 **직전 답의 출처 글 안에서** 찾는다(`is_reference`).
    - 뜻 있는 낱말이 3개 미만인 후속 질문("보안 문제는?")은 직전 질문을 붙여 검색한다.
@@ -119,4 +130,4 @@ Mongo: 필터(주제·태그·블로그·기간)와 요약 여부를 최종 판�
 
 - 새 글이 검색에 안 나온다 → `techletter jobs list --status pending`에서 `search.lexical_index_requested` 적체 확인(embedding-worker가 처리한다), 급하면 `techletter backfill lexical --execute`.
 - 순위 조정은 코드 배포 없이 `SEARCH_*` env로 가능하지만 compose가 주입하지 않으므로 `docker/compose.prod.yml`에 추가해야 한다. 가중치·`AVG_DOC_LENGTH`는 코드 상수이며 바꾸면 재백필이 필요하다.
-- 테스트: `tests/unit/search/`(토큰화·RRF·최신성·캐시·한도), `tests/integration/test_search.py`, `tests/contract/test_search_contract.py`.
+- 테스트: `tests/unit/search/`(토큰화·융합·최신성·캐시·한도), `tests/integration/test_search.py`, `tests/contract/test_search_contract.py`.

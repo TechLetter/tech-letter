@@ -139,3 +139,36 @@ def test_named_blogs_to_skip_are_excluded_not_boosted() -> None:
     assert s.boost_blog is None
     assert {b.name for b in s.exclude_blogs} == {"카카오", "당근마켓"}
     assert not is_reference("그 두 회사(카카오, 당근마켓) 말고 다른 회사들의 CDC 사례도 보여줘")
+
+
+def test_two_blogs_mean_a_comparison_without_narrowing() -> None:
+    """E32: "인프랩이 AWS Client VPN에서…"에서 AWS를 올려 인프랩 글을 밀어냈다."""
+    s = scope("토스와 카카오의 결제 시스템 비교")
+
+    assert s.blog is None
+    assert s.boost_blog is None
+
+
+def test_a_possessive_is_not_a_blog_marker() -> None:
+    """E21: "Uber의 정확한 고유값 집계"를 Uber 블로그 한정으로 읽었다."""
+    s = scope("토스의 결제 시스템 개선 사례")
+
+    assert s.blog is None
+    assert s.boost_blog == BlogRef("b-toss", "토스")
+
+
+def test_a_period_needs_a_post_context() -> None:
+    assert scope("오늘 서울 날씨 어때?").published_from is None
+    assert scope("오늘 올라온 글 보여줘").published_from is not None
+
+
+def test_words_containing_today_are_not_dates() -> None:
+    assert parse_period("오늘의집 추천 시스템 글", NOW)[0] is None
+    assert parse_period("오늘날 MSA 글", NOW)[0] is None
+
+
+def test_last_n_days_is_a_period() -> None:
+    start, _, label = parse_period("지난 7일 동안 올라온 글", NOW)
+
+    assert start is not None
+    assert label == "최근 7일"

@@ -234,9 +234,10 @@ async def test_a_leaked_brief_prompt_is_blocked() -> None:
 
 
 async def test_a_topic_list_filters_by_the_topic() -> None:
+    """ "카테고리"를 못 박았을 때만 주제 목록이다. 아니면 그 말로 검색한다(E24)."""
     chat, evidence, posts, _ = agent()
 
-    await chat.run("MCP 관련 글 목록", MemoryContext())
+    await chat.run("MCP 카테고리 글 목록", MemoryContext())
 
     assert evidence.ranked == []
     assert "AI 에이전트·MCP" in posts.listed[0].categories
@@ -285,3 +286,12 @@ async def test_an_answer_opening_with_no_match_drops_the_sources() -> None:
     assert out.intent == "no_result"
     # 설명은 남기고, 출처가 없으니 번호는 지운다(채점에서 한 줄 답이 성의 없다고 나왔다).
     assert out.answer == f"{NO_MATCH_ANSWER} 다만 CDC 사례는 있습니다."
+
+
+async def test_a_topic_word_without_category_searches_by_keywords() -> None:
+    chat, evidence, posts, _ = agent()
+
+    await chat.run("MCP 관련 글 목록", MemoryContext())
+
+    assert evidence.ranked[0][0] == "MCP"
+    assert posts.listed == []

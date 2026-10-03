@@ -147,11 +147,23 @@ def service(store, posts, embedder=None, **settings) -> SearchService:
 
 
 async def test_an_equally_relevant_newer_post_ranks_first() -> None:
-    """같은 순위로 걸렸으면 최신 글이 위다."""
+    """최신성 감쇠를 켜면, 같은 순위로 걸렸을 때 최신 글이 위다(기본은 끔)."""
     store = FakeStore(lexical=["old", "new"], dense=[("new", 0.9), ("old", 0.9)])
     posts = FakePosts({"old": days_ago(800), "new": days_ago(10)})
 
-    assert await service(store, posts).rank("kafka", ListPostsFilter()) == ["new", "old"]
+    ranked = await service(store, posts, fusion="rrf", recency_half_life_days=1100.0).rank(
+        "kafka", ListPostsFilter()
+    )
+
+    assert ranked == ["new", "old"]
+
+
+async def test_recency_is_off_by_default() -> None:
+    """2026-10-03 튜닝: 감쇠가 정답 글을 상위권 밖으로 밀어 껐다."""
+    store = FakeStore(lexical=["old", "new"], dense=[("old", 0.9), ("new", 0.9)])
+    posts = FakePosts({"old": days_ago(2000), "new": days_ago(1)})
+
+    assert await service(store, posts).rank("kafka", ListPostsFilter()) == ["old", "new"]
 
 
 async def test_a_much_more_relevant_old_post_still_wins() -> None:
@@ -170,10 +182,25 @@ async def test_dense_only_hits_need_a_high_score() -> None:
     store = FakeStore(lexical=["lex"], dense=[("strong", 0.8), ("weak", 0.6), ("lex", 0.1)])
     posts = FakePosts(dict.fromkeys(["lex", "strong", "weak"], NOW))
 
-    ranked = await service(store, posts, dense_min_score=0.7).rank("q1", ListPostsFilter())
+    ranked = await service(store, posts, dense_min_score=0.7, fusion="rrf").rank(
+        "q1", ListPostsFilter()
+    )
 
     assert set(ranked) == {"lex", "strong"}
-    assert ranked[0] == "lex"  # 양쪽에서 걸렸다
+    assert ranked[0] == "lex"  # RRF에서는 양쪽에서 걸린 글이 위다
+
+
+async def test_convex_fusion_weights_the_dense_side_more() -> None:
+    """기본 융합은 정규화 점수의 가중합(어휘 0.2, 벡터 0.8)이다.
+
+    벡터가 강하게 고른 글이 위로 온다.
+    """
+    store = FakeStore(lexical=["lex"], dense=[("strong", 0.8), ("lex", 0.1)])
+    posts = FakePosts(dict.fromkeys(["lex", "strong"], NOW))
+
+    ranked = await service(store, posts, dense_min_score=0.7).rank("q1", ListPostsFilter())
+
+    assert ranked == ["strong", "lex"]
 
 
 async def test_posts_filtered_out_by_mongo_are_dropped() -> None:
