@@ -21,8 +21,7 @@ from techletter.core.logging import get_logger
 from techletter.explainer.checks import check, clean_body, feedback
 from techletter.explainer.models import Explainer, Generation, GlossaryItem, Tldr
 from techletter.explainer.prompt import PROMPT_VERSION, SYSTEM_PROMPT, target_chars, user_message
-from techletter.summary.summarizer import normalize_tags
-from techletter.summary.topics import normalize_topics
+from techletter.summary.topics import normalize_tags, normalize_topics
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.llm.chat import LlmGateway

@@ -27,11 +27,12 @@ from techletter.core.pagination import Page
 from techletter.embedding.chunker import Chunker
 from techletter.embedding.handlers import EmbeddingDeleteHandler, EmbeddingRequestedHandler
 from techletter.embedding.pipeline import EmbeddingPipeline
+from techletter.explainer.generator import ExplainerGenerator
+from techletter.explainer.repository import ExplainerRepository
 from techletter.search.handlers import LexicalIndexHandler
-from techletter.settings import EmbeddingSettings, SummarySettings
+from techletter.settings import EmbeddingSettings
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
-from techletter.summary.pipeline import SummaryPipeline
-from techletter.summary.summarizer import Summarizer
+from techletter.summary.pipeline import ContentPipeline
 
 pytestmark = pytest.mark.integration
 
@@ -60,10 +61,17 @@ class FakeSummaryLlm:
     async def complete_json(self, purpose, system, user, **kwargs) -> tuple[dict, str]:
         return (
             {
-                "summary": "Kafka 컨슈머 리밸런싱을 줄이는 설정과 정적 멤버십을 정리한 글입니다.",
+                "error": None,
+                "post_type": "case",
+                "difficulty": "intermediate",
+                "tldr": {
+                    "one_liner": "Kafka 컨슈머 리밸런싱을 줄이는 설정을 정리했습니다.",
+                    "points": ["리밸런싱 원인", "정적 멤버십", "세션 타임아웃"],
+                },
+                "body_md": "## 배경\n컨슈머 리밸런싱을 줄이는 방법을 설명합니다.",
+                "glossary": [],
                 "categories": ["Backend"],
                 "tags": ["Kafka", "Consumer Group"],
-                "error": None,
             },
             "fake/summary-model",
         )
@@ -101,16 +109,18 @@ async def pipeline_env(mongo_db, queue, vector_store, http_clients):
     embedding_settings = EmbeddingSettings(chunk_size=200, chunk_overlap=20)  # type: ignore[call-arg]
 
     aggregator = Aggregator(blogs, posts, RssFeeder(http_clients), queue, batch_size=10)
-    summary_pipeline = SummaryPipeline(
-        renderer,  # type: ignore[arg-type]
-        Summarizer(FakeSummaryLlm(), SummarySettings()),  # type: ignore[arg-type]
-    )
+    summary_pipeline = ContentPipeline(renderer)  # type: ignore[arg-type]
+    explainers = ExplainerRepository(mongo_db)
     summary_runner = JobRunner(
         queue,
         _job_settings(),
         {
             JobType.CONTENT_FETCH_REQUESTED: ContentFetchHandler(posts, summary_pipeline, queue),
-            JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(posts, summary_pipeline, queue),
+            JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
+                posts,
+                queue,
+                ExplainerGenerator(FakeSummaryLlm()),  # type: ignore[arg-type]
+            ),
         },
         worker_id="summary-test",
     )
@@ -138,7 +148,7 @@ async def pipeline_env(mongo_db, queue, vector_store, http_clients):
         queue,
         _job_settings(),
         {
-            JobType.SUMMARY_COMPLETED: SummaryCompletedHandler(posts, queue),
+            JobType.SUMMARY_COMPLETED: SummaryCompletedHandler(posts, queue, explainers),
             JobType.EMBEDDING_COMPLETED: EmbeddingCompletedHandler(posts),
         },
         worker_id="core-test",

@@ -219,7 +219,6 @@ async def test_the_summary_job_stores_the_explainer_and_its_one_liner() -> None:
     ref = PostRefPayload(post_id="6a0000000000000000000001", title="t", link="l", blog_name="b")
     handler = SummaryRequestedHandler(
         FakePosts(),  # type: ignore[arg-type]
-        None,  # type: ignore[arg-type]
         queue,  # type: ignore[arg-type]
         ExplainerGenerator(FakeLlm(payload())),  # type: ignore[arg-type]
     )

@@ -34,7 +34,7 @@ uv run pytest -q -m e2e                                # E2E(실행 중인 스�
 - `chat/use_case`: 순서 보장(가드 실패 시 크레딧 미차감, 차감 실패 시 에이전트 미호출, 에이전트 실패 시 환불 호출).
 - `summary/pipeline`: 예외 분류(렌더 실패/봇 차단/파싱 실패 → 각각 다른 처리).
 - `search/`: 한글 2-gram 토큰화, BM25 문서 벡터, RRF 융합, 최신성 감쇠, 벡터 전용 하한, 질의 벡터 캐시·IP 한도, 장애 시 한쪽만으로 낮춤.
-- `core/ratelimit`·`summary/summarizer`: 분당 상한 대기, 1·2순위 예산 소진 순서. `embedding/pipeline`: 하루 청크 예산 초과 시 API 미호출 + `QuotaExceededError`.
+- `core/ratelimit`·`core/llm/quota`: 분당 상한 대기, 1·2순위 예산 소진 순서. `embedding/pipeline`: 하루 청크 예산 초과 시 API 미호출 + `QuotaExceededError`.
 - `api/schemas`: `is_bookmarked` boolean 고정, `ai_summary` null 직렬화, `Paged[T]`의 `total_pages` 계산.
 
 ## 4. 통합 테스트

@@ -1,8 +1,9 @@
-"""요약 도메인 잡 핸들러.
+"""원문 확보·쉽게 읽기 잡 핸들러.
 
 `content.fetch_requested` → 원문 확보·저장 → `summary.requested`
-`summary.requested` → 저장된 본문으로 요약 → `summary.completed` 발행.
-영구 실패면 포스트에 사유를 남긴다 — 어드민이 "왜 요약이 안 됐나"를 본다.
+`summary.requested` → 저장된 본문으로 쉽게 읽기 → `summary.completed` 발행.
+잡 이름은 예전 요약 시절 그대로 둔다(큐·인덱스·어드민 화면이 이 이름을 쓴다).
+영구 실패면 포스트에 사유를 남긴다 — 어드민이 "왜 안 됐나"를 본다.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.core.jobs.models import Job
     from techletter.core.jobs.queue import JobQueue
     from techletter.explainer.generator import ExplainerGenerator
-    from techletter.summary.pipeline import SummaryPipeline
+    from techletter.summary.pipeline import ContentPipeline
 
 __all__ = ["ContentFetchHandler", "SummaryRequestedHandler"]
 
@@ -40,7 +41,7 @@ def _ref(job: Job) -> PostRefPayload:
 
 
 class ContentFetchHandler:
-    def __init__(self, posts: PostRepository, pipeline: SummaryPipeline, queue: JobQueue) -> None:
+    def __init__(self, posts: PostRepository, pipeline: ContentPipeline, queue: JobQueue) -> None:
         self._posts = posts
         self._pipeline = pipeline
         self._queue = queue
@@ -67,17 +68,12 @@ class ContentFetchHandler:
 
 
 class SummaryRequestedHandler:
-    """본문 → 쉽게 읽기(TL;DR·풀어쓴 본문·주제·태그). TL;DR 한 문장이 기존 요약 자리에 들어간다."""
+    """본문 → 쉽게 읽기(TL;DR·풀어쓴 본문·주제·태그). TL;DR 한 문장이 카드 요약 자리에 들어간다."""
 
     def __init__(
-        self,
-        posts: PostRepository,
-        pipeline: SummaryPipeline,
-        queue: JobQueue,
-        explainer: ExplainerGenerator | None = None,
+        self, posts: PostRepository, queue: JobQueue, explainer: ExplainerGenerator
     ) -> None:
         self._posts = posts
-        self._pipeline = pipeline
         self._queue = queue
         self._explainer = explainer
 
@@ -85,16 +81,13 @@ class SummaryRequestedHandler:
         ref = _ref(job)
         plain_text = await self._posts.get_plain_text(ref.post_id)
         if not plain_text:
-            # 본문을 아직 못 받았다(나누기 전에 걸린 잡이거나 재요약 요청). 가져오기부터.
+            # 본문을 아직 못 받았다(나누기 전에 걸린 잡이거나 재생성 요청). 가져오기부터.
             await enqueue_content_fetch(self._queue, ref, priority=job.priority)
             logger.info("no content yet; fetching first", extra={"post_id": ref.post_id})
             return
 
         try:
-            if self._explainer is not None:
-                await self._explain(ref, plain_text)
-                return
-            outcome = await self._pipeline.summarize(plain_text)
+            await self._explain(ref, plain_text)
         except QuotaExceededError:
             # 쿼터는 시간이 지나면 풀린다. 사유를 남기지 않는다 —
             # 어드민 화면에 "실패"로 보이면 안 된다.
@@ -103,24 +96,8 @@ class SummaryRequestedHandler:
             await record_summary_failure(self._posts, ref.post_id, str(exc))
             raise
 
-        await self._queue.enqueue(
-            JobType.SUMMARY_COMPLETED,
-            ref.post_id,
-            SummaryCompletedPayload(
-                post_id=ref.post_id,
-                summary=outcome.summary,
-                categories=outcome.categories,
-                tags=outcome.tags,
-                model_name=outcome.model_name,
-            ).to_dict(),
-        )
-        logger.info(
-            "post summarized",
-            extra={"post_id": ref.post_id, "model": outcome.model_name},
-        )
-
     async def _explain(self, ref: PostRefPayload, plain_text: str) -> None:
-        explainer = await self._explainer.generate(  # type: ignore[union-attr]
+        explainer = await self._explainer.generate(
             ref.post_id, ref.title, ref.blog_name, plain_text
         )
         await self._queue.enqueue(

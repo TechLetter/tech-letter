@@ -19,33 +19,33 @@ from techletter.core.llm.router import ModelRouter
 from techletter.core.llm.scouter import ScouterClient
 from techletter.core.logging import get_logger
 from techletter.explainer.generator import ExplainerGenerator
+from techletter.summary.classifier import TopicClassifier
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
 from techletter.summary.icons import BlogIconHandler
-from techletter.summary.pipeline import SummaryPipeline
+from techletter.summary.pipeline import ContentPipeline
 from techletter.summary.renderer import PlaywrightRenderer, Renderer
-from techletter.summary.summarizer import Summarizer
 from techletter.workers.runtime import Heartbeat
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.container import Container
 
-__all__ = ["build_explainer", "build_summarizer", "build_summary_worker"]
+__all__ = ["build_explainer", "build_summary_worker", "build_topic_classifier"]
 
 logger = get_logger(__name__)
 
 
-def build_summarizer(container: Container) -> Summarizer:
-    """주제 재분류 CLI가 쓴다. 새 글은 `build_explainer`가 쉽게 읽기를 만든다."""
-    return Summarizer(_summary_llm(container), container.settings.summary)
+def build_topic_classifier(container: Container) -> TopicClassifier:
+    """주제 재분류 CLI가 쓴다. 새 글의 주제는 `build_explainer`가 함께 정한다."""
+    return TopicClassifier(_summary_llm(container))
 
 
 def build_explainer(container: Container) -> ExplainerGenerator:
-    """요약 워커와 같은 모델 순서·한도로 쉽게 읽기를 만든다."""
+    """새 글의 쉽게 읽기. 모델 순서·한도는 `_summary_llm`."""
     return ExplainerGenerator(_summary_llm(container))
 
 
 def _summary_llm(container: Container) -> LlmGateway:
-    """요약 워커와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다.
+    """쉽게 읽기와 주제 재분류 CLI가 같은 모델 순서와 예산을 쓴다.
 
     3 Flash → 3.5 Flash Lite → OpenRouter 무료 모델 순서다. 앞의 둘은 하루·분당
     한도 안에서만 부른다(`QuotaGate`). 한 모델이 503·429로 실패하면 다음으로 간다.
@@ -87,8 +87,7 @@ def _summary_llm(container: Container) -> LlmGateway:
 def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
     heartbeat = Heartbeat()
     renderer = PlaywrightRenderer(container.settings.summary, container.http.get())
-    summarizer = build_summarizer(container)
-    pipeline = SummaryPipeline(renderer, summarizer, container.http.get())
+    pipeline = ContentPipeline(renderer, container.http.get())
     runner = JobRunner(
         container.queue,
         container.settings.jobs,
@@ -97,13 +96,9 @@ def build_summary_worker(container: Container) -> tuple[JobRunner, Renderer]:
             JobType.CONTENT_FETCH_REQUESTED: ContentFetchHandler(
                 container.posts, pipeline, container.queue
             ),
+            # 새 글은 짧은 요약 없이 바로 쉽게 읽기를 만든다(2026-10-04 요약 기능 폐기).
             JobType.SUMMARY_REQUESTED: SummaryRequestedHandler(
-                container.posts,
-                pipeline,
-                container.queue,
-                build_explainer(container)
-                if container.settings.summary.explainer_enabled
-                else None,
+                container.posts, container.queue, build_explainer(container)
             ),
             # 이미지 변환(Pillow)과 SVG를 그릴 브라우저가 이 워커 이미지에만 있다.
             JobType.BLOG_ICON_REQUESTED: BlogIconHandler(

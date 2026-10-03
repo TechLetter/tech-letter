@@ -299,7 +299,7 @@ def backfill_summaries(
     ),
     dry_run: bool = typer.Option(True, "--dry-run/--execute"),
 ) -> None:
-    """요약이 없는 포스트에 대해 잡을 넣는다. 본문이 있으면 요약만, 없으면 가져오기부터."""
+    """쉽게 읽기가 없는 포스트에 잡을 넣는다. 본문이 있으면 생성만, 없으면 가져오기부터."""
 
     async def body(container: Container) -> None:
         from techletter.content.service import request_summary  # noqa: PLC0415
@@ -335,9 +335,9 @@ def backfill_topics(
     async def body(container: Container) -> None:
         from techletter.search.handlers import enqueue_lexical_index  # noqa: PLC0415
         from techletter.summary.topics import TOPIC_NAMES  # noqa: PLC0415
-        from techletter.workers.summary_worker import build_summarizer  # noqa: PLC0415
+        from techletter.workers.summary_worker import build_topic_classifier  # noqa: PLC0415
 
-        summarizer = build_summarizer(container)
+        classifier = build_topic_classifier(container)
         done = failed_batches = 0
         while True:
             want = batch_size if limit <= 0 else min(batch_size, limit - done)
@@ -347,7 +347,7 @@ def backfill_topics(
             if not posts:
                 break
             try:
-                results = await summarizer.classify_topics([_topic_input(p) for p in posts])
+                results = await classifier.classify_topics([_topic_input(p) for p in posts])
             except Exception as exc:
                 typer.echo(f"분류 실패: {type(exc).__name__}: {str(exc)[:200]}")
                 failed_batches += 1
@@ -643,7 +643,7 @@ def settings_example() -> None:
         ("LLM 모델 라우터", RouterSettings),
         ("잡 큐", JobSettings),
         ("RSS 수집", RssSettings),
-        ("요약 파이프라인", SummarySettings),
+        ("원문 렌더링", SummarySettings),
         ("임베딩 파이프라인", EmbeddingSettings),
         ("챗봇", ChatSettings),
         ("포스트 검색", SearchSettings),

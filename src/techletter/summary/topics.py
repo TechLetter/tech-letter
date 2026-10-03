@@ -19,6 +19,7 @@ __all__ = [
     "TOPIC_NAMES",
     "Topic",
     "TopicGroup",
+    "normalize_tags",
     "normalize_topics",
     "topic_prompt_lines",
 ]
@@ -170,3 +171,21 @@ def normalize_topics(values: Any, limit: int = 3) -> list[str]:
         if name and name not in kept:
             kept.append(name)
     return kept[:limit] or [OTHER]
+
+
+def normalize_tags(values: Any, limit: int) -> list[str]:
+    """중복(대소문자 무시)을 없애고 개수를 자른다."""
+    if not isinstance(values, list):
+        return []
+    kept: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        tag = str(value).strip()
+        key = tag.lower()
+        if not tag or key in seen or len(tag) > 40:
+            continue
+        seen.add(key)
+        kept.append(tag)
+        if len(kept) >= limit:
+            break
+    return kept

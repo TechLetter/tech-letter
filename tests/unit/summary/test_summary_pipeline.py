@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 
 from techletter.core.errors import PermanentError, RetryableError
-from techletter.summary.pipeline import SummaryPipeline, usable_feed_text
-from techletter.summary.summarizer import SummaryResult
+from techletter.summary.pipeline import ContentPipeline, usable_feed_text
 
 FEED_HTML = (
     "<html><body><article><p>" + "피드 본문 문장입니다. " * 120 + "</p></article></body></html>"
@@ -26,21 +25,11 @@ class FakeRenderer:
         return None
 
 
-class FakeSummarizer:
-    def __init__(self) -> None:
-        self.inputs: list[str] = []
-
-    async def summarize(self, plain_text: str) -> SummaryResult:
-        self.inputs.append(plain_text)
-        return SummaryResult(summary="요약", model_name="m")
-
-
-def _pipeline(error: Exception) -> tuple[SummaryPipeline, FakeSummarizer]:
-    summarizer = FakeSummarizer()
+def _pipeline(error: Exception) -> tuple[ContentPipeline, None]:
     renderer = FakeRenderer(error)
-    pipeline = SummaryPipeline(renderer, summarizer)  # type: ignore[arg-type]
+    pipeline = ContentPipeline(renderer)  # type: ignore[arg-type]
     pipeline.renderer_for_test = renderer  # type: ignore[attr-defined]
-    return pipeline, summarizer
+    return pipeline, None
 
 
 @pytest.mark.parametrize(
@@ -80,16 +69,6 @@ async def test_a_feed_body_means_one_browser_attempt() -> None:
     await pipeline.fetch("https://example.com/a", FEED_HTML)
 
     assert pipeline.renderer_for_test.attempts == [1]  # type: ignore[attr-defined]
-
-
-async def test_summarizing_uses_only_the_given_body() -> None:
-    """요약 단계는 원문을 열지 않는다 — 저장된 본문만 쓴다."""
-    pipeline, summarizer = _pipeline(AssertionError("renderer must not be called"))
-
-    outcome = await pipeline.summarize("저장된 본문")
-
-    assert outcome.summary == "요약"
-    assert summarizer.inputs == ["저장된 본문"]
 
 
 def test_a_feed_body_that_extracts_to_nothing_is_not_usable() -> None:
