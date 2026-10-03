@@ -93,3 +93,10 @@ def test_summary_context_skips_the_body() -> None:
 
     assert "요약" in context
     assert "본문" not in context
+
+
+async def test_full_width_citations_become_brackets() -> None:
+    """일부 무료 모델이 【1】을 쓴다. UI와 출처 번호는 [1]을 기대한다."""
+    answer, _ = await AnswerGenerator(FakeLlm("A다【1】 B다［2］")).answer("q", found(), [])  # type: ignore[arg-type]
+
+    assert answer == "A다[1] B다[2]"

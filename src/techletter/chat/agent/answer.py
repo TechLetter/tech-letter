@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from techletter.chat.agent.prompts import (
@@ -82,6 +83,14 @@ def format_post_list(result: ToolResult) -> str:
     return "\n".join(lines).strip()
 
 
+# 일부 무료 모델이 [1] 대신 전각 괄호 【1】·［1］을 쓴다(2026-10-03 채점에서 74건 중 10건).
+_WIDE_CITATION = re.compile(r"[【［]\s*(\d{1,2})\s*[】］]")
+
+
+def _normalize_citations(text: str) -> str:
+    return _WIDE_CITATION.sub(r"[\1]", text)
+
+
 class AnswerGenerator:
     def __init__(self, llm: LlmGateway, *, max_context_chars: int = 24000) -> None:
         self._llm = llm
@@ -122,4 +131,4 @@ class AnswerGenerator:
             max_attempts = max(max_attempts if isinstance(max_attempts, int) else 3, 1)
             candidates = list(dict.fromkeys([model_id, *automatic]))[:max_attempts]
         answer, used = await self._llm.complete("chat", system, user, candidates=candidates)
-        return (answer or "").strip() or NO_MATCH_ANSWER, used
+        return _normalize_citations((answer or "").strip()) or NO_MATCH_ANSWER, used

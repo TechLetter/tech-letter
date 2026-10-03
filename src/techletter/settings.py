@@ -257,8 +257,11 @@ class EmbeddingSettings(BaseSettings):
 
 class ChatSettings(BaseSettings):
     model_config = _BASE
-    rag_top_k: int = Field(default=5, alias="CHATBOT_RAG_TOP_K")
+    rag_top_k: int = Field(default=6, alias="CHATBOT_RAG_TOP_K")
     rag_chunks_per_post: int = Field(default=2, alias="CHATBOT_RAG_CHUNKS_PER_POST")
+    rag_chunk_chars: int = Field(default=1200, alias="CHATBOT_RAG_CHUNK_CHARS")
+    """근거 청크 하나의 최대 글자 수.
+    튜닝(2026-10-03): 글 6×청크 2×1200자 = 문맥 +15%, 요지 포함률 0.79→0.89."""
     memory_recent_messages: int = 8
     memory_max_message_chars: int = 1200
     credits_per_message: int = 1
@@ -269,16 +272,21 @@ class SearchSettings(BaseSettings):
     """포스트 검색(어휘 + 벡터 하이브리드). 환경변수는 `SEARCH_` + 필드명이다."""
 
     model_config = _llm_config("SEARCH_")  # 이름과 달리 prefix만 붙이는 공용 설정이다
-    lexical_candidates: int = 100
+    lexical_candidates: int = 200
     dense_candidates: int = 100
     """벡터 검색으로 가져올 **청크** 수. 포스트로 묶으면 이보다 적어진다."""
-    dense_min_score: float = 0.7
-    """어휘로는 안 걸리고 벡터로만 걸린 글을 남기는 최소 코사인 점수. 챗봇도 같은 값을 쓴다."""
+    dense_min_score: float = 0.65
+    """어휘로는 안 걸리고 벡터로만 걸린 글을 남기는 최소 코사인 점수."""
+    fusion: Literal["convex", "rrf"] = "convex"
+    """convex: 질의별 min-max 정규화 점수의 가중합(`lexical_weight`). rrf: 순위 융합(`rrf_k`).
+    2026-10-03 튜닝(평가 222문항): convex가 test nDCG@10 0.774→0.934(RRF k=60 대비)."""
+    lexical_weight: float = 0.2
+    """convex에서 어휘(BM25) 몫. 나머지가 벡터다."""
     rrf_k: int = 60
-    recency_half_life_days: float = 1100.0
-    """융합 점수에 곱하는 최신성 감쇠의 반감기. 1년이면 약 0.8, 2년이면 약 0.65배."""
+    recency_half_life_days: float = 0.0
+    """최신성 감쇠 반감기. 0이면 끈다. 튜닝에서 감쇠가 정답 글을 상위권 밖으로 밀어 껐다."""
     recency_min_factor: float = 0.5
-    """감쇠 하한. 오래됐어도 훨씬 관련 깊은 글은 위에 남는다."""
+    """감쇠 하한. 감쇠를 켤 때만 쓴다."""
     max_results: int = 100
     suggest_limit: int = 5
     query_cache_size: int = 256

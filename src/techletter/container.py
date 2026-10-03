@@ -292,6 +292,7 @@ class Container:
                 embedding_model=self.settings.embedding_llm.model_name,
                 max_posts=self.settings.chat.rag_top_k,
                 chunks_per_post=self.settings.chat.rag_chunks_per_post,
+                max_chunk_chars=self.settings.chat.rag_chunk_chars,
             ),
             posts=PostLookupTool(self.posts),
             answers=AnswerGenerator(self._chat_llm()),

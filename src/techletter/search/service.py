@@ -38,7 +38,9 @@ __all__ = [
     "Retrieval",
     "SearchService",
     "Suggestion",
+    "convex_fuse",
     "group_dense",
+    "minmax",
     "normalize_query",
     "recency_factor",
     "rrf_fuse",
@@ -77,13 +79,38 @@ def recency_factor(
     half_life_days: float,
     min_factor: float,
 ) -> float:
-    """0.5^(경과일/반감기), 하한 `min_factor`. 발행일이 없으면 하한을 준다."""
-    if published_at is None:
-        return min_factor
+    """0.5^(경과일/반감기), 하한 `min_factor`. 발행일이 없으면 하한을 준다. 반감기 0 이하면 끈다."""
     if half_life_days <= 0:
         return 1.0
+    if published_at is None:
+        return min_factor
     age_days = max(0.0, (now - ensure_utc(published_at)).total_seconds() / 86400)
     return max(min_factor, 0.5 ** (age_days / half_life_days))
+
+
+def minmax(scores: dict[str, float]) -> dict[str, float]:
+    """질의 안에서 0~1로 편다. 값이 하나뿐이거나 모두 같으면 1."""
+    if not scores:
+        return {}
+    lo, hi = min(scores.values()), max(scores.values())
+    if hi - lo < 1e-12:
+        return dict.fromkeys(scores, 1.0)
+    return {key: (value - lo) / (hi - lo) for key, value in scores.items()}
+
+
+def convex_fuse(
+    lexical: dict[str, float], dense: dict[str, float], lexical_weight: float
+) -> dict[str, float]:
+    """질의별 min-max 정규화 점수의 볼록결합. 한쪽에만 있는 글은 다른 쪽 0점이다.
+
+    순서는 어휘 먼저, 그다음 벡터 전용 글이다(동점일 때 이 순서를 따른다).
+    """
+    lex, den = minmax(lexical), minmax(dense)
+    order = list(dict.fromkeys([*lexical, *dense]))
+    return {
+        key: lexical_weight * lex.get(key, 0.0) + (1 - lexical_weight) * den.get(key, 0.0)
+        for key in order
+    }
 
 
 def group_dense(hits: list[SearchHit]) -> list[tuple[str, float]]:
@@ -254,18 +281,24 @@ class SearchService:
         """`rank`와 같은 순위에 질의 벡터를 곁들인다. 챗봇이 고른 글 안에서 청크를 고를 때
         같은 벡터를 다시 임베딩하지 않게 한다."""
         lexical = await self._lexical(query, flt)
-        lexical_ids = [str(hit.payload.get("post_id") or "") for hit in lexical]
-        lexical_ids = [post_id for post_id in lexical_ids if post_id]
-        in_lexical = set(lexical_ids)
+        lexical_scores: dict[str, float] = {}
+        for hit in lexical:
+            post_id = str(hit.payload.get("post_id") or "")
+            if post_id and post_id not in lexical_scores:
+                lexical_scores[post_id] = float(hit.score)
+        lexical_ids = list(lexical_scores)
 
         dense, vector = await self._dense(query, client)
-        dense_ids = [
-            post_id
+        dense_kept = [
+            (post_id, score)
             for post_id, score in dense
-            if post_id in in_lexical or score >= self._settings.dense_min_score
+            if post_id in lexical_scores or score >= self._settings.dense_min_score
         ]
 
-        fused = rrf_fuse([lexical_ids, dense_ids], self._settings.rrf_k)
+        if self._settings.fusion == "rrf":
+            fused = rrf_fuse([lexical_ids, [p for p, _ in dense_kept]], self._settings.rrf_k)
+        else:
+            fused = convex_fuse(lexical_scores, dict(dense_kept), self._settings.lexical_weight)
         if not fused:
             return Retrieval([], vector)
         # 필터·요약 여부는 Mongo가 판정한다. 벡터 쪽 payload에는 주제·블로그 id가 없다.

@@ -56,7 +56,7 @@ BLOG_ALIASES: dict[str, tuple[str, ...]] = {
 
 _BLOG_MARKER = re.compile(
     r"^\s*(?:기술\s*블로그|테크\s*블로그|블로그|tech\s*blog|engineering|techblog"
-    r"|의\s|에서\s*(?:쓴|올린|작성|나온|발행)|가\s*쓴|이\s*쓴|글|포스트)",
+    r"|에서\s*(?:쓴|올린|작성|나온|발행)|에\s*(?:올라온|올린|나온|있는\s*글)|가\s*쓴|이\s*쓴|글|포스트)",
     re.I,
 )
 _LIST = re.compile(r"목록|리스트|리스트업|list", re.I)
@@ -71,6 +71,10 @@ _REFERENCE = re.compile(
 )
 _RELEASE = re.compile(r"다른\s*(?:글|포스트|블로그|사례|회사|곳|기업)|말고|빼고|제외")
 _EXCLUDE = re.compile(r"말고|빼고|제외")
+# 기간 표현은 글을 묻는 문맥에서만 발행일 필터로 쓴다. "오늘 서울 날씨"는 기간 질문이 아니다.
+_POST_CONTEXT = re.compile(
+    r"글|포스트|아티클|게시물|블로그|올라온|올린|발행|목록|리스트|소식|업데이트|나온"
+)
 _WORD_START = r"(?<![0-9a-z가-힣])"
 _NOT_BLOG_NAMES = frozenset({"기술", "테크", "이", "그", "이런", "여러", "개인", "회사"})
 # "OO 블로그"라고 했는데 OO가 모으는 블로그에 없을 때 알린다.
@@ -169,13 +173,14 @@ def parse_period(  # noqa: PLR0911 — 표현마다 한 줄씩 판정한다
     if m := re.search(r"(20\d{2})년(\d{1,2})월", text):
         start = _month_start(int(m.group(1)), int(m.group(2)))
         return start, end_of(_next_month(start)), f"{m.group(1)}년 {m.group(2)}월"
-    if m := re.search(r"최근(\d{1,3})(일|주|개월|달)", text):
+    if m := re.search(r"(?:최근|지난)(\d{1,3})(일|주|개월|달)", text):
         n, unit = int(m.group(1)), m.group(2)
         days = n * {"일": 1, "주": 7, "개월": 30, "달": 30}[unit]
         return today - timedelta(days=days - 1), now, f"최근 {n}{unit}"
-    if "오늘" in text:
+    # "오늘의집", "오늘날"은 날짜가 아니다.
+    if re.search(r"오늘(?!의|날)", text):
         return today, now, "오늘"
-    if "어제" in text:
+    if re.search(r"어제(?!오늘)", text):
         return today - timedelta(days=1), end_of(today), "어제"
     week = today - timedelta(days=today.weekday())
     if re.search(r"이번주|금주", text):
@@ -211,14 +216,28 @@ def is_reference(query: str) -> bool:
 
 
 def _mentioned(query: str, blogs: list[BlogRef]) -> list[BlogRef]:
+    """질문에 이름이 나온 블로그. 긴 이름부터 보고, 이미 잡힌 자리 안의 짧은 이름은 세지 않는다
+    ("카카오페이"의 "카카오")."""
     text = _norm(query)
-    found = []
-    for blog in blogs:
-        names = [_norm(blog.name), *(_norm(a) for a in BLOG_ALIASES.get(blog.name, ()))]
-        if any(
-            len(n) >= 2 and re.search(r"(?<![0-9a-z가-힣])" + re.escape(n), text) for n in names
-        ):
-            found.append(blog)
+    names = sorted(
+        (
+            (n, blog)
+            for blog in blogs
+            for n in (_norm(blog.name), *(_norm(a) for a in BLOG_ALIASES.get(blog.name, ())))
+            if len(n) >= 2
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    taken: list[tuple[int, int]] = []
+    found: list[BlogRef] = []
+    for name, blog in names:
+        for m in re.finditer(_WORD_START + re.escape(name), text):
+            if any(a <= m.start() < b for a, b in taken):
+                continue
+            taken.append((m.start(), m.end()))
+            if blog not in found:
+                found.append(blog)
     return found
 
 
@@ -231,6 +250,10 @@ def read_scope(query: str, blogs: Iterable[BlogRef], now: datetime | None = None
         blog, boost = None, None
     else:
         blog, boost = match_blog(query, blogs)
+        if len(_mentioned(query, blogs)) >= 2:
+            # 여러 블로그(또는 블로그 이름과 같은 기술 이름)가 나오면 비교 질문이다.
+            # 한쪽으로 좁히거나 올리지 않는다("인프랩이 AWS Client VPN에서…", "Datadog과 Uber").
+            blog, boost = None, None
     unknown = ""
     if blog is None and (m := _NAMED_BLOG.search(query)):
         name = m.group(1)
@@ -246,9 +269,11 @@ def read_scope(query: str, blogs: Iterable[BlogRef], now: datetime | None = None
             "여러",
         }:
             unknown = name
-    start, end, label = parse_period(query, now)
     is_list = bool(_LIST.search(query)) or (
         bool(_LIST_ASK.search(query)) and not _EXPLAIN.search(query)
+    )
+    start, end, label = (
+        parse_period(query, now) if is_list or _POST_CONTEXT.search(query) else (None, None, "")
     )
     limit = DEFAULT_LIST_LIMIT
     if m := _COUNT.search(query):
