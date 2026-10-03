@@ -35,8 +35,15 @@ class AISummary(SubDocument):
     categories: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     summary: str | None = None
+    """카드에 보이는 한 문장. 쉽게 읽기가 있는 글은 그 TL;DR이다(예전 200자 요약은 폐기)."""
+    points: list[str] = Field(default_factory=list)
+    """쉽게 읽기의 핵심 3줄. 어휘 색인·챗봇이 한 문장만으로는 짧아 함께 읽는다."""
     model_name: str | None = None
     generated_at: MongoDateTime | None = None
+
+    def search_text(self) -> str:
+        """어휘 색인·챗봇 근거에 쓰는 요약 글. 한 문장 + 핵심 3줄."""
+        return " ".join(part for part in [self.summary or "", *self.points] if part)
 
 
 class EmbeddingMeta(SubDocument):

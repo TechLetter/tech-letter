@@ -38,7 +38,7 @@ def describe_constraints(constraints: PostConstraints) -> str:
 
 
 def post_record(post: Post) -> PostRecord:
-    summary = post.aisummary.summary if post.aisummary else ""
+    summary = post.aisummary.search_text() if post.aisummary else ""
     return PostRecord(
         id=str(post.id),
         title=post.title,

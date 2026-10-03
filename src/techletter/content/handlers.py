@@ -56,6 +56,7 @@ class SummaryCompletedHandler:
                 "categories": payload.categories,
                 "tags": payload.tags,
                 "summary": payload.summary,
+                "points": ((payload.explainer or {}).get("tldr") or {}).get("points") or [],
                 "model_name": payload.model_name,
                 "generated_at": now,
             },

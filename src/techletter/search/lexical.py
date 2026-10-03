@@ -136,7 +136,7 @@ def post_fields(post: Post) -> dict[str, str]:
         "tags": " ".join(summary.tags) if summary else "",
         "categories": " ".join(summary.categories) if summary else "",
         "blog_name": post.blog_name,
-        "summary": (summary.summary or "") if summary else "",
+        "summary": summary.search_text() if summary else "",
     }
 
 
