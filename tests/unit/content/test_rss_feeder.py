@@ -150,3 +150,29 @@ def test_the_feed_parser_does_not_need_the_extraction_library() -> None:
     }
     assert not any(str(name).startswith("techletter.summary") for name in imported)
     assert "trafilatura" not in imported and "bs4" not in imported
+
+
+RELATIVE_RSS = """<?xml version="1.0"?>
+<rss version="2.0"><channel><title>t</title><link>/</link>
+<item><title>상대 링크 글</title><link>/posts/2609-reliability/</link>
+<guid>/posts/2609-reliability/</guid></item>
+<item><title>guid만 있는 글</title><guid>/posts/guid-only/</guid></item>
+<item><title>절대 링크 글</title><link>https://other.test/a</link></item>
+<item><title>숫자 guid</title><guid isPermaLink="false">12345</guid></item>
+</channel></rss>"""
+
+
+def test_relative_links_are_joined_to_the_feed_url() -> None:
+    """카카오뱅크 피드는 <link>와 <guid>를 상대 경로로 준다."""
+    items = parse_feed(RELATIVE_RSS, source="https://tech.kakaobank.com/index.xml")
+
+    assert [i.link for i in items] == [
+        "https://tech.kakaobank.com/posts/2609-reliability/",
+        "https://tech.kakaobank.com/posts/guid-only/",
+        "https://other.test/a",
+    ]
+
+
+def test_relative_links_without_a_base_are_dropped() -> None:
+    """기준 주소를 모르면 상대 경로를 글 주소로 저장하지 않는다."""
+    assert [i.link for i in parse_feed(RELATIVE_RSS)] == ["https://other.test/a"]
