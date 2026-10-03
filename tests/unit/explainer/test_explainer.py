@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from techletter.content.jobs import PostRefPayload
+from techletter.content.models import AISummary
 from techletter.core.errors import PermanentError
 from techletter.core.jobs.models import Job
 from techletter.core.jobs.types import JobType
@@ -288,3 +289,11 @@ def test_hanja_from_the_source_is_allowed() -> None:
     source = "AI 번역의 시대, 세태(世態)를 본다." + SOURCE
 
     assert check(body(1500, " 세태(世態)"), source, 1500).korean_ok
+
+
+def test_search_text_adds_the_points_to_the_one_liner() -> None:
+    """어휘 색인·챗봇은 한 문장만으로 짧아 핵심 3줄을 함께 읽는다(예전 200자 요약 길이)."""
+    summary = AISummary(summary="랙을 줄인 사례입니다.", points=["원인은 파티션", "배치 조정"])
+
+    assert summary.search_text() == "랙을 줄인 사례입니다. 원인은 파티션 배치 조정"
+    assert AISummary(summary="옛 요약").search_text() == "옛 요약"

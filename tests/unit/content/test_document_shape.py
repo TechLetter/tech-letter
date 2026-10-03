@@ -41,6 +41,7 @@ def test_nested_documents_carry_no_id_or_timestamps() -> None:
         "categories",
         "tags",
         "summary",
+        "points",
         "model_name",
         "generated_at",
     }
