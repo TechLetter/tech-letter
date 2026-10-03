@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin, urlsplit
 
 import feedparser
 
@@ -60,6 +61,23 @@ def _full_content(entry: Any) -> str:
     return html if len(html) >= FEED_CONTENT_MIN_CHARS else ""
 
 
+def _absolute_link(entry: Any, base: str) -> str:
+    """글 주소. 상대 경로(`/posts/...`)는 피드 주소 기준으로 붙인다.
+
+    카카오뱅크 기술 블로그는 `<link>`와 `<guid>`를 모두 상대 경로로 준다. 그대로 저장하면
+    본문을 가져올 수 없고, 링크 유일 인덱스에서 다른 블로그의 같은 경로와 부딪힌다.
+    """
+    raw = (getattr(entry, "link", "") or "").strip()
+    if not raw:
+        # guid는 주소처럼 생겼을 때만 쓴다("12345" 같은 id를 경로로 붙이면 엉뚱한 주소가 된다).
+        guid = (getattr(entry, "id", "") or "").strip()
+        raw = guid if guid.startswith(("/", "http://", "https://")) else ""
+    if not raw:
+        return ""
+    link = urljoin(base, raw) if base else raw
+    return link if urlsplit(link).scheme in ("http", "https") else ""
+
+
 def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]:
     """RSS/Atom 본문을 항목 목록으로 바꾼다.
 
@@ -69,7 +87,7 @@ def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]
     parsed: Any = feedparser.parse(_INVALID_CONTROL_CHARS.sub("", text))
     items: list[FeedItem] = []
     for entry in parsed.entries:
-        link = (getattr(entry, "link", "") or "").strip()
+        link = _absolute_link(entry, source)
         if not link:
             continue
         items.append(
@@ -115,4 +133,5 @@ class RssFeeder:
                 raise PermanentError(message, reason=f"http_{response.status_code}")
             raise RetryableError(message)
 
-        return parse_feed(response.text, source=rss_url, limit=limit)
+        # 리다이렉트됐으면 최종 주소가 상대 링크의 기준이다.
+        return parse_feed(response.text, source=str(response.url) or rss_url, limit=limit)
