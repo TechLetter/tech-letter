@@ -52,6 +52,12 @@
 - 반영 순서: DB 덤프 → 격리 컨테이너에서 같은 검사로 재검증·upsert → 카드 요약 교체 →
   `techletter backfill lexical --execute`로 어휘 색인 재생성.
 
+### 남은 글 정리 (2026-10-04)
+해설이 없던 19건은 원문을 다시 받아 새 경로로 생성했고, 14건에 해설이 붙었다. 남은 5건은 원문이
+404이거나 추출에 실패했다. 이 5건은 옛 요약을 지우고 `status.ai_summarized=false`로 바꿔 공개 목록·검색에서
+뺐다. 공개 글은 모두 해설이 있다(2,300/2,300). 정리 직전 덤프는
+`/home/ubuntu/backups/techletter-20261003T151955Z.archive.gz`.
+
 ## 4. API·화면
 - `GET /posts/{id}/explainer` → `ExplainerOut`. 아직 없으면 404 `resource.not_found`.
   응답에 `X-Robots-Tag: noindex, nofollow`가 붙는다.
