@@ -78,7 +78,7 @@ tech-letter/
 │   │   └── agent/  scope.py evidence.py graph.py answer.py prompts.py state.py
 │   │               tools/  content_posts.py
 │   ├── summary/                  # summary-worker 전용 의존(playwright, trafilatura, bs4, Pillow)
-│   │   ├── renderer.py parser.py validator.py summarizer.py constants.py pipeline.py handlers.py
+│   │   ├── renderer.py parser.py validator.py classifier.py constants.py pipeline.py handlers.py
 │   │   ├── topics.py published.py icons.py   # 주제·부모 주제 목록 / 발행일 보정 / 블로그 아이콘 수집
 │   ├── embedding/
 │   │   ├── chunker.py pipeline.py handlers.py

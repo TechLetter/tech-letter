@@ -1,11 +1,8 @@
-"""요약 파이프라인. 두 단계로 나뉘어 있고 각자 다른 잡이 부른다.
+"""원문 확보 파이프라인: 원문 → 추출 → 검증 → 썸네일 (`content.fetch_requested`).
 
-- `fetch`: 원문 확보 → 추출 → 검증 → 썸네일 (`content.fetch_requested`)
-- `summarize`: 저장된 본문 → LLM 요약 (`summary.requested`)
-
-나눈 이유: 원문이 막혀 재시도할 때 LLM을 부르지 않고, LLM 한도에 걸려도
-받아 둔 원문을 버리지 않으며, 원문을 다시 받지 않고 재요약할 수 있다.
-각 단계의 실패는 **재시도 가능/불가로 나눈다**.
+해설 생성(`summary.requested`)과 잡을 나눈 이유: 원문이 막혀 재시도할 때 LLM을 부르지 않고,
+LLM 한도에 걸려도 받아 둔 원문을 버리지 않으며, 원문을 다시 받지 않고 해설을 다시 만들 수 있다.
+실패는 **재시도 가능/불가로 나눈다**.
 """
 
 from __future__ import annotations
@@ -26,9 +23,8 @@ if TYPE_CHECKING:  # pragma: no cover
     import httpx
 
     from techletter.summary.renderer import Renderer
-    from techletter.summary.summarizer import Summarizer
 
-__all__ = ["FetchedContent", "SummaryOutcome", "SummaryPipeline"]
+__all__ = ["ContentPipeline", "FetchedContent"]
 
 logger = get_logger(__name__)
 
@@ -73,23 +69,9 @@ class FetchedContent:
     """페이지에 적힌 발행일. 피드에 날짜가 없던 글만 이것으로 바로잡는다(`correct_published_at`)."""
 
 
-@dataclass(slots=True)
-class SummaryOutcome:
-    summary: str
-    categories: list[str]
-    tags: list[str]
-    model_name: str
-
-
-class SummaryPipeline:
-    def __init__(
-        self,
-        renderer: Renderer,
-        summarizer: Summarizer,
-        image_client: httpx.AsyncClient | None = None,
-    ) -> None:
+class ContentPipeline:
+    def __init__(self, renderer: Renderer, image_client: httpx.AsyncClient | None = None) -> None:
         self._renderer = renderer
-        self._summarizer = summarizer
         self._image_client = image_client
 
     async def _page_text(self, url: str, attempts: int | None) -> tuple[str, str]:
@@ -125,15 +107,4 @@ class SummaryPipeline:
             logger.warning("thumbnail extraction failed", extra={"url": url})
         return FetchedContent(
             plain_text=plain_text, thumbnail_url=thumbnail, published_at=extract_published_at(html)
-        )
-
-    async def summarize(self, plain_text: str) -> SummaryOutcome:
-        result = await self._summarizer.summarize(plain_text)
-        if result.truncated_input:
-            logger.info("summary input truncated")
-        return SummaryOutcome(
-            summary=result.summary,
-            categories=result.categories,
-            tags=result.tags,
-            model_name=result.model_name,
         )

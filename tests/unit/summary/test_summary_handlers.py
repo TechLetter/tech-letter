@@ -10,8 +10,9 @@ import pytest
 from techletter.core.errors import PermanentError
 from techletter.core.jobs.models import Job
 from techletter.core.jobs.types import JobType
+from techletter.explainer.models import Explainer, Tldr
 from techletter.summary.handlers import ContentFetchHandler, SummaryRequestedHandler
-from techletter.summary.pipeline import FetchedContent, SummaryOutcome
+from techletter.summary.pipeline import FetchedContent
 
 REF = {"post_id": "p1", "title": "t", "link": "https://a.test/p1", "blog_name": "A"}
 
@@ -58,7 +59,6 @@ class FakePipeline:
         self.error = error
         self.published_at = published_at
         self.fetched_with: list[str | None] = []
-        self.summarized: list[str] = []
 
     async def fetch(self, url: str, feed_html: str | None = None) -> FetchedContent:
         self.fetched_with.append(feed_html)
@@ -68,9 +68,19 @@ class FakePipeline:
             plain_text="본문", thumbnail_url="https://a.test/t.png", published_at=self.published_at
         )
 
-    async def summarize(self, plain_text: str) -> SummaryOutcome:
-        self.summarized.append(plain_text)
-        return SummaryOutcome(summary="요약", categories=["모바일"], tags=[], model_name="m")
+
+class FakeExplainer:
+    def __init__(self) -> None:
+        self.explained: list[str] = []
+
+    async def generate(self, post_id: str, title: str, blog_name: str, text: str) -> Explainer:
+        self.explained.append(text)
+        return Explainer(
+            post_id="6a0000000000000000000001",  # type: ignore[arg-type]
+            tldr=Tldr(one_liner="요약입니다.", points=["a", "b", "c"]),
+            body_md="## 배경\n본문",
+            categories=["모바일"],
+        )
 
 
 def job(job_type: JobType) -> Job:
@@ -105,27 +115,25 @@ async def test_a_blocked_fetch_never_reaches_the_llm() -> None:
         await ContentFetchHandler(posts, pipeline, queue)(job(JobType.CONTENT_FETCH_REQUESTED))  # type: ignore[arg-type]
 
     assert queue.enqueued == []
-    assert pipeline.summarized == []
     assert posts.failures
 
 
-async def test_a_summary_uses_the_stored_body() -> None:
-    posts, queue, pipeline = FakePosts(plain_text="저장된 본문"), FakeQueue(), FakePipeline()
+async def test_an_explainer_uses_the_stored_body() -> None:
+    posts, queue, explainer = FakePosts(plain_text="저장된 본문"), FakeQueue(), FakeExplainer()
 
-    await SummaryRequestedHandler(posts, pipeline, queue)(job(JobType.SUMMARY_REQUESTED))  # type: ignore[arg-type]
+    await SummaryRequestedHandler(posts, queue, explainer)(job(JobType.SUMMARY_REQUESTED))  # type: ignore[arg-type]
 
-    assert pipeline.summarized == ["저장된 본문"]
-    assert pipeline.fetched_with == []
+    assert explainer.explained == ["저장된 본문"]
     [(job_type, payload)] = queue.enqueued
     assert job_type == JobType.SUMMARY_COMPLETED
     assert set(payload) == {"post_id", "summary", "categories", "tags", "model_name", "explainer"}
 
 
-async def test_a_summary_without_a_body_fetches_first() -> None:
-    """나누기 전에 걸려 있던 요약 잡도 스스로 새 흐름을 탄다."""
-    posts, queue, pipeline = FakePosts(), FakeQueue(), FakePipeline()
+async def test_an_explainer_without_a_body_fetches_first() -> None:
+    """나누기 전에 걸려 있던 잡도 스스로 새 흐름을 탄다."""
+    posts, queue, explainer = FakePosts(), FakeQueue(), FakeExplainer()
 
-    await SummaryRequestedHandler(posts, pipeline, queue)(job(JobType.SUMMARY_REQUESTED))  # type: ignore[arg-type]
+    await SummaryRequestedHandler(posts, queue, explainer)(job(JobType.SUMMARY_REQUESTED))  # type: ignore[arg-type]
 
-    assert pipeline.summarized == []
+    assert explainer.explained == []
     assert [t for t, _ in queue.enqueued] == [JobType.CONTENT_FETCH_REQUESTED]
