@@ -425,10 +425,15 @@ class PostRepository:
         if oid is None:
             return False
         result = await self._col.delete_one({"_id": oid})
+        # 쉽게 읽기는 글에 딸린 문서다. 글과 함께 지운다.
+        await self._col.database["post_explainers"].delete_one({"post_id": oid})
         return result.deleted_count > 0
 
     async def delete_by_blog(self, blog_id: ObjectId) -> int:
+        ids = [doc["_id"] async for doc in self._col.find({"blog_id": blog_id}, {"_id": 1})]
         result = await self._col.delete_many({"blog_id": blog_id})
+        if ids:
+            await self._col.database["post_explainers"].delete_many({"post_id": {"$in": ids}})
         return result.deleted_count
 
     async def ids_by_blog(self, blog_id: ObjectId) -> list[str]:

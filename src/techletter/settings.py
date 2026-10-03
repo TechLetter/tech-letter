@@ -231,6 +231,10 @@ class SummarySettings(BaseSettings):
     summary_target_chars: int = 200
     summary_tolerance_chars: int = 20
     max_tags: int = 5
+    explainer_enabled: bool = Field(default=False, alias="EXPLAINER_GENERATION_ENABLED")
+    """새 글의 요약 대신 "쉽게 읽기"를 만든다. 2026-10-03 파일럿에서 3.5 Flash Lite는
+    사실성 1.41, 중대 오류 5/39로 불합격이었다(Codex 1.97, 0건) — 생성 모델을 정하기 전까지
+    끈다. 꺼져 있으면 예전처럼 짧은 요약만 만든다."""
 
 
 class EmbeddingSettings(BaseSettings):

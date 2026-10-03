@@ -9,7 +9,8 @@ model_id(`nvidia/...:free`)가 그대로 Gemini API로 가서 "그런 모델 없
 
 from __future__ import annotations
 
-from techletter.core.llm.chat import RoutingChatClient
+from techletter.core.llm.chat import LangChainChatClient, RoutingChatClient
+from techletter.settings import GenerativeLlmSettings
 
 
 class RecordingClient:
@@ -92,3 +93,12 @@ async def test_every_listed_gemini_model_goes_to_the_primary_client() -> None:
 
     assert primary.calls == ["gemini-3.5-flash-lite"]
     assert fallback.calls == ["nvidia/x:free"]
+
+
+def test_json_calls_ask_gemini_for_json_output(monkeypatch) -> None:
+    """`complete_json`은 Gemini에 JSON 모드를 켠다. 일반 호출(챗봇 답변)은 켜지 않는다."""
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    client = LangChainChatClient(GenerativeLlmSettings(provider="google"))
+
+    assert client._get(PRIMARY_MODEL, 100, json_mode=True).response_mime_type == "application/json"
+    assert client._get(PRIMARY_MODEL, 100).response_mime_type is None

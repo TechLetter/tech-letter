@@ -10,8 +10,10 @@ from fastapi import APIRouter, Request, Response, status
 
 from techletter.api.deps import Ctx, MaybeUser
 from techletter.api.schemas import Paged, PostOut
+from techletter.api.schemas.explainer import ExplainerOut
 from techletter.api.schemas.query import ListQ, StrQ, clean_list, parse_page, published_range
 from techletter.content.models import ListPostsFilter
+from techletter.core.errors import ResourceNotFoundError
 from techletter.search.service import normalize_query
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -75,6 +77,20 @@ async def get_post(ctx: Ctx, user: MaybeUser, post_id: str) -> PostOut:
     post = await ctx.post_service.get(post_id)
     marked = await _bookmarked_ids(ctx, user, [post_id])
     return PostOut.of(post, bookmarked=post_id in marked)
+
+
+@router.get("/{post_id}/explainer", response_model=ExplainerOut)
+async def get_explainer(ctx: Ctx, post_id: str, response: Response) -> ExplainerOut:
+    """글의 "쉽게 읽기". 아직 만들지 않았으면 404다.
+
+    검색엔진에는 노출하지 않는다 — 원 블로그와 검색 결과에서 경쟁하지 않는다(nginx도 막는다).
+    """
+    await ctx.post_service.get(post_id)  # 없는 글이면 404
+    explainer = await ctx.explainers.get(post_id)
+    if explainer is None:
+        raise ResourceNotFoundError(f"explainer not found: {post_id}")
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return ExplainerOut.of(explainer)
 
 
 @router.post("/{post_id}/views", status_code=status.HTTP_204_NO_CONTENT)

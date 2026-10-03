@@ -21,6 +21,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from techletter.content.repositories import PostRepository
     from techletter.core.jobs.models import Job
     from techletter.core.jobs.queue import JobQueue
+    from techletter.explainer.repository import ExplainerRepository
 
 __all__ = ["EmbeddingCompletedHandler", "SummaryCompletedHandler", "record_summary_failure"]
 
@@ -30,12 +31,20 @@ logger = get_logger(__name__)
 class SummaryCompletedHandler:
     """`summary.completed` 처리. 요약 결과를 posts에 쓰고 임베딩을 건다."""
 
-    def __init__(self, posts: PostRepository, queue: JobQueue) -> None:
+    def __init__(
+        self, posts: PostRepository, queue: JobQueue, explainers: ExplainerRepository | None = None
+    ) -> None:
         self._posts = posts
         self._queue = queue
+        self._explainers = explainers
 
     async def __call__(self, job: Job) -> None:
         payload = SummaryCompletedPayload.from_dict(job.payload)
+        if payload.explainer is not None and self._explainers is not None:
+            from techletter.explainer.models import Explainer  # noqa: PLC0415
+
+            # 글이 지워졌는지는 아래 apply_summary가 판정한다. 남는 해설은 무해하다.
+            await self._explainers.upsert(Explainer.model_validate(payload.explainer))
         if not payload.post_id:
             raise PermanentError("summary.completed without post_id", reason="bad_payload")
 

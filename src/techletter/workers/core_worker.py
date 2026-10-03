@@ -118,7 +118,7 @@ def build_core_worker(container: Container) -> CoreWorker:
         queue,
         settings.jobs,
         {
-            JobType.SUMMARY_COMPLETED: SummaryCompletedHandler(posts, queue),
+            JobType.SUMMARY_COMPLETED: SummaryCompletedHandler(posts, queue, container.explainers),
             JobType.EMBEDDING_COMPLETED: EmbeddingCompletedHandler(posts),
         },
         worker_id=f"core-{uuid.uuid4().hex[:8]}",

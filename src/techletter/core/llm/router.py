@@ -121,7 +121,7 @@ class ModelRouter:
                 await self._record(model_id, purpose, ok=False)
                 logger.warning(
                     "model returned invalid json; trying next",
-                    extra={"model_id": model_id, "purpose": purpose.value},
+                    extra={"model_id": model_id, "purpose": purpose.value, "error": str(exc)[:200]},
                 )
                 continue
             except Exception as exc:
