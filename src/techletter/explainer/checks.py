@@ -16,7 +16,7 @@ __all__ = ["MAX_QUOTE_RATIO", "check", "clean_body", "feedback", "min_sections"]
 
 MAX_QUOTE_RATIO = 0.15
 # 목표 분량에서 이만큼 벗어나도 허용한다. 모델이 글자 수를 정확히 맞추지 못한다.
-LENGTH_TOLERANCE = (0.7, 1.8)
+LENGTH_TOLERANCE = (0.5, 1.5)
 MIN_KOREAN_RATIO = 0.6
 # 원문을 이만큼 이상 그대로 옮기면 해설이 아니라 발췌다. ">" 인용 없이 문단을 옮기는 모델이
 # 있었다(2026-10-03 파일럿, 형식·대체성 점수 1.1).
@@ -24,7 +24,31 @@ MAX_COPY_RATIO = 0.2
 COPY_SPAN = 30
 # 원문에 없는 이런 문자가 이만큼 넘게 섞이면 언어가 샌 것이다(일본어·러시아어가 섞인 사례).
 MAX_FOREIGN_CHARS = 3
-CHARS_PER_SECTION = 700
+MAX_SECTIONS = 5
+# v5 문체(2026-10-04): 합니다체 문장 비율 상한, 금지 장치. 사용자 지적 — "AI 문체 같다",
+# "링크드인 글 구성 같다".
+MAX_POLITE_RATIO = 0.1
+_BANNED = (
+    "—",
+    "의외로",
+    "놀랍게도",
+    "교훈",
+    "시사점",
+    "핵심은",
+    "**",
+    "의미:",
+    "혁신",
+    "획기적",
+    "대폭",
+)
+# 글·저자에 대해 말하는 단서 문장. v5 Codex에서 10.7%로 늘었다(v4 3.2%). 사실을 바로 쓰게 한다.
+_HEDGE = re.compile(
+    r"(글은|글에서는|글에 따르면|저자는|저자들은|라고 설명한다|라고 밝힌다|고 설명한다)"
+)
+MAX_HEDGES = 1
+_AI_HEADING = re.compile(r"(는 법|가른 것|의 비밀|란 무엇|의 힘|게임 체인저)")
+MAX_ONE_LINER = 90
+SHORT_TARGET = 1200
 
 # 두 자리 이상 숫자, 소수, 퍼센트·배수. 한 자리 숫자("3가지")는 흔해서 보지 않는다.
 # 뒤에 붙은 단위로 크기를 환산해 같이 비교한다 — "30B"를 "300억"으로, "5k"를 "5,000"으로
@@ -56,8 +80,13 @@ _HANGUL = re.compile(r"[가-힣]")
 _LATIN = re.compile(r"[A-Za-z]")
 # 가나, 키릴, 한자. 한자는 원문에 있으면 허용한다("세태(世態)").
 _FOREIGN = re.compile(r"[\u3040-\u30ff\u0400-\u04ff\u4e00-\u9fff]")
+# 원문에 없으면 한 글자도 허용하지 않는 문자: 가나·키릴·데바나가리("これが", "커डेंट"가 섞인 사례).
+_NEVER = re.compile(r"[\u3040-\u30ff\u0400-\u04ff\u0900-\u097f]")
 _EMPTY_QUOTE = re.compile(r"^>\s*$\n?", re.M)
-_POLITE_END = re.compile(r"(니다|세요|까요)[.!?]?$")
+_SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+_POLITE = re.compile(r"(니다|세요|까요|어요|아요|해요)[.!?]")
+_HEADING_LINE = re.compile(r"^## (.+)$", re.M)
+_BULLET = re.compile(r"^\s*- \S", re.M)
 
 
 def clean_body(body_md: str) -> str:
@@ -66,8 +95,48 @@ def clean_body(body_md: str) -> str:
 
 
 def min_sections(target_chars: int) -> int:
-    """프롬프트는 700자당 섹션 하나를 바란다. 그 절반은 넘어야 한다."""
-    return max(1, round(target_chars / CHARS_PER_SECTION / 2))
+    """섹션 3~5개. 짧은 글(목표 1,200자 미만)은 섹션 없이 개요와 bullet만 쓴다."""
+    return 3 if target_chars >= SHORT_TARGET else 0
+
+
+def max_sections(target_chars: int) -> int:
+    return MAX_SECTIONS if target_chars >= SHORT_TARGET else 1
+
+
+def style_issues(body_md: str, one_liner: str, points: int = 3) -> list[str]:
+    """v5 문체 규칙 위반 목록(영어, 모델 피드백용)."""
+    issues: list[str] = []
+    line = one_liner.strip()
+    if not line.endswith("다.") or line.endswith("니다."):
+        issues.append('tldr.one_liner must be a plain sentence ending in "다." (not 합니다체)')
+    if ":" in line:
+        issues.append("tldr.one_liner must not contain a colon")
+    if points != 3:
+        issues.append("tldr.points must have exactly 3 items")
+    if len(line) > MAX_ONE_LINER:
+        issues.append(f"tldr.one_liner must be under {MAX_ONE_LINER} characters")
+    if body_md.lstrip().startswith("## "):
+        issues.append("start body_md with a 1-2 sentence overview paragraph before any heading")
+    if len(_HEDGE.findall(body_md)) > MAX_HEDGES:
+        issues.append(
+            'state facts directly; do not write about the post or author ("글은", "글에 따르면", '
+            '"저자는", "~라고 설명한다")'
+        )
+    prose = _CODE_BLOCK.sub(" ", body_md)
+    sentences = len(_SENTENCE_END.findall(prose)) or 1
+    if len(_POLITE.findall(prose)) / sentences > MAX_POLITE_RATIO:
+        issues.append('use plain "~다" endings, not 합니다체/해요체')
+    for heading in _HEADING_LINE.findall(prose):
+        # 설명형 제목("계층형 아키텍처의 도입과 한계")은 괜찮다. 콜론·질문·AI식 구호만 막는다.
+        if any(ch in heading for ch in ":?") or _AI_HEADING.search(heading) or len(heading) > 20:
+            issues.append(f'heading "{heading}" must be a short plain heading, no colon or slogan')
+    for word in _BANNED:
+        if word in prose:
+            issues.append(f'do not use "{word}"')
+    headings = len(_HEADING_LINE.findall(prose))
+    if headings and len(_BULLET.findall(prose)) < headings:
+        issues.append('put 2-4 "- " bullets under each section')
+    return issues
 
 
 def _korean_ratio(text: str) -> float:
@@ -79,6 +148,11 @@ def _korean_ratio(text: str) -> float:
 def _foreign_chars(prose: str, source: str) -> int:
     allowed = set(_FOREIGN.findall(source))
     return sum(1 for ch in _FOREIGN.findall(prose) if ch not in allowed)
+
+
+def _never_chars(prose: str, source: str) -> int:
+    allowed = set(_NEVER.findall(source))
+    return sum(1 for ch in _NEVER.findall(prose) if ch not in allowed)
 
 
 def _copy_ratio(prose: str, source: str) -> float:
@@ -130,7 +204,7 @@ def _squash(text: str) -> str:
 
 
 def check(
-    body_md: str, source: str, target_chars: int, one_liner: str = "니다."
+    body_md: str, source: str, target_chars: int, one_liner: str = "정리했다.", points: int = 3
 ) -> ExplainerChecks:
     body_len = len(body_md)
     lo, hi = LENGTH_TOLERANCE
@@ -149,15 +223,19 @@ def check(
     return ExplainerChecks(
         length_ok=lo * target_chars <= body_len <= hi * target_chars,
         quote_ratio=ratio,
-        quote_ok=ratio <= MAX_QUOTE_RATIO,
+        quote_ok=quoted == 0,
         numbers_missing=missing[:20],
         code_ok=code_ok,
         copy_ratio=copied,
         copy_ok=copied <= MAX_COPY_RATIO,
         korean_ok=_korean_ratio(body_md) >= MIN_KOREAN_RATIO
-        and _foreign_chars(prose, source) <= MAX_FOREIGN_CHARS,
-        sections_ok=len(_HEADING.findall(body_md)) >= min_sections(target_chars),
-        style_ok=bool(_POLITE_END.search(one_liner.strip())),
+        and _foreign_chars(prose, source) <= MAX_FOREIGN_CHARS
+        and _never_chars(prose + one_liner, source) == 0,
+        sections_ok=min_sections(target_chars)
+        <= len(_HEADING.findall(body_md))
+        <= max_sections(target_chars),
+        style_ok=not (issues := style_issues(body_md, one_liner, points)),
+        style_issues=issues[:10],
     )
 
 
@@ -168,33 +246,36 @@ def feedback(checks: ExplainerChecks, body_md: str, target_chars: int) -> str:
         lo, hi = LENGTH_TOLERANCE
         if len(body_md) < lo * target_chars:
             notes.append(
-                f"body_md was {len(body_md)} characters; it must be at least "
-                f"{int(target_chars * 0.85)}. Expand every section with the post's concrete "
-                "details (how it works, why, numbers, trade-offs) and add sections for parts "
-                "you skipped. Do not pad with repetition."
+                f"body_md was {len(body_md)} characters; write at least "
+                f"{int(target_chars * 0.7)}. Explain the main points more concretely "
+                "(how and why). Do not pad with repetition."
             )
         else:
             notes.append(
-                f"body_md was {len(body_md)} characters; keep it under {int(hi * target_chars)}."
+                f"body_md was {len(body_md)} characters; keep it under {int(hi * target_chars)}. "
+                "Drop details a reader does not need."
             )
     if not checks.sections_ok:
-        notes.append(
-            f'Split body_md into at least {min_sections(target_chars) + 1} "## " sections.'
-        )
+        if target_chars < SHORT_TARGET:
+            notes.append(
+                'This is a short post: write the overview and bullets with no "## " sections.'
+            )
+        else:
+            notes.append(f'Use {min_sections(target_chars)}-{MAX_SECTIONS} "## " sections.')
     if not checks.korean_ok:
         notes.append(
             "Write body_md in Korean only. Keep names and technical terms in English; "
             "no Japanese, Chinese or Cyrillic text."
         )
     if not checks.style_ok:
-        notes.append('End tldr.one_liner in polite 합니다체 (for example "...했습니다.").')
+        notes.extend(checks.style_issues)
     if not checks.copy_ok:
         notes.append(
             f"{round(checks.copy_ratio * 100)}% of body_md copies the post word for word. "
             "Explain in your own words instead of copying sentences."
         )
     if not checks.quote_ok:
-        notes.append("Quote less: at most two short blockquotes.")
+        notes.append("Remove all blockquotes; explain in your own words.")
     if checks.numbers_missing:
         nums = ", ".join(checks.numbers_missing[:10])
         notes.append(f"These numbers are not in the post: {nums}. Use only numbers from the post.")

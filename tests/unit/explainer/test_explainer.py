@@ -23,8 +23,12 @@ SOURCE = (
 
 
 def body(chars: int, extra: str = "") -> str:
-    half = chars // 2
-    return "## 배경\n" + "가" * half + "\n## 결과\n" + "가" * (chars - half) + extra
+    """v5 모양: 개요 문단 다음 섹션 3개, 섹션마다 설명 한 문장과 bullet 둘."""
+    part = max(1, chars // 6)
+    sections = ["팀이 컨슈머 랙을 줄였다."]
+    for heading in ("배경", "방법", "결과"):
+        sections.append(f"## {heading}\n설명이다.\n- {'가' * part}\n- {'가' * part}")
+    return "\n".join(sections) + extra
 
 
 def payload(**overrides) -> dict:
@@ -32,8 +36,8 @@ def payload(**overrides) -> dict:
         "error": None,
         "post_type": "case",
         "difficulty": "intermediate",
-        "tldr": {"one_liner": "랙을 줄인 사례입니다.", "points": ["a", "b", "c", "d"]},
-        "body_md": body(1500, " 랙은 1,200건에서 35건으로 줄었습니다."),
+        "tldr": {"one_liner": "랙을 줄인 사례다.", "points": ["a", "b", "c"]},
+        "body_md": body(1500, " 랙은 1,200건에서 35건으로 줄었다."),
         "glossary": [{"term": "컨슈머 랙", "original": "consumer lag", "explanation": "밀린 양"}],
         "categories": ["streaming"],
         "tags": ["Kafka"],
@@ -63,10 +67,10 @@ class FakeLlm:
 # ── 분량 ────────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     ("source", "target"),
-    [(200, 300), (848, 700), (1000, 800), (3300, 1500), (9400, 3600), (63000, 8000)],
+    [(200, 300), (848, 700), (1000, 800), (3300, 1500), (9400, 1900), (63000, 2400)],
 )
 def test_the_target_length_follows_the_source(source: int, target: int) -> None:
-    """긴 글은 더 길게(최대 8,000자). 짧은 글은 원문의 80%를 넘지 않는다."""
+    """원문의 약 20%, 1,500~2,400자(v5.1 — 이해가 먼저다). 짧은 글은 원문의 80%까지만."""
     assert target_chars(source) == target
 
 
@@ -76,7 +80,7 @@ def test_reading_time_is_at_least_a_minute() -> None:
 
 
 def test_the_prompt_forbids_translation() -> None:
-    assert "NOT a translation" in SYSTEM_PROMPT
+    assert "Do not translate sentences" in SYSTEM_PROMPT
 
 
 # ── 코드 검사 ───────────────────────────────────────────────────────
@@ -168,7 +172,7 @@ async def test_the_retry_tells_the_model_what_was_wrong() -> None:
     await ExplainerGenerator(llm).generate("6a0000000000000000000001", "t", "b", SOURCE)  # type: ignore[arg-type]
 
     assert "previous answer" not in llm.users[0]
-    assert "at least 1275" in llm.users[1]
+    assert "at least 1050" in llm.users[1]
 
 
 async def test_a_model_that_fails_twice_hands_over_to_the_next() -> None:
@@ -227,10 +231,10 @@ async def test_the_summary_job_stores_the_explainer_and_its_one_liner() -> None:
 
     [(job_type, sent)] = queue.jobs
     assert job_type == JobType.SUMMARY_COMPLETED
-    assert sent["summary"] == "랙을 줄인 사례입니다."
+    assert sent["summary"] == "랙을 줄인 사례다."
     stored = Explainer.model_validate(sent["explainer"])
     assert str(stored.post_id) == ref.post_id
-    assert stored.body_md.startswith("## 배경")
+    assert "## 배경" in stored.body_md
 
 
 # ── 모델 버릇 ───────────────────────────────────────────────────────
@@ -240,16 +244,40 @@ def test_an_english_body_fails() -> None:
     assert check(english, SOURCE, 1500).korean_ok is False
 
 
-def test_a_summary_without_sections_fails() -> None:
-    assert check("가" * 6000, SOURCE, 6900).sections_ok is False
-    assert check(
-        body(6000).replace("## 결과", "## 결과\n## 한계\n## 방법\n## 배포"), SOURCE, 6900
-    ).sections_ok
+def test_sections_are_three_to_five() -> None:
+    assert check("가" * 2000, SOURCE, 2000).sections_ok is False  # 섹션 없이 한 덩어리
+    assert check(body(2000), SOURCE, 2000).sections_ok  # 3개
+    too_many = body(2000) + "".join(f"\n## 부록{c}\n- 가" for c in "가나다")
+    assert check(too_many, SOURCE, 2000).sections_ok is False  # 6개
 
 
-def test_the_one_liner_must_be_polite() -> None:
-    assert check(body(1500), SOURCE, 1500, "줄였습니다.").style_ok
-    assert check(body(1500), SOURCE, 1500, "줄였다.").style_ok is False
+def test_the_one_liner_is_a_plain_sentence() -> None:
+    assert check(body(1500), SOURCE, 1500, "랙을 줄였다.").style_ok
+    assert check(body(1500), SOURCE, 1500, "랙을 줄였습니다.").style_ok is False
+    assert check(body(1500), SOURCE, 1500, "Kafka: 랙을 줄였다.").style_ok is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "\n## 품질을 가른 것: 인용 밀도\n설명이다.\n- 가\n- 가",  # 콜론 제목
+        "\n## 결과는 어땠나?\n설명이다.\n- 가\n- 가",  # 질문 제목
+        " 의외로 단순했다.",
+        " 이 글의 교훈은 분명하다.",
+        " 속도는 3.5배다 — 빠르다.",
+        " **굵게** 강조했다.",
+        " 이렇게 정리했습니다. 저렇게 정리했습니다. 또 정리했습니다.",
+        " 의미: 지연이 줄었다.",
+        "\n## 좋은 데이터를 고르는 법\n설명이다.\n- 가\n- 가",  # 구호형 제목
+        " 글은 랙을 줄였다고 설명한다. 저자는 배치를 바꿨다.",  # 단서 문장
+        " これが 원인이다.",  # 원문에 없는 가나
+    ],
+)
+def test_ai_style_devices_fail(bad: str) -> None:
+    """2026-10-04 사용자 지적: "AI 문체 같다", "링크드인 글 구성 같다"."""
+    checks = check(body(1500, bad), SOURCE, 1500, "랙을 줄였다.")
+
+    assert checks.style_ok is False or checks.korean_ok is False
 
 
 def test_empty_blockquotes_are_removed() -> None:
@@ -257,12 +285,12 @@ def test_empty_blockquotes_are_removed() -> None:
 
 
 def test_feedback_names_every_failure() -> None:
-    checks = check("word " * 100, SOURCE, 1500, "줄였다.")
+    checks = check("word " * 100, SOURCE, 1500, "줄였습니다.")
     note = feedback(checks, "word " * 100, 1500)
 
-    assert "at least 1275" in note
+    assert "at least 1050" in note
     assert "Korean" in note
-    assert "합니다체" in note
+    assert 'ending in "다."' in note
     assert "sections" in note
     assert feedback(check(body(1500), SOURCE, 1500), body(1500), 1500) == ""
 
@@ -296,3 +324,16 @@ def test_search_text_adds_the_points_to_the_one_liner() -> None:
 
     assert summary.search_text() == "랙을 줄인 사례입니다. 원인은 파티션 배치 조정"
     assert AISummary(summary="옛 요약").search_text() == "옛 요약"
+
+
+def test_a_short_post_needs_no_sections() -> None:
+    """목표 1,200자 미만(공지 등)은 개요와 bullet만 쓴다(848자 글을 섹션 3개로 채우던 것)."""
+    short = "네이버가 행사를 연다.\n- 일정은 10월이다.\n- 신청을 받는다."
+    assert check(short, SOURCE, 700).sections_ok
+    assert check(body(700), SOURCE, 700).sections_ok is False
+
+
+def test_the_body_starts_with_an_overview() -> None:
+    no_overview = body(1500).split("\n", 1)[1]  # 개요 문단을 뺀다
+
+    assert any("overview" in i for i in check(no_overview, SOURCE, 1500).style_issues)
