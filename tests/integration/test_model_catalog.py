@@ -17,8 +17,9 @@ from techletter.core.time import utcnow
 async def list_events(db, model_id: str | None = None) -> list[dict]:
     """감지 결과 확인용. 공개 API가 없어져 테스트에서 컬렉션을 직접 읽는다."""
     query = {"model_id": model_id} if model_id else {}
-    cursor = db[EVENTS_COLLECTION].find(query, projection={"_id": 0}).sort("detected_at", -1)
-    return [doc async for doc in cursor]
+    # 같은 밀리초에 기록된 이벤트는 `_id`(삽입 순서)로 가른다. CI에서 가끔 뒤집혔다.
+    cursor = db[EVENTS_COLLECTION].find(query).sort([("detected_at", -1), ("_id", -1)])
+    return [{k: v for k, v in doc.items() if k != "_id"} async for doc in cursor]
 
 
 pytestmark = pytest.mark.integration

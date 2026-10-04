@@ -177,8 +177,8 @@ async def test_admin_lists_posts_with_v2_fields(
     await expect(page).to_have_url(f"{ui_server}/admin/posts")
     # 한 페이지 10개, 최신 글부터.
     await expect(page.get_by_text("테스트 포스트 14")).to_be_visible(timeout=TIMEOUT)
-    # `ai_summary.model_name` 을 읽는다. 요약 점의 툴팁에 모델이 뜬다.
-    await page.get_by_label("요약 완료", exact=False).first.hover()
+    # `ai_summary.model_name` 을 읽는다. 해설 점의 툴팁에 모델이 뜬다.
+    await page.get_by_label("해설 완료", exact=False).first.hover()
     await expect(page.get_by_role("tooltip")).to_contain_text("gemini-3-flash-preview")
     assert console_errors == []
 
@@ -199,7 +199,7 @@ async def test_admin_ops_tab_shows_the_pipeline(page, ui_server, seeded, sign_in
 
     assert (await info.value).status == 200
     await expect(page).to_have_url(f"{ui_server}/admin/ops")
-    for stage in ("수집", "요약", "임베딩"):
+    for stage in ("수집", "해설", "임베딩"):
         await expect(page.get_by_role("heading", name=stage)).to_be_visible(timeout=TIMEOUT)
 
 

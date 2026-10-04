@@ -532,7 +532,7 @@ def settings_example() -> None:
         ("MongoDB", MongoSettings),
         ("Qdrant", QdrantSettings),
         ("인증 (Google OAuth · JWT)", AuthSettings),
-        ("요약 워커 LLM", SummaryLlmSettings),
+        ("해설 생성 LLM (summary-worker)", SummaryLlmSettings),
         ("임베딩 LLM (워커·챗봇 공용)", EmbeddingLlmSettings),
         ("챗봇 LLM", ChatLlmSettings),
         ("LLM 모델 라우터", RouterSettings),
