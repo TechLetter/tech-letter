@@ -1,4 +1,4 @@
-"""백필. 미요약·미임베딩 포스트를 화면에서 큐에 건다."""
+"""백필. 해설이 없거나 임베딩되지 않은 포스트를 화면에서 큐에 건다."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ async def summary_status(ctx: Ctx, _: AdminUser) -> BackfillStatusOut:
 
 
 async def _count(ctx: Ctx, job_status: JobStatus) -> int:
-    """요약까지 가는 두 단계(가져오기·요약)를 합쳐 센다."""
+    """해설까지 가는 두 단계(가져오기·해설)를 합쳐 센다."""
     total = 0
     for job_type in (JobType.CONTENT_FETCH_REQUESTED, JobType.SUMMARY_REQUESTED):
         total += await ctx.queue.count(status=job_status.value, job_type=job_type.value)
@@ -35,7 +35,7 @@ async def _count(ctx: Ctx, job_status: JobStatus) -> int:
 
 @router.post("/summary", status_code=status.HTTP_202_ACCEPTED)
 async def enqueue_summaries(ctx: Ctx, _: AdminUser, body: BackfillIn) -> dict[str, int]:
-    """미요약 포스트를 오래된 것부터 큐에 넣는다.
+    """해설이 없는 포스트를 오래된 것부터 큐에 넣는다.
 
     우선순위를 낮춰(숫자가 크다) 새로 수집된 글이 먼저 처리되게 한다.
     이미 대기 중인 잡은 중복 억제로 건너뛴다.

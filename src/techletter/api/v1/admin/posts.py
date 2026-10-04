@@ -56,7 +56,7 @@ async def delete_post(ctx: Ctx, _: AdminUser, post_id: str) -> Response:
     "/{post_id}/summarize", status_code=status.HTTP_202_ACCEPTED, response_model=JobAccepted
 )
 async def summarize(ctx: Ctx, _: AdminUser, post_id: str) -> JobAccepted:
-    """요약을 다시 요청한다. 이미 대기 중이면 새 잡을 만들지 않는다."""
+    """해설을 다시 만든다. 이미 대기 중이면 새 잡을 만들지 않는다."""
     job_type = await ctx.post_service.retry_summary(post_id)
     return JobAccepted(job_id=await _job_id(ctx, job_type, post_id))
 
