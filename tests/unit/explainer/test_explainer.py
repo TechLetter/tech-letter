@@ -9,7 +9,7 @@ from techletter.content.models import AISummary
 from techletter.core.errors import PermanentError
 from techletter.core.jobs.models import Job
 from techletter.core.jobs.types import JobType
-from techletter.explainer.checks import check, clean_body, feedback
+from techletter.explainer.checks import check, clean_body
 from techletter.explainer.generator import ExplainerGenerator, reading_minutes
 from techletter.explainer.models import Explainer
 from techletter.explainer.prompt import SYSTEM_PROMPT, target_chars
@@ -154,46 +154,16 @@ async def test_a_passing_answer_is_used_once() -> None:
     assert out.generation.generator == "gemini"
 
 
-async def test_a_failing_answer_is_regenerated_once() -> None:
-    wrong = payload(body_md=body(1500, " 랙은 9,999건이었습니다."))
-    llm = FakeLlm(wrong, payload())
-
-    out = await ExplainerGenerator(llm).generate("6a0000000000000000000001", "t", "b", SOURCE)  # type: ignore[arg-type]
-
-    assert llm.calls == 2
-    assert out.checks.passed
-
-
-async def test_the_retry_tells_the_model_what_was_wrong() -> None:
-    """모델이 무엇이든 같은 기준으로 고치게 한다 — 짧았으면 몇 자가 필요한지 알려 준다."""
-    short = payload(body_md=body(600))
-    llm = FakeLlm(short, payload())
-
-    await ExplainerGenerator(llm).generate("6a0000000000000000000001", "t", "b", SOURCE)  # type: ignore[arg-type]
-
-    assert "previous answer" not in llm.users[0]
-    assert "at least 1050" in llm.users[1]
-
-
-async def test_a_model_that_fails_twice_hands_over_to_the_next() -> None:
-    """같은 모델이 피드백을 받고도 지어낸 숫자를 쓰면, 다른 모델에게 맡긴다."""
+async def test_a_failing_answer_is_kept_with_its_checks_and_not_retried() -> None:
+    """검사는 기록만 한다(2026-10-04). 다시 부르면 약한 무료 모델로 넘어가 사실 오류가 났다."""
     wrong = payload(body_md=body(1500, " 9,999건"))
-    llm = FakeLlm(wrong, wrong, payload())
+    llm = FakeLlm(wrong)
 
     out = await ExplainerGenerator(llm).generate("6a0000000000000000000001", "t", "b", SOURCE)  # type: ignore[arg-type]
 
-    assert llm.candidate_lists == [None, None, ["nvidia/nemotron:free"]]
-    assert out.checks.passed
-    assert out.generation.model == "nvidia/nemotron:free"
-
-
-async def test_three_failures_keep_the_answer_with_its_checks() -> None:
-    wrong = payload(body_md=body(1500, " 9,999건"))
-    llm = FakeLlm(wrong, wrong, wrong)
-
-    out = await ExplainerGenerator(llm).generate("6a0000000000000000000001", "t", "b", SOURCE)  # type: ignore[arg-type]
-
+    assert llm.calls == 1
     assert out.checks.numbers_missing == ["9999"]
+    assert out.checks.passed is False
 
 
 async def test_an_unreadable_page_is_permanent() -> None:
@@ -282,17 +252,6 @@ def test_ai_style_devices_fail(bad: str) -> None:
 
 def test_empty_blockquotes_are_removed() -> None:
     assert clean_body("## 배경\n>\n> \n본문") == "## 배경\n본문"
-
-
-def test_feedback_names_every_failure() -> None:
-    checks = check("word " * 100, SOURCE, 1500, "줄였습니다.")
-    note = feedback(checks, "word " * 100, 1500)
-
-    assert "at least 1050" in note
-    assert "Korean" in note
-    assert 'ending in "다."' in note
-    assert "sections" in note
-    assert feedback(check(body(1500), SOURCE, 1500), body(1500), 1500) == ""
 
 
 def test_copied_paragraphs_fail_even_without_blockquotes() -> None:
