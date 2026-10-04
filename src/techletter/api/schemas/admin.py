@@ -59,7 +59,7 @@ class JobOut(BaseModel):
             title=_text(job.payload.get("title")),
             blog_name=_text(job.payload.get("blog_name")),
         )
-        # payload 는 내보내지 않는다 — 요약 결과 본문이 수십 KB다.
+        # payload 는 내보내지 않는다 — 해설 본문이 수십 KB다.
 
 
 class JobStatsOut(BaseModel):

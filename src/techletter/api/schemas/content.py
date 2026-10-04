@@ -68,7 +68,7 @@ class PostOut(BaseModel):
             thumbnail_url=post.thumbnail_url or None,
             view_count=post.view_count,
             summary=(summary.summary or None) if summary else None,
-            # 요약 전이면 빈 배열. null이 아니다.
+            # 해설 전이면 빈 배열. null이 아니다.
             categories=summary.categories if summary else [],
             tags=summary.tags if summary else [],
             # 익명 요청이면 false. 키가 없는 3상태를 없앤다.
