@@ -3,7 +3,7 @@
 LLM 판정은 숫자 왜곡을 25% 정도만 잡는다는 보고가 있다(2026-10-03 조사 C). 그래서 먼저
 코드로 거른다: 분량, 인용 비율, 원문을 그대로 옮긴 비율, 숫자가 원문에 있는지, 코드 블록이
 원문에 있는지, 한국어로 썼는지, 섹션을 나눴는지, 합니다체인지. 어느 모델이 쓰든 같은
-기준이다 — 걸리면 무엇이 모자란지 알려 주고 다시 쓰게 한다(`feedback`).
+기준이다. 결과는 해설에 기록만 하고 재시도하지 않는다.
 """
 
 from __future__ import annotations
@@ -12,9 +12,8 @@ import re
 
 from techletter.explainer.models import ExplainerChecks
 
-__all__ = ["MAX_QUOTE_RATIO", "check", "clean_body", "feedback", "min_sections"]
+__all__ = ["check", "clean_body", "min_sections"]
 
-MAX_QUOTE_RATIO = 0.15
 # 목표 분량에서 이만큼 벗어나도 허용한다. 모델이 글자 수를 정확히 맞추지 못한다.
 LENGTH_TOLERANCE = (0.5, 1.5)
 MIN_KOREAN_RATIO = 0.6
@@ -237,48 +236,3 @@ def check(
         style_ok=not (issues := style_issues(body_md, one_liner, points)),
         style_issues=issues[:10],
     )
-
-
-def feedback(checks: ExplainerChecks, body_md: str, target_chars: int) -> str:
-    """검사에 걸린 항목을 모델에게 그대로 알려 줄 문장들. 통과면 빈 문자열."""
-    notes: list[str] = []
-    if not checks.length_ok:
-        lo, hi = LENGTH_TOLERANCE
-        if len(body_md) < lo * target_chars:
-            notes.append(
-                f"body_md was {len(body_md)} characters; write at least "
-                f"{int(target_chars * 0.7)}. Explain the main points more concretely "
-                "(how and why). Do not pad with repetition."
-            )
-        else:
-            notes.append(
-                f"body_md was {len(body_md)} characters; keep it under {int(hi * target_chars)}. "
-                "Drop details a reader does not need."
-            )
-    if not checks.sections_ok:
-        if target_chars < SHORT_TARGET:
-            notes.append(
-                'This is a short post: write the overview and bullets with no "## " sections.'
-            )
-        else:
-            notes.append(f'Use {min_sections(target_chars)}-{MAX_SECTIONS} "## " sections.')
-    if not checks.korean_ok:
-        notes.append(
-            "Write body_md in Korean only. Keep names and technical terms in English; "
-            "no Japanese, Chinese or Cyrillic text."
-        )
-    if not checks.style_ok:
-        notes.extend(checks.style_issues)
-    if not checks.copy_ok:
-        notes.append(
-            f"{round(checks.copy_ratio * 100)}% of body_md copies the post word for word. "
-            "Explain in your own words instead of copying sentences."
-        )
-    if not checks.quote_ok:
-        notes.append("Remove all blockquotes; explain in your own words.")
-    if checks.numbers_missing:
-        nums = ", ".join(checks.numbers_missing[:10])
-        notes.append(f"These numbers are not in the post: {nums}. Use only numbers from the post.")
-    if not checks.code_ok:
-        notes.append("Code blocks must be copied exactly from the post, or removed.")
-    return "\n".join(f"- {n}" for n in notes)
