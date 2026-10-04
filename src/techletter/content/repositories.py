@@ -122,11 +122,6 @@ def _exact_ci(values: list[str]) -> list[re.Pattern[str]]:
 _WITHOUT_BODIES: dict[str, int] = {"plain_text": 0, "feed_html": 0}
 
 
-def _missing_link_key_query() -> dict[str, Any]:
-    """정규화 키가 아직 없는 구형 문서를 고른다."""
-    return {"link_key": {"$not": {"$type": "string"}}}
-
-
 class PostRepository:
     def __init__(self, db: AsyncDatabase) -> None:
         self._col = db["posts"]
@@ -285,33 +280,6 @@ class PostRepository:
             if isinstance(link_key := doc.get("link_key"), str):
                 known.add(link_key)
         return known
-
-    async def find_missing_link_keys(
-        self, limit: int, *, after_id: ObjectId | None = None
-    ) -> list[Post]:
-        """정규화 키가 없는 문서를 `_id` 순으로 배치 조회한다."""
-        query = _missing_link_key_query()
-        if after_id is not None:
-            query["_id"] = {"$gt": after_id}
-        cursor = (
-            self._col.find(
-                query,
-                projection={"_id": 1, "link": 1, "link_key": 1},
-            )
-            .sort([("_id", ASCENDING)])
-            .limit(limit)
-        )
-        return [Post.model_validate(doc) async for doc in cursor]
-
-    async def find_by_link_keys(self, keys: list[str]) -> list[Post]:
-        """주어진 키를 이미 가진 문서를 조회한다(백필 충돌 확인용)."""
-        if not keys:
-            return []
-        cursor = self._col.find(
-            {"link_key": {"$in": keys}},
-            projection={"_id": 1, "link": 1, "link_key": 1},
-        )
-        return [Post.model_validate(doc) async for doc in cursor]
 
     # ── 변경 ────────────────────────────────────────────────────────
     async def insert(self, post: Post) -> Post | None:
@@ -506,21 +474,6 @@ class PostRepository:
         ).limit(limit)
         return [Post.model_validate(doc) async for doc in cursor]
 
-    async def update_link_key(self, post_id: str, link_key: str) -> bool:
-        """구형 포스트에 정규화 키를 채운다. 유니크 충돌은 건너뛴다."""
-        oid = to_object_id(post_id)
-        if oid is None:
-            return False
-        try:
-            result = await self._col.update_one(
-                {"_id": oid, **_missing_link_key_query()},
-                {"$set": {"link_key": link_key, "updated_at": utcnow()}},
-            )
-        except DuplicateKeyError:
-            return False
-        return result.matched_count > 0
-
-    # ── 집계 ────────────────────────────────────────────────────────
     async def _facet_counts(self, unwind_field: str, match: dict[str, Any]) -> dict[str, int]:
         """배열 필드를 펼쳐 값별 개수를 센다. 대소문자를 무시해 묶고 원본 표기를 쓴다."""
         pipeline = [

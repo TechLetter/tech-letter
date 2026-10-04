@@ -12,7 +12,7 @@ tech-letter/
 ├── src/techletter/
 │   ├── __main__.py  cli.py       # typer: api | worker | summary-worker | embedding-worker | all
 │   │                             #        | jobs {list,stats,retry,purge}
-│   │                             #        | backfill {summaries,topics,embeddings,lexical,icons,link-keys}
+│   │                             #        | backfill {summaries,topics,lexical,icons}
 │   │                             #        | ensure-indexes | settings {check,example}
 │   ├── settings.py               # pydantic-settings 단일 트리
 │   ├── app.py                    # create_app(): lifespan, 미들웨어, 라우터, 예외 핸들러
@@ -100,7 +100,7 @@ tech-letter/
 │   └── fixtures/  rss/ html/ seed/
 │
 ├── docker/  Dockerfile  compose.dev.yml  compose.prod.yml
-├── scripts/  eval_models.py  dev.sh  verify_prod_smoke.sh
+├── scripts/  dev.sh  verify_prod_smoke.sh
 ├── .github/workflows/  ci.yml  deploy.yml
 └── docs/  README.md  architecture/  images/
 ```
