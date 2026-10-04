@@ -53,7 +53,8 @@ def explainer_from_payload(
     """모델이 준 JSON(또는 백필 파일) → 저장할 문서. 값을 정리하고 검사한다."""
     tldr = payload.get("tldr") or {}
     body = clean_body(str(payload.get("body_md") or ""))
-    points = [str(p).strip() for p in (tldr.get("points") or []) if str(p).strip()][:3]
+    all_points = [str(p).strip() for p in (tldr.get("points") or []) if str(p).strip()]
+    points = all_points[:3]
     glossary = [
         GlossaryItem(
             term=str(g.get("term") or "").strip(),
@@ -76,7 +77,7 @@ def explainer_from_payload(
         glossary=glossary,
         categories=normalize_topics(payload.get("categories")),
         tags=normalize_tags(payload.get("tags"), 5),
-        checks=check(body, source, target_chars(len(source)), one_liner),
+        checks=check(body, source, target_chars(len(source)), one_liner, len(all_points)),
         generation=generation,
     )
 

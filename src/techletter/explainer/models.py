@@ -47,7 +47,9 @@ class ExplainerChecks(SubDocument):
     sections_ok: bool = True
     """분량에 맞게 "## " 섹션을 나눴는가. 요약으로 뭉개면 섹션이 적다."""
     style_ok: bool = True
-    """TL;DR 한 문장이 합니다체로 끝나는가."""
+    """v5 문체 규칙(`~다` 평서체, 담백한 명사 제목, AI 문체 장치 없음, bullet 사용)을 지켰는가."""
+    style_issues: list[str] = Field(default_factory=list)
+    """어긴 문체 규칙. 재시도 피드백에 그대로 쓴다."""
 
     @property
     def passed(self) -> bool:
