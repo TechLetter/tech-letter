@@ -34,3 +34,6 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
+
+# 워크스페이스의 작업 산출물(plans/)이 잘못된 상대 경로로 여기 생기는 일을 막는다.
+plans/
