@@ -45,6 +45,22 @@ BLOCKED_STATUS = frozenset({401, 403, 429})
 # 잠잠해질 때까지 기다렸다가 다시 읽는다 — 183자였던 카카오 글이 3만 자가 됐다.
 SETTLE_MIN_CHARS = 1000
 SETTLE_TIMEOUT_MS = 15_000
+# 브라우저에는 언어만 덧붙인다. Accept·Sec-Fetch-*·Upgrade-Insecure-Requests를 컨텍스트에
+# 넣으면 페이지의 모든 하위 요청(XHR 포함)에 붙어, 네이버 D2는 본문 API가 실패해
+# 껍데기만 남았다. 문서 요청용 헤더는 Chromium이 알아서 보낸다.
+ACCEPT_LANGUAGE = "en-US,en;q=0.9,ko-KR,ko;q=0.8"
+# 본문을 shadow DOM에 그리는 페이지(네이버 D2, 2026-09~). `page.content()`는 shadow
+# 트리를 직렬화하지 않아 껍데기만 남는다 — 열린 shadow 트리를 호스트 아래로 복사한다.
+INLINE_SHADOW_JS = """() => {
+  const inline = (root) => {
+    root.querySelectorAll("*").forEach((el) => {
+      if (!el.shadowRoot) return;
+      inline(el.shadowRoot);
+      el.insertAdjacentHTML("beforeend", el.shadowRoot.innerHTML);
+    });
+  };
+  inline(document);
+}"""
 
 
 def is_blocked_status(status: int) -> bool:
@@ -108,22 +124,6 @@ class PlaywrightRenderer:
             return self._browser
 
     @staticmethod
-    def _headers() -> dict[str, str]:
-        return {
-            "User-Agent": BROWSER_USER_AGENT,
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                "image/avif,image/webp,image/apng,*/*;q=0.8"
-            ),
-            "Accept-Language": "en-US,en;q=0.9,ko-KR,ko;q=0.8",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-        }
-
-    @staticmethod
     def _retry_url(url: str, attempt: int) -> str:
         """캐시된 차단 페이지를 다시 받지 않으려고 쿼리를 하나 붙인다."""
         if attempt == 0:
@@ -168,7 +168,7 @@ class PlaywrightRenderer:
             context = await browser.new_context(
                 user_agent=BROWSER_USER_AGENT,
                 locale="en-US",
-                extra_http_headers=self._headers(),
+                extra_http_headers={"Accept-Language": ACCEPT_LANGUAGE},
             )
             try:
                 page = await context.new_page()
@@ -183,6 +183,7 @@ class PlaywrightRenderer:
                 await page.wait_for_selector("body", timeout=timeout_ms)
                 if not is_blocked_status(status):
                     await self._settle(page)
+                await page.evaluate(INLINE_SHADOW_JS)
                 last_html = await page.content()
             except PermanentError:
                 raise
