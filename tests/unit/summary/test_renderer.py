@@ -11,6 +11,7 @@ import pytest
 
 from techletter.settings import SummarySettings
 from techletter.summary.renderer import (
+    INLINE_SHADOW_JS,
     RETRY_MARKER_MAX_HTML,
     PlaywrightRenderer,
     needs_retry,
@@ -223,3 +224,31 @@ async def test_the_caller_can_cap_browser_attempts(monkeypatch: pytest.MonkeyPat
     with pytest.raises(RetryableError):
         await renderer.render("https://example.com/post", attempts=1)
     assert browser.contexts == 1
+
+
+SHADOW_PAGE = """<html><body><h1>shell</h1><div id="host"></div><script>
+const outer = document.getElementById("host").attachShadow({mode: "open"});
+outer.innerHTML = '<p>shadow body</p><div id="inner"></div>';
+outer.getElementById("inner").attachShadow({mode: "open"}).innerHTML = "<p>nested body</p>";
+document.currentScript.remove();
+</script></body></html>"""
+
+
+async def test_shadow_dom_text_is_copied_into_the_page_html() -> None:
+    """네이버 D2는 본문을 shadow DOM에 그린다. `content()`에 본문이 남아야 한다."""
+    playwright = pytest.importorskip("playwright.async_api")
+    async with playwright.async_playwright() as driver:
+        try:
+            browser = await driver.chromium.launch()
+        except Exception as exc:  # 브라우저가 설치되지 않은 환경
+            pytest.skip(f"chromium unavailable: {exc}")
+        page = await browser.new_page()
+        await page.set_content(SHADOW_PAGE)
+        assert "shadow body" not in await page.content()
+
+        await page.evaluate(INLINE_SHADOW_JS)
+        html = await page.content()
+        await browser.close()
+
+    assert "shadow body" in html
+    assert "nested body" in html
