@@ -20,19 +20,15 @@ import httpx
 
 from techletter.core.errors import SessionExpiredError
 from techletter.core.ids import random_token
-from techletter.core.logging import get_logger
 from techletter.core.security import issue_token
 from techletter.users.service import OAuthProfile
 
 if TYPE_CHECKING:  # pragma: no cover
     from techletter.settings import AuthSettings
-    from techletter.users.credits import CreditService
     from techletter.users.repositories import LoginSessionRepository
     from techletter.users.service import UserService
 
 __all__ = ["OAUTH_STATE_COOKIE", "AuthService", "GoogleOAuthError"]
-
-logger = get_logger(__name__)
 
 OAUTH_STATE_COOKIE = "oauth_state"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
@@ -57,13 +53,11 @@ class AuthService:
         self,
         settings: AuthSettings,
         users: UserService,
-        credits: CreditService,
         sessions: LoginSessionRepository,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._settings = settings
         self._users = users
-        self._credits = credits
         self._sessions = sessions
         self._client = client
 
@@ -97,12 +91,6 @@ class AuthService:
 
         session_id = random_token(16)
         await self._sessions.create(session_id, token, self._settings.login_session_ttl_seconds)
-
-        # 크레딧 지급 실패가 로그인을 막지 않는다.
-        try:
-            await self._credits.grant_daily(user.user_code, profile.provider, profile.provider_sub)
-        except Exception:
-            logger.warning("daily credit grant failed", extra={"user_code": user.user_code})
 
         return self._redirect_with_session(session_id)
 

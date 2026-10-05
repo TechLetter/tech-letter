@@ -181,7 +181,6 @@ class Container:
         return AuthService(
             self.settings.auth,
             self.users,
-            self.credits,
             LoginSessionRepository(self.db),
             self.http.get(),
         )
