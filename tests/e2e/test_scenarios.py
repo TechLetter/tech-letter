@@ -25,8 +25,16 @@ async def seeded(db):
 
 @pytest.fixture
 async def broke(db, seeded):
-    """크레딧이 0인 상태."""
+    """크레딧이 0이고, 오늘 일일 지급도 이미 받은 상태(`GET /me`가 더 주지 않는다)."""
+    from techletter.core.time import utcnow
+    from techletter.users.credits import DAILY_POLICY_KEY, identity_hash
+
     await db["credits"].delete_many({"user_code": USER_CODE})
+    await db["identity_policies"].update_one(
+        {"identity_hash": identity_hash("google", USER_CODE), "policy_key": DAILY_POLICY_KEY},
+        {"$set": {"last_acted_at": utcnow(), "updated_at": utcnow()}},
+        upsert=True,
+    )
     return seeded
 
 

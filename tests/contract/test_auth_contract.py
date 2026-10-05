@@ -83,7 +83,19 @@ async def test_credits_are_an_object_not_an_integer(client, registered, headers_
 
     assert isinstance(body["credits"], dict)
     assert set(body["credits"]) == {"remaining", "granted_today"}
-    assert body["credits"]["granted_today"] == 0
+
+
+async def test_the_first_profile_of_the_day_grants_daily_credits(
+    client, registered, headers_for
+) -> None:
+    """로그인 상태가 이어져도 날이 바뀐 뒤 처음 열면 받는다. 같은 날 두 번째는 0."""
+    headers = headers_for(registered.user_code)
+
+    first = (await client.get("/api/v1/me", headers=headers)).json()
+    second = (await client.get("/api/v1/me", headers=headers)).json()
+
+    assert first["credits"] == {"remaining": 10, "granted_today": 10}
+    assert second["credits"] == {"remaining": 10, "granted_today": 10}
 
 
 async def test_me_reports_only_todays_grants_from_the_ledger(
@@ -122,7 +134,8 @@ async def test_me_reports_only_todays_grants_from_the_ledger(
 
     body = (await client.get("/api/v1/me", headers=headers_for(user_code))).json()
 
-    assert body["credits"]["granted_today"] == 15
+    # 오늘 원장의 grant 10 + admin_grant 5, 그리고 이 조회가 준 일일 지급 10.
+    assert body["credits"]["granted_today"] == 25
 
 
 async def test_internal_identifiers_are_not_exposed(client, registered, headers_for) -> None:

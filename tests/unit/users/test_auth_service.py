@@ -25,7 +25,7 @@ class FakeSessions:
 
 def make_service(redirect: str = REDIRECT) -> tuple[AuthService, FakeSessions]:
     sessions = FakeSessions()
-    service = AuthService(make_auth_settings(redirect=redirect), None, None, sessions)  # pyright: ignore[reportArgumentType]
+    service = AuthService(make_auth_settings(redirect=redirect), None, sessions)  # pyright: ignore[reportArgumentType]
     return service, sessions
 
 

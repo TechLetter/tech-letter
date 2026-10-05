@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 @router.get("", response_model=MeOut)
 async def get_me(ctx: Ctx, user: CurrentUser) -> MeOut:
-    return MeOut.of(await ctx.users.get_profile(user.user_code))
+    return MeOut.of(await ctx.users.get_profile(user.user_code, grant_daily=True))
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)

@@ -66,7 +66,7 @@ class UserService:
         )
         return await self._users.upsert(candidate)
 
-    async def get_profile(self, user_code: str) -> UserProfile:
+    async def get_profile(self, user_code: str, *, grant_daily: bool = False) -> UserProfile:
         """프로필과 크레딧을 합쳐서 준다.
 
         크레딧 조회가 실패해도 프로필은 준다 — 크레딧 서비스 장애로 로그인
@@ -75,6 +75,13 @@ class UserService:
         user = await self._users.get_by_user_code(user_code)
         if user is None:
             raise ResourceNotFoundError("사용자를 찾을 수 없습니다.")
+        # 일일 크레딧은 로그인이 아니라 본인의 프로필 조회(`GET /me`) 때 준다. 로그인
+        # 상태가 며칠 이어져도 날이 바뀐 뒤 처음 열면 받는다. 같은 날 두 번째는 0이다.
+        if grant_daily:
+            try:
+                await self._credits.grant_daily(user_code, user.provider, user.provider_sub)
+            except Exception:
+                logger.warning("daily credit grant failed", extra={"user_code": user_code})
         try:
             day_start, day_end = self._today_bounds()
             remaining = await self._credits.remaining(user_code)

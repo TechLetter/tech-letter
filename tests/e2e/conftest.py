@@ -107,8 +107,10 @@ async def db(api_url):
         await client.close()
         pytest.skip(f"E2E Mongo 에 접속할 수 없다 ({MONGO_URI}): {exc}")
 
+    # drop 대신 문서만 지운다. API가 기동 때 만든 인덱스(일일 지급 중복을 막는 유니크
+    # 인덱스 등)가 남아야 운영과 같은 동작을 본다.
     for name in await database.list_collection_names():
-        await database[name].drop()
+        await database[name].delete_many({})
     yield database
     await client.close()
 
