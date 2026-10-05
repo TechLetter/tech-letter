@@ -176,3 +176,12 @@ def test_relative_links_are_joined_to_the_feed_url() -> None:
 def test_relative_links_without_a_base_are_dropped() -> None:
     """기준 주소를 모르면 상대 경로를 글 주소로 저장하지 않는다."""
     assert [i.link for i in parse_feed(RELATIVE_RSS)] == ["https://other.test/a"]
+
+
+def test_entries_without_title_are_skipped() -> None:
+    xml = """<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title><![CDATA[]]></title><link>https://x.test/posts/draft-uuid/</link></item>
+<item><title>Real</title><link>https://x.test/posts/real/</link></item>
+</channel></rss>"""
+
+    assert [item.link for item in parse_feed(xml)] == ["https://x.test/posts/real/"]

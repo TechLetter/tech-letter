@@ -88,11 +88,14 @@ def parse_feed(text: str, *, source: str = "", limit: int = 0) -> list[FeedItem]
     items: list[FeedItem] = []
     for entry in parsed.entries:
         link = _absolute_link(entry, source)
-        if not link:
+        title = (getattr(entry, "title", "") or "").strip()
+        # 제목 없는 항목은 발행 전 임시 글이다.
+        # 아임웹은 이런 글을 나중에 다른 주소로 다시 올려 중복이 됐다.
+        if not link or not title:
             continue
         items.append(
             FeedItem(
-                title=(getattr(entry, "title", "") or "").strip(),
+                title=title,
                 link=link,
                 published_at=_to_datetime(
                     getattr(entry, "published_parsed", None)
